@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "FitMap",
+    "slug": "fitmap",
+    "description": "Aplicativo para localizar academias próximas, comparar opções e registrar exercícios concluídos.",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "fitmap",
+    "icon": "./assets/images/logo-fitmap.png",
+    "splash": {
+      "image": "./assets/images/logo-fitmap.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111827"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permita que o FitMap acesse sua localização para encontrar academias próximas."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permita que o FitMap use a câmera para registrar exercícios concluídos."
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.bryan.fitmap",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/logo-fitmap.png",
+        "backgroundColor": "#111827"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.bryan.fitmap",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Permita que o FitMap use a câmera para registrar exercícios concluídos.",
+        "NSLocationWhenInUseUsageDescription": "Permita que o FitMap acesse sua localização para encontrar academias próximas."
+      }
+    }
+  }
+}
