@@ -280,6 +280,17 @@ Projeto desenvolvido por:
 * Bryan Paz
 * Pedro Queiroz 
 
+## My contributions
+
+In this project, I contributed to:
+
+- Mobile app structure and project organization
+- Task management flow
+- Camera registration flow for workout tasks
+- Local data storage using AsyncStorage
+- UI improvements and screen organization
+- Project documentation and repository organization
+
 ## Licença
 
 Este projeto foi desenvolvido para fins acadêmicos.
