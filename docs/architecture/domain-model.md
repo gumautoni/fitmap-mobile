@@ -1,4 +1,4 @@
-# FitMap v1 — Domain Model
+# FitMap v1 - Domain Model
 
 ## Document status
 
@@ -327,7 +327,9 @@ A workout describes planned activity and is not itself proof that training occur
 
 - a workout belongs to one user;
 - modification of a workout must not corrupt previously completed workout history;
-- lifecycle changes to a workout must preserve historical sessions that were already completed.
+- lifecycle changes to a workout must preserve historical sessions that were already completed;
+- a workout may exist without exercises while it is being configured;
+- a workout must contain at least one configured exercise before a workout session can be started from it.
 
 ### Accepted lifecycle rule
 
@@ -655,6 +657,7 @@ User
 |   `-- WorkoutExercise
 |       `-- Exercise
 |-- WorkoutSession
+|   |-- source Workout (optional)
 |   `-- ExerciseExecution
 |       `-- SetExecution
 |-- ProgressPhoto
@@ -663,15 +666,21 @@ User
 `-- FitnessGoal
 ```
 
-A workout may contain many workout exercises.
+A workout may contain zero or more workout exercises while it is being configured.
+
+A workout must contain at least one configured exercise before a workout session can be started from it.
 
 An exercise may be referenced by many workouts.
 
 Catalog exercises may be shared by many users.
 
-A custom exercise belongs to one user.
+A custom exercise belongs to exactly one user and is private by default.
 
 A user may have many workout sessions over time but at most one active workout session at a time.
+
+A workout session may optionally originate from one configured workout.
+
+A workout may be the source of many workout sessions over time.
 
 A workout session may contain many exercise executions.
 
@@ -699,6 +708,8 @@ classDiagram
     User "1" --> "0..1" UserProfile
     User "1" --> "0..1" UserPreferences
 
+    User "0..1" --> "0..*" Exercise : owns custom
+
     User "1" --> "0..*" FavoriteGym
     FavoriteGym "*" --> "1" Gym
 
@@ -708,10 +719,12 @@ classDiagram
     GymReview "*" --> "1" Gym
 
     User "1" --> "0..*" Workout
-    Workout "1" --> "1..*" WorkoutExercise
+    Workout "1" --> "0..*" WorkoutExercise
     WorkoutExercise "*" --> "1" Exercise
 
     User "1" --> "0..*" WorkoutSession
+    WorkoutSession "0..*" --> "0..1" Workout : originates from
+
     WorkoutSession "1" --> "0..*" ExerciseExecution
     ExerciseExecution "1" --> "0..*" SetExecution
     ExerciseExecution "*" --> "1" Exercise
@@ -724,6 +737,14 @@ classDiagram
 ```
 
 This diagram represents conceptual relationships and must not be interpreted as the final database schema.
+
+The relationship between `User` and `Exercise` applies only to user-created custom exercises. Catalog exercises do not have an individual user owner.
+
+The optional relationship between `WorkoutSession` and `Workout` represents the workout template from which a session may originate.
+
+A workout may originate many workout sessions over time, while a workout session may originate from at most one workout template.
+
+Historical session integrity must not depend on the current mutable state of that workout.
 
 The distinction between catalog exercises and user-owned custom exercises is conceptual at this stage and does not imply an inheritance-based implementation.
 
@@ -748,6 +769,10 @@ A user should not have duplicate favorite relationships for the same gym.
 ## Custom exercise privacy
 
 A user-created custom exercise is private to its owner by default and must not automatically become part of the global catalog.
+
+## Workout configuration
+
+A workout may exist without exercises while being configured but must contain at least one configured exercise before a workout session can be started from it.
 
 ## Workout lifecycle
 
