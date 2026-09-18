@@ -2,18 +2,26 @@
 
 This directory contains the architecture documentation for FitMap.
 
-The architecture documentation will describe:
+## Documentation
 
-- system context;
-- major application components;
-- mobile application responsibilities;
-- backend responsibilities;
-- persistence strategy;
-- external service integrations;
-- security and trust boundaries;
-- deployment architecture;
-- relevant cross-cutting concerns.
+- [High-Level Architecture](high-level-architecture.md) — system context, application components, integration boundaries and delivery strategy.
+- [Domain Model](domain-model.md) — core domain concepts, relationships and ownership rules.
+- [Architecture Decision Records](decisions/) — significant technical decisions and their rationale.
 
-The architecture will be defined incrementally as part of the FitMap v1 design process.
+## Architecture approach
 
-Architecture documentation must describe approved decisions rather than assumptions.
+FitMap uses a modular, production-oriented architecture while keeping infrastructure proportional to the current product and team.
+
+The architecture prioritizes:
+
+- clear business and module boundaries;
+- separation between application, persistence and external integrations;
+- backend-enforced security and ownership;
+- reliable relational data and controlled schema evolution;
+- testability and operational visibility;
+- incremental evolution from the existing mobile prototype;
+- avoiding distributed-system complexity without a demonstrated need.
+
+Architecture documentation should reflect approved product and technical decisions rather than speculative future infrastructure.
+
+Implementation details that do not require architectural history belong in the relevant code, configuration or technical documentation.

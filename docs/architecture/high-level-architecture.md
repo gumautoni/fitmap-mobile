@@ -102,7 +102,7 @@ short-lived access token
 rotating refresh session
 ```
 
-Passwords are stored using an appropriate password-hashing algorithm rather than plaintext or general-purpose hashes.
+Passwords are stored using Argon2id rather than plaintext or general-purpose hashes.
 
 Authorization and resource ownership are always enforced by the backend.
 
