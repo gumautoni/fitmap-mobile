@@ -1,22 +1,24 @@
-# FitMap v1 - Domain Model
+# FitMap v1 — Domain Model
 
 ## Document status
 
-**Status:** Draft  
+**Status:** Accepted  
 **Product:** FitMap  
-**Version:** v1  
+**Version:** v1
 
 **Related documents:**
 
 - `../requirements/product-scope.md`
 - `../requirements/functional-requirements.md`
 - `../requirements/non-functional-requirements.md`
+- `high-level-architecture.md`
+- `decisions/`
 
 This document describes the conceptual domain model of FitMap v1.
 
-The purpose of this model is to define the main business concepts, responsibilities, relationships and invariants before database schemas, API contracts or framework-specific models are designed.
+Its purpose is to define the main business concepts, responsibilities, relationships and invariants before they are translated into database schemas, API contracts or framework-specific models.
 
-This document intentionally separates domain concepts from implementation details.
+The domain model describes product meaning. It is not a direct representation of database tables or source-code classes.
 
 ---
 
@@ -27,40 +29,41 @@ The FitMap domain model should:
 - represent concepts that exist in the product problem space;
 - preserve clear ownership of user data;
 - distinguish planned workouts from executed workouts;
-- preserve historical training data even when workout templates change;
-- distinguish external gym data from FitMap-managed user data;
-- avoid coupling domain rules to mobile UI or database technology;
-- support future product evolution without introducing unnecessary complexity.
+- preserve historical training data when workout templates change;
+- distinguish FitMap-managed gym identity from external-provider data;
+- avoid coupling domain rules to mobile UI, HTTP or persistence technology;
+- keep private progress information private by default;
+- support product evolution without introducing unnecessary complexity.
 
-The domain model is expected to evolve as architecture and user-experience decisions become more precise.
+Implementation details may evolve while these domain meanings and invariants remain preserved.
 
 ---
 
 # 2. Main domain areas
 
-FitMap currently contains four primary domain areas:
+FitMap is organized around four primary domain areas:
 
-## Identity and Profile
+## Identity
 
-Responsible for the FitMap user and user-specific preferences.
+Responsible for users, profiles and user-specific preferences.
 
-## Gym Discovery
+## Gyms
 
-Responsible for gym identity, discovery-related information, favorites and gym-related user interactions.
+Responsible for gym identity, discovery-related information, favorites, amenities, external references and reviews.
 
 ## Training
 
-Responsible for workout planning, exercises, workout execution and training history.
+Responsible for exercises, workout planning, workout execution and training history.
 
 ## Progress
 
-Responsible for user progress records derived from training activity or manually registered progress information.
+Responsible for progress photos, body measurements, fitness goals and derived progress information.
 
-User-generated gym reviews are related to the Gym Discovery domain but have additional moderation and ownership concerns.
+These areas correspond to the primary business-module boundaries defined in the FitMap architecture.
 
 ---
 
-# 3. Identity and Profile domain
+# 3. Identity domain
 
 ## User
 
@@ -69,28 +72,23 @@ A `User` represents a person with a FitMap account.
 A user owns or controls private product data such as:
 
 - profile information;
+- preferences;
 - workouts;
 - workout sessions;
 - custom exercises;
 - progress records;
 - progress photos;
 - favorite gyms;
-- reviews;
-- preferences.
+- reviews.
 
-Authentication credentials are associated with the user account but their secure representation is an architecture and security concern rather than a domain attribute exposed throughout the product.
-
-### Main responsibilities
-
-- represent the identity of a FitMap account;
-- provide ownership boundaries for private data;
-- associate user-specific product behavior with the correct account.
+Authentication credentials are associated with the account, but their secure representation is an architecture and security concern rather than a general-purpose domain attribute.
 
 ### Important rules
 
-- private data must always belong to exactly the correct user;
-- one user must never gain access to another user's private records without explicit authorization;
-- account deletion must follow the approved personal-data lifecycle.
+- private records must belong to the correct user;
+- one user must not access another user's private information without authorization;
+- ownership must be enforced by the backend;
+- account and personal-data lifecycle behavior must follow the applicable product and privacy rules.
 
 ---
 
@@ -102,7 +100,7 @@ Candidate information may include:
 
 - display name;
 - profile image;
-- fitness-related preferences.
+- fitness-related profile information.
 
 The final profile attributes will be defined according to actual product needs and privacy considerations.
 
@@ -110,7 +108,7 @@ The final profile attributes will be defined according to actual product needs a
 
 ## UserPreferences
 
-`UserPreferences` represents user-specific configuration that changes FitMap behavior without representing independent domain history.
+`UserPreferences` represents user-specific configuration that changes FitMap behavior without representing independent historical data.
 
 Examples may include:
 
@@ -119,17 +117,17 @@ Examples may include:
 - preferred measurement units;
 - application preferences.
 
-The exact preference model will be refined later.
+The preference model should remain limited to settings that provide actual product value.
 
 ---
 
-# 4. Gym Discovery domain
+# 4. Gyms domain
 
 ## Gym
 
 A `Gym` represents a fitness facility that can be discovered or referenced by FitMap.
 
-Conceptually, a gym may contain information such as:
+Gym information may include:
 
 - name;
 - geographic location;
@@ -140,48 +138,34 @@ Conceptually, a gym may contain information such as:
 - amenities;
 - external-provider references.
 
-The existence of the `Gym` domain concept does not yet determine whether every gym will be permanently persisted in the FitMap database.
+FitMap owns the stable identity of gyms that participate in persistent product relationships.
 
-That persistence strategy will be decided during architecture.
+External search results do not automatically need to become permanent FitMap records. A durable FitMap gym identity is required when persistent relationships such as favorites or reviews depend on that gym.
 
 ### Important rules
 
-- FitMap must not fabricate production gym information and present it as real data;
-- unavailable data must remain explicitly unavailable;
-- a gym referenced by FitMap user data must have a stable identity suitable for favorites, reviews and other relationships.
-
-### Accepted identity rule
-
-FitMap maintains its own stable identity for gyms that participate in persistent product relationships.
-
-External provider identifiers are treated as provider-specific references and must not become the primary domain identity of a gym.
-
-A FitMap gym may be associated with multiple external references over time.
-
-Persistent relationships such as favorites and reviews must reference the FitMap gym identity rather than an external provider identifier.
+- FitMap must not fabricate production gym information;
+- unavailable external information remains unavailable;
+- persistent user relationships reference the FitMap gym identity rather than a provider identifier;
+- external-provider details must not define the core FitMap gym model.
 
 ---
 
 ## GymExternalReference
 
-`GymExternalReference` conceptually represents the relationship between a FitMap gym identity and an external provider's gym or place identifier.
+`GymExternalReference` represents the relationship between a FitMap gym and an external provider's place or gym identifier.
 
-A gym may have multiple external references when FitMap obtains information from more than one provider or when provider relationships evolve over time.
+A FitMap gym may have references to multiple external providers over time.
 
-### Important rules
+Provider identifiers are integration references and must not become the primary identity of the FitMap gym.
 
-- an external reference belongs to one FitMap gym;
-- an external reference identifies the external provider and provider-specific resource;
-- provider identifiers are not substitutes for the FitMap gym identity;
-- changes in external providers must not invalidate FitMap-owned persistent relationships.
-
-The final representation will depend on the selected gym-data architecture.
+The technical representation of these references belongs to persistence and integration implementation.
 
 ---
 
 ## GymAmenity
 
-A `GymAmenity` represents a capability or facility available at a gym.
+A `GymAmenity` represents a facility or capability associated with a gym.
 
 Examples may include:
 
@@ -191,28 +175,26 @@ Examples may include:
 - parking;
 - accessibility-related facilities.
 
-Amenities should only be displayed when supported by trustworthy data.
+Amenities should only be presented when supported by trustworthy data.
 
 ---
 
 ## FavoriteGym
 
-`FavoriteGym` represents the relationship between a user and a gym the user has chosen to save.
+`FavoriteGym` represents the relationship between a user and a gym they have chosen to save.
 
 ### Important rules
 
 - a favorite belongs to one user;
-- a favorite references one FitMap gym identity;
-- the same gym should not create duplicate favorite relationships for the same user;
+- a favorite references one gym;
+- the same user must not have duplicate favorite relationships for the same gym;
 - one user's favorites must not affect another user's favorites.
 
 ---
 
-# 5. Gym Reviews domain behavior
-
 ## GymReview
 
-A `GymReview` represents user-generated feedback associated with a gym.
+`GymReview` represents user-generated feedback associated with a gym.
 
 A review may contain:
 
@@ -223,38 +205,26 @@ A review may contain:
 
 ### Important rules
 
-- a review must have an identifiable author;
-- a review must reference a valid FitMap gym identity;
-- only the author or an authorized moderation process may modify or remove a review;
-- public written reviews require an appropriate moderation and reporting strategy;
-- review behavior must not expose private user information unnecessarily.
+- a review has an identifiable author;
+- a review references a valid FitMap gym;
+- a user may maintain at most one active review for the same gym;
+- the author may edit their own active review;
+- the author may remove their own review;
+- removed reviews must not contribute to public presentation or aggregated ratings;
+- one user cannot modify or remove another user's review through ordinary product functionality;
+- public review content must not expose private user information unnecessarily.
 
-### Accepted review rule
+Review history, moderation history and audit mechanisms may be introduced when product or operational requirements justify them.
 
-A user may maintain at most one active review for the same gym.
-
-A review may contain a rating and optional written content according to the approved review policy.
-
-The author may edit their own active review instead of creating multiple simultaneous active reviews for the same gym.
-
-The author may remove their own review.
-
-A removed review must no longer contribute to public review presentation or aggregated gym rating calculations.
-
-Review history, moderation history and audit mechanisms may be introduced later if required, but they are not required as user-facing FitMap v1 functionality.
-
-The exact moderation, reporting and persistence strategy will be defined during architecture and implementation design.
+The exact moderation, reporting and persistence strategy will be refined when these capabilities are implemented.
 
 ---
 
-# 6. Training domain
+# 5. Training planning domain
 
-The training domain distinguishes between:
+The Training domain distinguishes what the user plans to perform from what the user actually performs.
 
-1. what the user plans to do;
-2. what the user actually performs.
-
-This separation is essential for preserving meaningful training history.
+This distinction is necessary to preserve trustworthy training history.
 
 ---
 
@@ -262,44 +232,39 @@ This separation is essential for preserving meaningful training history.
 
 An `Exercise` represents a type of physical exercise that can be included in a workout.
 
-Examples:
+Examples include:
 
 - Barbell Bench Press;
 - Squat;
 - Lat Pulldown;
 - Leg Press.
 
-An exercise may originate from:
+FitMap supports two exercise origins:
 
-- a FitMap-managed exercise catalog;
-- a user-created custom exercise.
+```text
+FitMap-managed catalog exercise
+                or
+User-owned custom exercise
+```
 
-### Candidate attributes
+### Catalog exercises
 
-- name;
-- description;
-- exercise category;
-- target muscle groups;
-- equipment requirements;
-- ownership or source when the exercise is custom.
+Catalog exercises are shared FitMap product concepts and are not owned by individual users.
 
-### Accepted catalog rule
+### Custom exercises
 
-FitMap maintains a managed global exercise catalog while allowing authenticated users to create private custom exercises when the catalog does not represent their training needs.
+Authenticated users may create private custom exercises when the global catalog does not represent their training needs.
 
-Catalog exercises are shared product concepts and are not owned by individual users.
+A custom exercise:
 
-Custom exercises belong to the user who created them and are private by default.
+- belongs to the user who created it;
+- is private by default;
+- does not automatically become part of the global catalog;
+- may be renamed or archived without invalidating historical training records.
 
-Creating a custom exercise must not automatically publish or promote that exercise into the global FitMap catalog.
+Historical execution data must remain meaningful even if a custom exercise is later changed or made unavailable for new workout configuration.
 
-The user experience should prefer existing catalog exercises when appropriate while still allowing legitimate custom exercise variations.
-
-Custom exercise lifecycle changes must not invalidate previously recorded workout history.
-
-Historical exercise execution must remain meaningful even when a custom exercise is renamed, archived or otherwise made unavailable for new workout configuration.
-
-The exact exercise taxonomy, catalog source, lifecycle mechanism and historical snapshot strategy will be defined during architecture and persistence design.
+The exact exercise taxonomy, catalog source, lifecycle mechanism and historical snapshot strategy will be refined as the exercise catalog and persistence model are implemented.
 
 ---
 
@@ -307,7 +272,7 @@ The exact exercise taxonomy, catalog source, lifecycle mechanism and historical 
 
 A `Workout` represents a reusable training plan created or configured by a user.
 
-Examples:
+Examples include:
 
 - Push;
 - Pull;
@@ -315,7 +280,7 @@ Examples:
 - Chest and Triceps;
 - Workout A.
 
-A workout describes planned activity and is not itself proof that training occurred.
+A workout describes planned training. It is not evidence that training actually occurred.
 
 ### Main responsibilities
 
@@ -326,48 +291,49 @@ A workout describes planned activity and is not itself proof that training occur
 ### Important rules
 
 - a workout belongs to one user;
-- modification of a workout must not corrupt previously completed workout history;
-- lifecycle changes to a workout must preserve historical sessions that were already completed;
-- a workout may exist without exercises while it is being configured;
-- a workout must contain at least one configured exercise before a workout session can be started from it.
+- editing a workout must not rewrite previously completed training history;
+- a workout may temporarily contain no exercises while being configured;
+- at least one exercise is required before a workout session can be started from that workout.
 
-### Accepted lifecycle rule
+### Lifecycle
 
-Workouts have an active or archived lifecycle.
+Workouts use an active or archived lifecycle.
 
-An active workout is available for normal workout planning and for starting new workout sessions.
+An active workout is available for normal planning and for starting new workout sessions.
 
 An archived workout is removed from normal active use but retains its identity and historical relationships.
 
-Archiving a workout must not delete, invalidate or rewrite previously completed workout sessions.
+Archiving must not remove or modify previously completed workout sessions.
 
-Archived workouts may be restored to active status.
+Archived workouts may be restored.
 
 Hard deletion is not part of the normal FitMap v1 workout lifecycle.
 
-The technical persistence mechanism used to implement archival will be defined during architecture and database design.
+The technical persistence mechanism used to implement archival will be selected during persistence implementation.
 
 ---
 
 ## WorkoutExercise
 
-A `WorkoutExercise` represents the inclusion and planned configuration of an exercise inside a workout.
+`WorkoutExercise` represents the inclusion and planned configuration of an exercise within a workout.
 
 It connects:
 
-`Workout -> Exercise`
+```text
+Workout -> WorkoutExercise -> Exercise
+```
 
-and may define information such as:
+It may contain planned information such as:
 
-- order;
+- position or order;
 - target number of sets;
 - target repetitions;
 - target load when appropriate;
 - notes.
 
-`WorkoutExercise` is necessary because the same exercise may have different planned configurations in different workouts.
+The same `Exercise` may therefore have different planned configurations in different workouts.
 
-Example:
+For example:
 
 ```text
 Workout A
@@ -385,75 +351,59 @@ Bench Press
 45 kg
 ```
 
-Both reference the same `Exercise`, but their planned configurations are different.
+Both configurations reference the same exercise while representing different training plans.
 
 ---
 
-# 7. Workout execution domain
+# 6. Workout execution domain
 
 ## WorkoutSession
 
 A `WorkoutSession` represents an actual occurrence of training performed by a user.
 
-A session is historical data.
+A workout session is historical data and is distinct from the reusable `Workout` template.
 
-Example:
-
-```text
-Workout A
-September 13, 2026
-Started: 18:05
-Finished: 19:12
-```
+A session may originate from a configured workout, but completed session history must remain meaningful even if the original workout is later edited or archived.
 
 ### Main responsibilities
 
 - identify when training occurred;
-- associate executed exercises with the user;
-- preserve historical training information.
+- associate executed exercises with the correct user;
+- preserve historical training information;
+- represent the lifecycle of an actual training session.
 
 ### Important rules
 
 - a workout session belongs to one user;
-- completed historical data must remain valid even if the original workout is later edited;
-- a session may originate from a configured workout;
-- session lifecycle rules must distinguish active, completed and cancelled sessions where required.
+- ownership cannot be transferred to another user;
+- completed historical data must not be rewritten when a workout template changes;
+- a session may be active, completed or cancelled according to the implemented lifecycle;
+- a user may have at most one active workout session at a time.
 
-### Accepted active-session rule
+When a session is already active, FitMap should require the user to resume, finish or cancel it before starting another session.
 
-A user may have at most one active workout session at a time.
-
-Starting a new workout session while another session is active must not create a second simultaneous active session for the same user.
-
-When an active session already exists, FitMap should direct the user to resume, finish or cancel that session before another workout session can be started.
-
-This restriction applies only to active sessions and does not limit the number of completed or cancelled historical workout sessions associated with a user.
-
-The exact technical enforcement mechanism will be defined during architecture and persistence design.
+The exact database enforcement mechanism belongs to persistence implementation.
 
 ---
 
 ## ExerciseExecution
 
-`ExerciseExecution` represents the execution of one exercise during a workout session.
+`ExerciseExecution` represents the execution of an exercise during a workout session.
 
-It may record:
+It may record information such as:
 
 - exercise identity;
 - execution order;
 - notes;
-- completion status;
-- historical information required to keep the execution understandable over time.
+- completion state.
 
-It separates the planned `WorkoutExercise` from what actually happened during training.
-
-Historical execution data must not depend exclusively on mutable current exercise configuration when doing so would make past sessions inaccurate or ambiguous.
+It represents what actually occurred during training rather than merely copying the planned `WorkoutExercise`.
 
 ---
 
 ## SetExecution
 
-`SetExecution` represents an individual performed set during an exercise execution.
+`SetExecution` represents an individual performed set within an `ExerciseExecution`.
 
 It may record:
 
@@ -473,13 +423,13 @@ Set 3: 8 reps x 60 kg
 Set 4: 7 reps x 60 kg
 ```
 
-This model allows FitMap to calculate meaningful training progression from actual data rather than only planned values.
+This historical execution data allows FitMap to derive meaningful training progression.
 
 ---
 
-# 8. Historical integrity
+## Historical integrity
 
-FitMap must preserve the difference between:
+FitMap must preserve the distinction between:
 
 ```text
 Workout
@@ -493,28 +443,13 @@ WorkoutSession
 historical training execution
 ```
 
-Consider the following situation:
+For example, if a user completes a workout configured as `4 x 10` and later changes the workout template to `5 x 8`, the completed session must continue representing what actually occurred at the time.
 
-1. A user completes Workout A on September 10.
-2. Workout A contains Bench Press with `4 x 10`.
-3. On September 15 the user edits Workout A to `5 x 8`.
-
-The September 10 history must continue representing what actually occurred on September 10.
-
-Editing the workout template must not rewrite historical training data.
-
-The same principle applies when:
-
-- a workout is archived;
-- a custom exercise is renamed or archived;
-- current exercise targets change;
-- other mutable planning data changes after execution.
-
-This rule will influence persistence and API architecture.
+Workout-template changes must never retroactively rewrite completed training history.
 
 ---
 
-# 9. Progress domain
+# 7. Progress domain
 
 ## ProgressPhoto
 
@@ -522,74 +457,55 @@ A `ProgressPhoto` represents an image intentionally recorded by a user as part o
 
 ### Important rules
 
-- the photo belongs to one user;
+- a progress photo belongs to one user;
 - progress photos are private by default;
-- the photo has a relevant recording date;
-- taking a photo must not automatically determine whether an exercise was completed.
+- a photo has a relevant recording date;
+- a photo exists independently from workout completion;
+- taking a photo must not automatically mark an exercise or workout as completed.
 
-Image binary storage is an infrastructure concern and should not be confused with the conceptual progress record.
+A progress photo may optionally reference a `WorkoutSession` when the user intentionally associates the image with that session.
 
-### Accepted relationship rule
+A workout session is not required to create a progress photo.
 
-A progress photo exists independently as a user-owned progress record.
+Removing or changing the optional session relationship must not remove the progress photo itself.
 
-A progress photo may optionally reference a workout session when the user intentionally associates the photo with that training session.
-
-A workout session is not required in order to create a progress photo.
-
-Removing or changing the optional workout-session relationship must not remove the progress photo itself.
-
-Progress photos remain private by default regardless of whether they are associated with a workout session.
-
-The exact media-storage and persistence strategy will be defined during architecture and infrastructure design.
+The photo binary is an infrastructure concern. The domain record represents the user-owned progress information, while private media storage is handled by the architecture defined for FitMap.
 
 ---
 
 ## BodyMetricRecord
 
-`BodyMetricRecord` represents a body-related measurement recorded at a specific point in time.
+`BodyMetricRecord` represents a body-related measurement recorded at a point in time.
 
-A body metric is historical information rather than only the user's current measurement.
-
-### Initial metric types
-
-The controlled metric set may initially include:
+Supported metric candidates include:
 
 - body weight;
-- waist circumference;
-- chest circumference;
-- arm circumference;
-- thigh circumference;
-- hip circumference.
+- waist measurement;
+- chest measurement;
+- arm measurement;
+- thigh measurement;
+- hip measurement.
 
-Additional metric types should require an explicit product decision rather than unrestricted free-form metric definitions.
+Measurements should preserve:
 
-### Accepted metric rule
+- metric type;
+- value;
+- unit;
+- recording date;
+- owner.
 
-Body metrics are stored as time-based user-owned measurements with an explicit metric type, numeric value, unit and recording date.
+Supported unit systems may include:
 
-Each measurement belongs to exactly one user.
+```text
+Weight: kg / lb
+Length: cm / in
+```
 
-Measurement values and units must be represented separately rather than stored as arbitrary combined text.
+Body metrics are personal progress records and are private by default.
 
-Supported units must be controlled and appropriate to the metric type.
+FitMap treats these measurements as fitness-tracking information rather than clinical or diagnostic data.
 
-Examples may include:
-
-- `kg` and `lb` for body weight;
-- `cm` and `in` for body circumferences.
-
-Historical measurements must remain available so that FitMap can derive progress trends over time.
-
-FitMap must not silently reinterpret historical values when a user's preferred display unit changes.
-
-Automatic clinical interpretation, diagnosis or health assessment is outside the purpose of this domain concept.
-
-Metrics such as automatically estimated body-fat percentage, diagnostic BMI interpretation or metabolic assessment are not part of the initial model.
-
-This concept remains in the Differentiator product scope and should not increase Core implementation complexity prematurely.
-
-The exact persistence representation, conversion strategy and validation ranges will be defined during architecture and implementation design.
+The product should not infer diagnostic body-composition, metabolic or medical conclusions from measurements without a separate validated requirement.
 
 ---
 
@@ -597,25 +513,23 @@ The exact persistence representation, conversion strategy and validation ranges 
 
 `FitnessGoal` represents a user-defined progress objective.
 
-Candidate examples include:
+Candidate goals include:
 
-- workout-frequency goal;
-- body-weight goal;
-- performance goal.
+- workout-frequency goals;
+- body-weight goals;
+- performance goals.
 
-The supported goal types and progress calculation rules must be defined before implementation.
-
-This concept belongs to the Differentiator scope.
+The supported goal types and calculation rules should be introduced only when the corresponding product behavior is implemented.
 
 ---
 
-# 10. Derived progress information
+# 8. Derived progress information
 
-Statistics and progress charts should preferably be derived from trustworthy domain data instead of being stored as independent duplicated facts when unnecessary.
+Progress statistics should preferably be derived from trustworthy historical domain data rather than duplicated as manually maintained values.
 
-Examples:
+Examples include:
 
-- number of workouts completed;
+- workouts completed;
 - training frequency;
 - exercise load progression;
 - training consistency;
@@ -633,54 +547,35 @@ load progression calculation
 progress chart
 ```
 
-rather than manually maintaining a separate field containing the same derived value.
-
-Derived data may still be cached or materialized later for performance reasons if architecture and measurements justify it.
+Derived information may later be cached or materialized when actual performance requirements justify it.
 
 ---
 
-# 11. Conceptual relationships
+# 9. Conceptual relationships
 
-The initial conceptual relationships are:
+The primary conceptual relationships are:
 
 ```text
 User
 |-- UserProfile
 |-- UserPreferences
 |-- Custom Exercise
-|-- FavoriteGym
-|   `-- Gym
-|       `-- GymExternalReference
-|-- GymReview
-|   `-- Gym
-|-- Workout
-|   `-- WorkoutExercise
-|       `-- Exercise
+|-- FavoriteGym -> Gym -> GymExternalReference
+|-- GymReview -> Gym
+|-- Workout -> WorkoutExercise -> Exercise
 |-- WorkoutSession
 |   |-- source Workout (optional)
-|   `-- ExerciseExecution
-|       `-- SetExecution
-|-- ProgressPhoto
-|   `-- WorkoutSession (optional)
+|   `-- ExerciseExecution -> SetExecution
+|-- ProgressPhoto -> WorkoutSession (optional)
 |-- BodyMetricRecord
 `-- FitnessGoal
 ```
 
-A workout may contain zero or more workout exercises while it is being configured.
-
-A workout must contain at least one configured exercise before a workout session can be started from it.
+A workout may contain many workout exercises.
 
 An exercise may be referenced by many workouts.
 
-Catalog exercises may be shared by many users.
-
-A custom exercise belongs to exactly one user and is private by default.
-
-A user may have many workout sessions over time but at most one active workout session at a time.
-
-A workout session may optionally originate from one configured workout.
-
-A workout may be the source of many workout sessions over time.
+A user may have many historical workout sessions but at most one active session at a time.
 
 A workout session may contain many exercise executions.
 
@@ -690,44 +585,37 @@ A user may favorite multiple gyms.
 
 A gym may be favorited by multiple users.
 
-A FitMap gym may have multiple external-provider references.
+A user may create reviews over time while maintaining at most one active review for the same gym.
 
-A user may maintain at most one active review for a specific gym.
-
-A progress photo may optionally reference one workout session.
-
-A user may have many body metric records over time.
+A progress photo may optionally reference a workout session without depending on that session for its existence.
 
 ---
 
-# 12. Conceptual diagram
+# 10. Conceptual diagram
 
 ```mermaid
 classDiagram
-
     User "1" --> "0..1" UserProfile
     User "1" --> "0..1" UserPreferences
-
-    User "0..1" --> "0..*" Exercise : owns custom
-
-    User "1" --> "0..*" FavoriteGym
-    FavoriteGym "*" --> "1" Gym
-
-    Gym "1" --> "0..*" GymExternalReference
-
-    User "1" --> "0..*" GymReview
-    GymReview "*" --> "1" Gym
 
     User "1" --> "0..*" Workout
     Workout "1" --> "0..*" WorkoutExercise
     WorkoutExercise "*" --> "1" Exercise
 
     User "1" --> "0..*" WorkoutSession
-    WorkoutSession "0..*" --> "0..1" Workout : originates from
-
+    WorkoutSession "0..*" --> "0..1" Workout
     WorkoutSession "1" --> "0..*" ExerciseExecution
     ExerciseExecution "1" --> "0..*" SetExecution
     ExerciseExecution "*" --> "1" Exercise
+
+    User "1" --> "0..*" FavoriteGym
+    FavoriteGym "*" --> "1" Gym
+
+    User "1" --> "0..*" GymReview
+    GymReview "*" --> "1" Gym
+
+    Gym "1" --> "0..*" GymExternalReference
+    Gym "1" --> "0..*" GymAmenity
 
     User "1" --> "0..*" ProgressPhoto
     ProgressPhoto "0..*" --> "0..1" WorkoutSession
@@ -738,95 +626,59 @@ classDiagram
 
 This diagram represents conceptual relationships and must not be interpreted as the final database schema.
 
-The relationship between `User` and `Exercise` applies only to user-created custom exercises. Catalog exercises do not have an individual user owner.
-
-The optional relationship between `WorkoutSession` and `Workout` represents the workout template from which a session may originate.
-
-A workout may originate many workout sessions over time, while a workout session may originate from at most one workout template.
-
-Historical session integrity must not depend on the current mutable state of that workout.
-
-The distinction between catalog exercises and user-owned custom exercises is conceptual at this stage and does not imply an inheritance-based implementation.
-
 ---
 
-# 13. Domain invariants
-
-The following invariants are important candidates for the FitMap domain:
+# 11. Domain invariants
 
 ## User ownership
 
-Private product records must always belong to the correct user.
-
-## Stable gym identity
-
-Persistent FitMap relationships must reference a stable FitMap gym identity rather than depending directly on an external provider identifier.
+Private product records must belong to the correct authenticated user.
 
 ## Favorite uniqueness
 
-A user should not have duplicate favorite relationships for the same gym.
+A user must not have duplicate favorite relationships for the same gym.
 
-## Custom exercise privacy
+## Stable gym identity
 
-A user-created custom exercise is private to its owner by default and must not automatically become part of the global catalog.
+Persistent FitMap relationships must reference a stable FitMap gym identity rather than depending directly on an external-provider identifier.
 
-## Workout configuration
+## Review uniqueness
 
-A workout may exist without exercises while being configured but must contain at least one configured exercise before a workout session can be started from it.
-
-## Workout lifecycle
-
-A workout is active or archived within the normal FitMap v1 lifecycle.
-
-Archiving must not destroy historical workout sessions.
-
-## Active-session uniqueness
-
-A user may have at most one active workout session at a time.
+A user may have at most one active review for the same gym.
 
 ## Historical preservation
 
-Changes to workout templates or mutable exercise configuration must not retroactively modify completed workout-session history.
+Changes to workouts or exercises must not retroactively invalidate or rewrite completed workout-session history.
 
 ## Historical ownership
 
 A workout session cannot change ownership from one user to another.
 
+## Single active session
+
+A user may have at most one active workout session at a time.
+
 ## Progress privacy
 
-Progress photos and private progress information are not public by default.
-
-## Progress-photo independence
-
-A progress photo does not require a workout session in order to exist.
-
-## Body-metric history
-
-Body measurements represent time-based historical records and must preserve their recorded value, unit and date.
+Progress photos, body measurements and other private progress information are not public by default.
 
 ## Authentic gym data
 
-Missing external gym information must not be replaced by fabricated production data.
-
-## Review uniqueness
-
-A user may maintain at most one active review for the same gym.
+Missing external gym information must not be replaced with fabricated production data.
 
 ## Review ownership
 
-A user cannot modify or delete another user's review through ordinary product functionality.
+A user cannot modify or remove another user's review through ordinary product functionality.
 
 ## Execution accuracy
 
-Recorded exercise execution should represent what the user actually performed rather than automatically copying planned targets as completed results.
-
-These invariants will be reviewed during architecture and implementation design.
+Recorded exercise execution represents what the user actually performed rather than automatically treating planned targets as completed results.
 
 ---
 
-# 14. Value objects and supporting concepts
+# 12. Value objects and supporting concepts
 
-Some information may be represented as value objects rather than independent entities.
+Some information may be represented as value objects or supporting types rather than independent entities.
 
 Candidate examples include:
 
@@ -838,15 +690,15 @@ Candidate examples include:
 - load value;
 - date range.
 
-The final representation depends on the programming and persistence model selected later.
+The final technical representation depends on the persistence and application design.
 
-The existence of a concept in this section does not imply that a database table should exist for it.
+The presence of a concept in the domain model does not imply that a dedicated database table or source-code class must exist for it.
 
 ---
 
-# 15. Concepts intentionally excluded from the initial Core domain
+# 13. Concepts outside the initial Core scope
 
-The following areas are outside the current Core domain:
+The following capabilities are outside the current FitMap Core scope:
 
 - social feed;
 - private messaging;
@@ -855,94 +707,40 @@ The following areas are outside the current Core domain:
 - membership billing;
 - wearable synchronization.
 
-Introducing these concepts would significantly expand the FitMap domain and should require an explicit product-scope decision.
+Introducing these areas would materially expand the product domain and should require an explicit product-scope decision.
 
 ---
 
-# 16. Resolved domain decisions
+# 14. Implementation-deferred details
 
-The following domain decisions were reviewed and accepted during the initial FitMap v1 domain-modeling phase.
+Some details intentionally remain implementation decisions rather than unresolved domain architecture.
 
-## Gym identity
+These include:
 
-FitMap maintains its own stable gym identity for persistent product relationships.
+- final user-profile attributes;
+- detailed exercise taxonomy and initial catalog population;
+- technical archival representation;
+- historical snapshot implementation;
+- review moderation and audit mechanisms;
+- exact body-metric validation ranges;
+- supported fitness-goal calculation rules.
 
-External provider identifiers are references associated with a FitMap gym and are not the primary domain identity used by favorites, reviews or other persistent relationships.
-
-## Exercise catalog
-
-FitMap uses a managed global exercise catalog while allowing authenticated users to create private custom exercises.
-
-Custom exercise lifecycle changes must not invalidate previously recorded workout history.
-
-## Workout lifecycle
-
-Workouts use an active or archived lifecycle.
-
-Archiving removes a workout from normal active use without deleting its historical workout sessions.
-
-Archived workouts may be restored.
-
-Hard deletion is not part of the normal FitMap v1 workout lifecycle.
-
-## Active workout session
-
-A user may have at most one active workout session at a time.
-
-An existing active session must be resumed, finished or cancelled before another session can be started.
-
-## Gym review policy
-
-A user may maintain at most one active review for the same gym.
-
-The author may edit or remove their own review.
-
-Removed reviews must no longer participate in public review presentation or aggregated gym rating calculations.
-
-## Progress-photo relationship
-
-Progress photos exist independently as user-owned progress records.
-
-A progress photo may optionally reference a workout session, but a workout session is not required to create or retain a progress photo.
-
-## Body metrics
-
-Body metrics are modeled as historical user-owned measurements with a controlled metric type, numeric value, explicit unit and recording date.
-
-The initial model is limited to non-clinical progress tracking and does not provide automatic clinical interpretation.
-
-Body metrics remain in the Differentiator product scope.
+These details may be refined during implementation as long as the domain invariants defined in this document remain preserved.
 
 ---
 
-# 17. Relationship to implementation
+# 15. Relationship to implementation
 
-This domain model should influence:
+This domain model should guide:
 
 - backend module boundaries;
-- database modeling;
+- persistence design;
 - API contracts;
 - mobile feature organization;
 - authorization rules;
-- test strategy;
-- documentation;
+- automated tests;
 - backlog decomposition.
 
-However, domain concepts should not be mechanically converted into one database table or one source-code class each.
+Domain concepts should not be mechanically converted into one database table or one source-code class each.
 
-Implementation design must preserve domain meaning while remaining appropriate for the selected architecture.
-
----
-
-# 18. Next steps
-
-Before implementation begins, the next modeling activities should include:
-
-1. review the domain concepts and terminology;
-2. validate conceptual relationships and domain invariants;
-3. define major module boundaries;
-4. define the high-level system architecture;
-5. document significant architectural decisions through ADRs;
-6. design the persistence model;
-7. design API boundaries and contracts;
-8. decompose implementation work into traceable GitHub Issues.
+Implementation should preserve the meaning, ownership and invariants of the domain while remaining appropriate for the FitMap architecture.
