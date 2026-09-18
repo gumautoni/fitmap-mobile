@@ -2,7 +2,7 @@
 
 ## Document status
 
-**Status:** Accepted  
+**Status:** Accepted
 **Product:** FitMap  
 **Version:** v1
 
