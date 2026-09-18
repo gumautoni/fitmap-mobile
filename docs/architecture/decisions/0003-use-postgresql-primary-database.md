@@ -1,4 +1,4 @@
-# ADR 0003 — Use PostgreSQL as the Primary Database
+# ADR 0003 — Use PostgreSQL with SQLAlchemy and Alembic
 
 ## Status
 
@@ -6,82 +6,38 @@ Accepted
 
 ## Context
 
-FitMap manages strongly related application data across multiple product domains.
+FitMap manages strongly related data across users, gyms, workouts, workout sessions and progress records.
 
-Relevant relationships include:
-
-- users and profiles;
-- users and workouts;
-- workouts and workout exercises;
-- exercises and workouts;
-- users and workout sessions;
-- workout sessions and exercise executions;
-- exercise executions and set executions;
-- users and favorite gyms;
-- users and gym reviews;
-- gyms and external provider references;
-- users and progress records.
-
-Several FitMap domain rules require strong consistency.
-
-Examples include:
-
-- a favorite gym relationship should not be duplicated for the same user and gym;
-- workout sessions must remain associated with the correct user;
-- historical workout execution must preserve valid relationships;
-- exercise executions must belong to valid workout sessions;
-- set executions must remain associated with valid exercise executions;
-- user-owned records must remain isolated between different accounts.
-
-FitMap therefore requires a persistence technology capable of supporting:
-
-- relational integrity;
-- transactional operations;
-- uniqueness constraints;
-- referential constraints;
-- indexes;
-- structured querying;
-- aggregation;
-- schema evolution;
-- reliable production operation.
-
-The database architecture must remain appropriate for the modular monolith established for FitMap v1.
+The backend requires reliable relational integrity, transactions and controlled schema evolution while keeping persistence concerns separate from API and business logic.
 
 ## Decision
 
-FitMap v1 will use **PostgreSQL** as its primary transactional database.
+FitMap v1 will use:
 
-The initial backend architecture will use a single PostgreSQL database rather than independent databases for each backend module.
+- PostgreSQL as the primary transactional database;
+- SQLAlchemy 2.x for relational persistence;
+- Alembic for database schema migrations.
 
-A shared physical database does not imply unrestricted ownership of all persisted data by all modules.
+The modular monolith will initially use a single PostgreSQL database.
 
-Backend modules must maintain explicit logical ownership of their domain data.
+Each business module retains logical ownership of its data even though the physical database is shared.
 
-Conceptually, ownership is expected to align approximately with the FitMap domain boundaries:
+Database constraints should reinforce important domain invariants where appropriate through mechanisms such as:
+
+- primary and foreign keys;
+- unique constraints;
+- non-null constraints;
+- check constraints.
+
+Application validation and database integrity complement each other.
+
+### Persistence boundaries
+
+SQLAlchemy is an infrastructure concern and must not define the FitMap domain model.
+
+The application maintains a conceptual distinction between:
 
 ```text
-PostgreSQL
-|
-|-- Identity and Profile
-|   |-- users
-|   |-- profiles
-|   `-- preferences
-|
-|-- Gym Discovery
-|   |-- gyms
-|   |-- external provider references
-|   |-- favorites
-|   `-- reviews
-|
-|-- Training
-|   |-- exercises
-|   |-- workouts
-|   |-- workout exercises
-|   |-- workout sessions
-|   |-- exercise executions
-|   `-- set executions
-|
-`-- Progress
-    |-- progress photo metadata
-    |-- body metrics
-    `-- fitness goals
+API contracts
+Domain / application behavior
+Persistence models
