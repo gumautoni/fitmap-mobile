@@ -1,4 +1,4 @@
-# ADR 0002 — Use Python and FastAPI for the Backend API
+# ADR 0002 — Use Python and FastAPI for the Backend
 
 ## Status
 
@@ -6,63 +6,34 @@ Accepted
 
 ## Context
 
-FitMap requires a backend API responsible for product capabilities including:
+FitMap requires a backend API for authentication, gym discovery, workout management, progress tracking and integration with external services.
 
-- authentication and authorization;
-- user and profile management;
-- gym-related persistent relationships;
-- workout planning;
-- workout execution;
-- training history;
-- progress tracking;
-- integration with external services;
-- media-related metadata.
-
-The backend must support the modular monolith architecture established for FitMap v1.
-
-The selected backend technology should provide:
-
-- strong support for HTTP APIs;
-- explicit request and response contracts;
-- input validation;
-- maintainable modular organization;
-- automated testing;
-- asynchronous capabilities where appropriate;
-- clear integration with relational persistence;
-- strong development productivity;
-- sufficient ecosystem maturity;
-- compatibility with professional deployment and CI/CD practices.
-
-The framework must support the application architecture without becoming the architecture itself.
-
-FitMap business rules must remain separated from HTTP transport, persistence and framework-specific concerns.
+The backend technology should support clear API contracts, validation, automated testing and the modular monolith architecture without imposing unnecessary framework complexity.
 
 ## Decision
 
-FitMap v1 will use **Python** as the backend programming language and **FastAPI** as the HTTP/API delivery framework.
+FitMap v1 will use **Python** as the backend language and **FastAPI** as the HTTP API framework.
 
-FastAPI will be responsible primarily for concerns such as:
+FastAPI is responsible for transport concerns such as:
 
-- HTTP routing;
-- request parsing;
+- routing;
 - request and response validation;
-- API serialization;
-- dependency integration at the delivery boundary;
+- serialization;
 - HTTP status handling;
-- generated API documentation.
+- OpenAPI generation.
 
-FastAPI route handlers must not become the primary location for FitMap business rules.
+Business rules must remain outside route handlers whenever practical.
 
-The backend should maintain explicit separation between concerns such as:
+The intended dependency direction is:
 
 ```text
-HTTP / API delivery
-        |
-        v
+HTTP / FastAPI
+      |
+      v
 Application use cases
-        |
-        v
-Domain rules
-        |
-        v
+      |
+      v
+Domain behavior
+      |
+      v
 Persistence and external infrastructure
