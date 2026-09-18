@@ -1,4 +1,4 @@
-# ADR 0001 — Use a Modular Monolith for the FitMap Backend
+# ADR 0001 — Use a Modular Monolith for the Backend
 
 ## Status
 
@@ -6,113 +6,82 @@ Accepted
 
 ## Context
 
-FitMap v1 requires backend capabilities for multiple product domains, including:
+FitMap requires backend capabilities for authentication, gym discovery, workout management and progress tracking.
 
-- identity and user profile;
-- gym discovery and persistent gym relationships;
-- training planning and execution;
-- progress tracking;
-- media-related metadata;
-- authentication and authorization.
+These areas have distinct responsibilities, but the project is currently developed by a small team and has no demonstrated need for independently deployed services.
 
-These domains have different responsibilities and should remain clearly separated.
+Adopting microservices at this stage would add network, deployment, observability and data-consistency complexity without proportional benefit.
 
-However, FitMap is currently being developed by a small team, has no demonstrated requirement for independently deployed backend services, and does not currently have scalability or organizational constraints that justify a distributed microservices architecture.
-
-Introducing microservices at this stage would add operational and development complexity such as:
-
-- multiple deployable services;
-- service-to-service communication;
-- distributed failure handling;
-- independent service authentication;
-- distributed tracing;
-- contract versioning;
-- additional infrastructure;
-- more complex local development;
-- more complex CI/CD;
-- distributed transaction and consistency concerns.
-
-This complexity would not currently provide proportional product or engineering value.
-
-At the same time, using a single backend application must not result in an unstructured monolith where domain responsibilities are freely mixed.
+At the same time, a single deployable backend should not become an application where every feature depends directly on every other feature.
 
 ## Decision
 
-FitMap v1 will use a **modular monolith backend architecture**.
+FitMap v1 will use a **modular monolith**.
 
-The backend will be deployed as a single application while maintaining explicit internal module boundaries aligned with the primary FitMap domains.
+The backend will be deployed as a single application while being organized around four primary business modules:
 
-The initial domain-oriented backend boundaries are expected to include concepts such as:
+- `Identity`
+- `Gyms`
+- `Training`
+- `Progress`
 
-- Identity and Profile;
-- Gym Discovery;
-- Training;
-- Progress.
+### Module responsibilities
 
-Cross-cutting infrastructure concerns such as persistence, configuration, logging and external-service integration must support these modules without unnecessarily coupling their domain logic.
+**Identity** owns user accounts, profiles, preferences, authentication and sessions.
 
-Modules should communicate through well-defined application boundaries and should not depend directly on another module's internal implementation unless explicitly justified.
+**Gyms** owns gym discovery, FitMap gym identity, external gym references, favorites and reviews.
 
-A shared physical database may be used while preserving clear logical ownership of domain data.
+**Training** owns exercises, workouts, workout sessions, execution records and training history.
 
-The architecture must not assume that every module should become a future microservice.
+**Progress** owns progress photos, body measurements, fitness goals and progress-oriented capabilities.
+
+Each module owns its business rules and persistence responsibilities.
+
+Cross-module interactions should use explicit application boundaries instead of depending directly on another module's repositories, ORM models or private services.
+
+The modules share a PostgreSQL database initially, but physical database sharing does not remove logical data ownership.
+
+Cross-module foreign keys may be used when they represent legitimate relational integrity without transferring ownership of the referenced entity.
+
+Circular module dependencies should be avoided.
+
+A small shared technical area may exist for genuinely cross-cutting concerns, but it must not become a general location for domain logic.
+
+Internal modules communicate in-process. FitMap will not introduce HTTP communication between modules merely to imitate microservices.
 
 ## Consequences
 
-### Positive consequences
+### Positive
 
-The selected architecture:
-
-- keeps deployment and local development comparatively simple;
-- reduces distributed-system complexity;
-- supports transactional consistency where appropriate;
-- allows the development team to understand and operate the complete backend;
-- preserves explicit domain boundaries;
-- supports automated testing with lower infrastructure overhead;
-- allows the system to scale vertically or through multiple application instances when appropriate;
-- provides a foundation from which individual services could later be extracted if justified by real requirements.
+- simpler deployment and local development;
+- lower operational complexity;
+- clear domain ownership;
+- straightforward transactional behavior;
+- easier testing and debugging;
+- future service extraction remains possible if justified.
 
 ### Trade-offs
 
-The selected architecture also means:
+- modules are deployed together;
+- independent scaling or deployment by module is not available;
+- architectural boundaries require discipline because the database and process are shared.
 
-- backend modules are deployed together;
-- independent deployment of individual modules is not available;
-- careless implementation could still create excessive coupling between modules;
-- module boundaries must therefore be actively protected through architecture, code organization and review.
-
-These trade-offs are acceptable for FitMap v1.
+These trade-offs are appropriate for FitMap v1.
 
 ## Alternatives considered
 
 ### Unstructured monolith
 
-Rejected because placing unrelated domain behavior together without explicit boundaries would reduce maintainability, testability and future architectural flexibility.
+Rejected because unrestricted coupling between product areas would reduce maintainability as FitMap grows.
 
 ### Microservices
 
-Not selected for FitMap v1.
+Not selected because the current team size, deployment requirements and expected scale do not justify distributed-system complexity.
 
-Microservices may provide independent deployment, scaling and team ownership benefits, but FitMap does not currently have requirements that justify the additional distributed-system and operational complexity.
-
-## Reconsideration criteria
-
-This decision may be revisited if concrete evidence demonstrates that one or more modules require independent deployment or scaling.
-
-Examples may include:
-
-- a module develops substantially different scaling characteristics;
-- independent release cycles become operationally necessary;
-- team growth creates clear independent ownership boundaries;
-- isolation requirements cannot be reasonably satisfied within the modular monolith;
-- availability requirements justify independent service operation;
-- measured operational constraints show that extraction provides meaningful value.
-
-Microservices must not be introduced solely because the product has grown or because distributed architecture is perceived as more advanced.
+Microservices may be reconsidered if concrete scaling, availability or organizational requirements eventually require independent services.
 
 ## Related documentation
 
-- `../../requirements/product-scope.md`
-- `../../requirements/functional-requirements.md`
-- `../../requirements/non-functional-requirements.md`
 - `../domain-model.md`
+- `../high-level-architecture.md`
+- `../../requirements/product-scope.md`
