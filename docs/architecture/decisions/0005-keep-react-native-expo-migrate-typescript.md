@@ -8,59 +8,66 @@ Accepted
 
 FitMap already has a functional mobile prototype built with React Native and Expo.
 
-The current application includes capabilities such as:
+The application needs to evolve into a more maintainable production-oriented codebase without introducing the cost and regression risk of a full mobile rewrite.
 
-- navigation;
-- location access;
-- map integration;
-- camera access;
-- forms and screens;
-- local state;
-- external API integration.
-
-The project also already contains TypeScript configuration, including strict-mode support, while a significant portion of the application is still implemented in JavaScript.
-
-FitMap must evolve from a functional prototype into a maintainable production-oriented mobile application without introducing unnecessary rewrite risk.
-
-The mobile architecture must support:
-
-- Android and iOS;
-- backend API integration;
-- authentication and session management;
-- location and map capabilities;
-- camera and media workflows;
-- workout planning and execution;
-- progress tracking;
-- automated testing;
-- maintainable application structure;
-- explicit typing;
-- future CI/CD and release workflows.
+Most of the existing source code is JavaScript, while the project already has TypeScript configuration available.
 
 ## Decision
 
-FitMap v1 will continue using **React Native with Expo** as its mobile application platform.
+FitMap v1 will continue using **React Native with Expo**.
 
-The existing application will not be rewritten in another mobile framework without a demonstrated technical or product requirement.
+The existing application will be migrated incrementally from JavaScript to **TypeScript** rather than rewritten from scratch.
 
-FitMap will migrate incrementally from JavaScript to **TypeScript**.
+New production code should be written in TypeScript unless a specific reason justifies otherwise.
 
-New production application code should be written in TypeScript unless a justified exception exists.
+TypeScript strict mode will remain enabled, and `any` should not be used as the default migration strategy.
 
-The migration must preserve working application behavior and should be performed incrementally rather than through a full application rewrite.
+The migration should preserve working application behavior and occur gradually across shared types, services, hooks, components and screens.
 
-## Architectural principles
+Expo will remain part of the mobile architecture unless a concrete product requirement demonstrates a limitation that justifies additional native complexity.
 
-### Preserve the working application
+The existing navigation approach will not be replaced solely for modernization purposes.
 
-Migration and modernization work should minimize unnecessary regressions.
+## Consequences
 
-The preferred evolution strategy is:
+### Positive
 
-```text
-working JavaScript prototype
-        |
-        v
-incremental TypeScript migration
-        |
-        v
-fully typed mobile application
+- preserves the value of the working prototype;
+- avoids unnecessary rewrite risk;
+- improves refactoring and type safety;
+- provides stronger contracts for backend integration;
+- keeps Android and iOS development in one codebase.
+
+### Trade-offs
+
+- JavaScript and TypeScript will coexist during the migration;
+- stricter typing may expose existing prototype inconsistencies;
+- dependency and SDK upgrades must be handled incrementally.
+
+These costs are preferable to a full rewrite.
+
+## Alternatives considered
+
+### Continue with JavaScript
+
+Not selected because the growing domain and backend integration benefit from stronger compile-time contracts.
+
+### Rewrite the application in TypeScript
+
+Not selected because replacing working functionality would introduce unnecessary schedule and regression risk.
+
+### Flutter or separate native applications
+
+Not selected because React Native already provides a suitable cross-platform foundation and no current FitMap requirement justifies replacing it.
+
+### Remove Expo
+
+Not selected because no current product requirement demonstrates that Expo prevents the planned FitMap capabilities.
+
+## Related documentation
+
+- `0001-use-modular-monolith-backend.md`
+- `0002-use-python-fastapi-backend.md`
+- `../high-level-architecture.md`
+- `../domain-model.md`
+- `../../requirements/product-scope.md`
