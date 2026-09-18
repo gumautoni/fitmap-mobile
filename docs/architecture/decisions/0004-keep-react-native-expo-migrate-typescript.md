@@ -1,4 +1,4 @@
-# ADR 0005 — Keep React Native and Expo and Migrate to TypeScript
+# ADR 0004 — Keep React Native and Expo and Migrate to TypeScript
 
 ## Status
 

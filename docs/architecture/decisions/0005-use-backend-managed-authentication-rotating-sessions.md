@@ -1,4 +1,4 @@
-# ADR 0006 — Use Backend-Managed Authentication and Rotating Sessions
+# ADR 0005 — Use Backend-Managed Authentication and Rotating Sessions
 
 ## Status
 
@@ -83,6 +83,6 @@ Not selected because FitMap currently controls its own first-party mobile applic
 
 - `0001-use-modular-monolith-backend.md`
 - `0002-use-python-fastapi-backend.md`
-- `0005-keep-react-native-expo-migrate-typescript.md`
+- `0004-keep-react-native-expo-migrate-typescript.md`
 - `../high-level-architecture.md`
 - `../domain-model.md`

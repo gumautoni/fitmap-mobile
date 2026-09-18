@@ -1,4 +1,4 @@
-# ADR 0007 — Isolate External Location and Gym Providers
+# ADR 0006 — Isolate External Location and Gym Providers
 
 ## Status
 

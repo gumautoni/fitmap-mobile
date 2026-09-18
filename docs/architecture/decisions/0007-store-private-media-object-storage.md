@@ -1,4 +1,4 @@
-# ADR 0008 — Store Private Media in Object Storage
+# ADR 0007 — Store Private Media in Object Storage
 
 ## Status
 

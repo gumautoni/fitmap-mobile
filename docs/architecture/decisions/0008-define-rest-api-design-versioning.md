@@ -1,4 +1,4 @@
-# ADR 0010 — Define REST API Design and Versioning
+# ADR 0008 — Define REST API Design and Versioning
 
 ## Status
 
