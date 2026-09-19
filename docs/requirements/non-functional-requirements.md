@@ -1,4 +1,4 @@
-﻿# FitMap v1 — Non-Functional Requirements
+# FitMap v1 — Non-Functional Requirements
 
 ## Document status
 

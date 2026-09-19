@@ -1,4 +1,4 @@
-﻿# FitMap v1 — Product Scope
+# FitMap v1 — Product Scope
 
 ## Document status
 
