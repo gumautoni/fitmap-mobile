@@ -2,7 +2,7 @@
 
 ## Document status
 
-**Status:** Draft  
+**Status:** Accepted
 **Product:** FitMap  
 **Version:** v1  
 **Purpose:** Define the initial product boundaries, target users, value proposition and functional scope of FitMap v1.
@@ -290,7 +290,7 @@ Examples include:
 
 When information is unavailable, the application should represent it as unavailable instead of generating misleading values.
 
-The final gym data strategy will be defined during the architecture phase.
+Gym data handling must follow the approved architecture and external-provider integration strategy.
 
 ---
 

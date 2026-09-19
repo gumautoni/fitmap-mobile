@@ -2,7 +2,7 @@
 
 ## Document status
 
-**Status:** Draft  
+**Status:** Accepted
 **Product:** FitMap  
 **Version:** v1  
 **Related document:** `product-scope.md`
@@ -256,7 +256,7 @@ This traceability is expected to evolve as the FitMap architecture and implement
 
 # 17. Requirement evolution
 
-This document is currently a draft.
+This document represents the accepted FitMap v1 functional-requirements baseline.
 
 Requirements may be refined when:
 

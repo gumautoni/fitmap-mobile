@@ -2,29 +2,29 @@
 
 This directory contains the Architecture Decision Records (ADRs) for FitMap.
 
-ADRs are used to document important technical decisions that have meaningful architectural consequences.
+ADRs document technical decisions that have meaningful architectural consequences and are useful to preserve over time.
 
-Each ADR should describe:
+## Current decisions
 
-- the context that motivated the decision;
-- the problem being addressed;
-- relevant alternatives considered;
-- the selected decision;
-- the main consequences and trade-offs.
+| ADR | Decision | Status |
+| --- | --- | --- |
+| [0001](0001-use-modular-monolith-backend.md) | Use a modular monolith for the backend | Accepted |
+| [0002](0002-use-python-fastapi-backend.md) | Use Python and FastAPI for the backend | Accepted |
+| [0003](0003-use-postgresql-primary-database.md) | Use PostgreSQL with SQLAlchemy and Alembic | Accepted |
+| [0004](0004-keep-react-native-expo-migrate-typescript.md) | Keep React Native and Expo and migrate to TypeScript | Accepted |
+| [0005](0005-use-backend-managed-authentication-rotating-sessions.md) | Use backend-managed authentication and rotating sessions | Accepted |
+| [0006](0006-isolate-external-location-gym-providers.md) | Isolate external location and gym providers | Accepted |
+| [0007](0007-store-private-media-object-storage.md) | Store private media in object storage | Accepted |
+| [0008](0008-define-rest-api-design-versioning.md) | Define REST API design and versioning | Accepted |
+| [0009](0009-define-deployment-containers-cicd.md) | Define deployment, containers and CI/CD strategy | Accepted |
 
 ## Naming convention
 
-ADR files should follow this pattern:
+ADR files follow this pattern:
 
 `NNNN-short-decision-title.md`
 
-Examples:
-
-- `0001-mobile-application-stack.md`
-- `0002-backend-architecture.md`
-- `0003-database-technology.md`
-
-ADR numbering is sequential and should not be reused.
+Numbers are sequential and should not be reused after an ADR has been merged into the main branch.
 
 ## Status
 
@@ -35,6 +35,6 @@ An ADR may use one of the following statuses:
 - Deprecated
 - Superseded
 
-Accepted ADRs should not be silently rewritten when the decision changes.
+Once an accepted ADR has been merged into the main branch, a change to the architectural decision should normally be documented through a new ADR rather than silently rewriting the existing record.
 
-If an architectural decision is replaced, a new ADR should normally document the new decision and reference the previous one.
+Editorial corrections that do not change the decision may still be made when necessary.

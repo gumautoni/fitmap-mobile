@@ -2,7 +2,7 @@
 
 ## Document status
 
-**Status:** Draft  
+**Status:** Accepted
 **Product:** FitMap  
 **Version:** v1  
 **Related documents:** `product-scope.md`, `functional-requirements.md`
@@ -293,7 +293,7 @@ Validation may include:
 
 # 20. Requirement evolution
 
-This document is currently a draft.
+This document represents the accepted FitMap v1 non-functional-requirements baseline.
 
 Quantitative thresholds should be introduced when the architecture, infrastructure and representative operating conditions make those thresholds meaningful and testable.
 
