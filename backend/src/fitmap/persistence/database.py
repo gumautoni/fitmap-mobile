@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 from sqlalchemy import URL, Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -27,6 +29,11 @@ session_factory = sessionmaker(
     class_=Session,
     expire_on_commit=False,
 )
+
+
+def get_db_session() -> Iterator[Session]:
+    with session_factory() as session:
+        yield session
 
 
 def check_database_connection() -> None:
