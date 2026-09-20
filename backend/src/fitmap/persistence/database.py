@@ -22,6 +22,7 @@ _settings = get_settings()
 engine: Engine = create_engine(
     build_database_url(_settings),
     pool_pre_ping=True,
+    connect_args={"connect_timeout": 3},
 )
 
 session_factory = sessionmaker(
@@ -33,7 +34,11 @@ session_factory = sessionmaker(
 
 def get_db_session() -> Iterator[Session]:
     with session_factory() as session:
-        yield session
+        try:
+            yield session
+        except Exception:
+            session.rollback()
+            raise
 
 
 def check_database_connection() -> None:
