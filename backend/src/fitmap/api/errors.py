@@ -57,7 +57,7 @@ def register_exception_handlers(application: FastAPI) -> None:
         _request: Request,
         exc: StarletteHTTPException,
     ) -> JSONResponse:
-        message = exc.detail if isinstance(exc.detail, str) else "Request failed."
+        message = exc.detail
 
         payload = ErrorResponse(
             error=ErrorDetail(
