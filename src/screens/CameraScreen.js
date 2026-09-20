@@ -81,7 +81,7 @@ export default function CameraScreen({ navigation, route }) {
           onPress: () => navigation.navigate('Tarefas'),
         },
       ]);
-    } catch (error) {
+    } catch {
       Alert.alert('Erro', 'Não foi possível tirar a foto.');
     } finally {
       setSaving(false);

@@ -65,7 +65,7 @@ export default function AddTaskScreen({ navigation }) {
           onPress: () => navigation.goBack(),
         },
       ]);
-    } catch (error) {
+    } catch {
       Alert.alert('Erro', 'Não foi possível salvar o exercício.');
     }
   }

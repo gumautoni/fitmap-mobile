@@ -1,37 +1,39 @@
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import AddTaskScreen from '../screens/AddTaskScreen';
-import CameraScreen from '../screens/CameraScreen';
-import GymDetailsScreen from '../screens/GymDetailsScreen';
-import HomeScreen from '../screens/HomeScreen';
-import MapScreen from '../screens/MapScreen';
-import TasksScreen from '../screens/TasksScreen';
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-const Stack = createNativeStackNavigator();
+import type { AppStackParamList } from "./types";
+import AddTaskScreen from "../screens/AddTaskScreen";
+import CameraScreen from "../screens/CameraScreen";
+import GymDetailsScreen from "../screens/GymDetailsScreen";
+import HomeScreen from "../screens/HomeScreen";
+import MapScreen from "../screens/MapScreen";
+import TasksScreen from "../screens/TasksScreen";
+
+const Stack = createNativeStackNavigator<AppStackParamList>();
 
 export default function AppNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: '#111827',
+          backgroundColor: "#111827",
         },
-        headerTintColor: '#FFFFFF',
+        headerTintColor: "#FFFFFF",
         headerTitleStyle: {
-          fontWeight: '900',
+          fontWeight: "900",
           fontSize: 18,
         },
         headerShadowVisible: false,
         contentStyle: {
-          backgroundColor: '#F3F4F6',
+          backgroundColor: "#F3F4F6",
         },
-        animation: 'slide_from_right',
+        animation: "slide_from_right",
       }}
     >
       <Stack.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          title: 'FitMap',
+          title: "FitMap",
         }}
       />
 
@@ -39,7 +41,7 @@ export default function AppNavigator() {
         name="Mapa"
         component={MapScreen}
         options={{
-          title: 'Mapa de academias',
+          title: "Mapa de academias",
         }}
       />
 
@@ -47,7 +49,7 @@ export default function AppNavigator() {
         name="Tarefas"
         component={TasksScreen}
         options={{
-          title: 'Exercícios',
+          title: "Exercícios",
         }}
       />
 
@@ -55,7 +57,7 @@ export default function AppNavigator() {
         name="NovaTarefa"
         component={AddTaskScreen}
         options={{
-          title: 'Novo exercício',
+          title: "Novo exercício",
         }}
       />
 
@@ -63,7 +65,7 @@ export default function AppNavigator() {
         name="Camera"
         component={CameraScreen}
         options={{
-          title: 'Registrar exercício',
+          title: "Registrar exercício",
         }}
       />
 
@@ -71,7 +73,7 @@ export default function AppNavigator() {
         name="DetalhesAcademia"
         component={GymDetailsScreen}
         options={{
-          title: 'Detalhes da academia',
+          title: "Detalhes da academia",
         }}
       />
     </Stack.Navigator>
