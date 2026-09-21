@@ -1,4 +1,6 @@
-import React, { useMemo, useRef, useState } from 'react';
+import type { AppStackScreenProps } from "../navigation/types";
+import type { Gym } from "../types/gym";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -9,48 +11,59 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import GymCard from '../components/GymCard';
-import { geocodeRegion } from '../services/geocoding';
-import { fetchNearbyGyms } from '../services/overpass';
-import { requestForegroundLocation } from '../services/location';
+} from "react-native";
+import MapView, { Marker, type Region } from "react-native-maps";
 
-export default function MapScreen({ navigation }) {
-  const mapRef = useRef(null);
+import GymCard from "../components/GymCard";
+import { geocodeRegion } from "../services/geocoding";
+import { requestForegroundLocation } from "../services/location";
+import { fetchNearbyGyms } from "../services/overpass";
 
-  const [query, setQuery] = useState('');
-  const [gyms, setGyms] = useState([]);
+type Props = AppStackScreenProps<"Mapa">;
+
+type SortMode = "distance" | "price" | "contact";
+
+const INITIAL_REGION: Region = {
+  latitude: -22.6077,
+  longitude: -43.7108,
+  latitudeDelta: 0.08,
+  longitudeDelta: 0.08,
+};
+
+export default function MapScreen({ navigation }: Props) {
+  const mapRef = useRef<MapView | null>(null);
+
+  const [query, setQuery] = useState("");
+  const [gyms, setGyms] = useState<Gym[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchedPlace, setSearchedPlace] = useState('');
-  const [sortMode, setSortMode] = useState('distance');
-  const [region, setRegion] = useState({
-    latitude: -22.6077,
-    longitude: -43.7108,
-    latitudeDelta: 0.08,
-    longitudeDelta: 0.08,
-  });
+  const [searchedPlace, setSearchedPlace] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("distance");
+  const [region, setRegion] = useState<Region>(INITIAL_REGION);
 
-  const cheapestGym = useMemo(() => {
-    if (!gyms.length) return null;
+  const cheapestGym = useMemo<Gym | null>(() => {
+    if (gyms.length === 0) {
+      return null;
+    }
+
     return [...gyms].sort((a, b) => a.monthlyPrice - b.monthlyPrice)[0];
   }, [gyms]);
 
-  const filteredGyms = useMemo(() => {
+  const filteredGyms = useMemo<Gym[]>(() => {
     const nextGyms = [...gyms];
 
-    if (sortMode === 'price') {
+    if (sortMode === "price") {
       nextGyms.sort((a, b) => a.monthlyPrice - b.monthlyPrice);
     }
 
-    if (sortMode === 'distance') {
+    if (sortMode === "distance") {
       nextGyms.sort((a, b) => a.distanceKm - b.distanceKm);
     }
 
-    if (sortMode === 'contact') {
+    if (sortMode === "contact") {
       nextGyms.sort((a, b) => {
-        const aHasContact = a.phone !== 'Não informado' || !!a.website;
-        const bHasContact = b.phone !== 'Não informado' || !!b.website;
+        const aHasContact = a.phone !== "Não informado" || Boolean(a.website);
+
+        const bHasContact = b.phone !== "Não informado" || Boolean(b.website);
 
         if (aHasContact === bHasContact) {
           return a.distanceKm - b.distanceKm;
@@ -63,7 +76,11 @@ export default function MapScreen({ navigation }) {
     return nextGyms;
   }, [gyms, sortMode]);
 
-  async function loadGymsByCoords(latitude, longitude, placeLabel = '') {
+  async function loadGymsByCoords(
+    latitude: number,
+    longitude: number,
+    placeLabel = "",
+  ): Promise<void> {
     try {
       setLoading(true);
 
@@ -71,25 +88,28 @@ export default function MapScreen({ navigation }) {
 
       setGyms(data);
       setSearchedPlace(placeLabel);
-    } catch (error) {
+    } catch (error: unknown) {
       setGyms([]);
+
       Alert.alert(
-        'Busca sem resultado',
-        error.message || 'Não foi possível buscar academias próximas.'
+        "Busca sem resultado",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível buscar academias próximas.",
       );
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleUseCurrentLocation() {
+  async function handleUseCurrentLocation(): Promise<void> {
     try {
       Keyboard.dismiss();
       setLoading(true);
 
       const current = await requestForegroundLocation();
 
-      const nextRegion = {
+      const nextRegion: Region = {
         latitude: current.coords.latitude,
         longitude: current.coords.longitude,
         latitudeDelta: 0.08,
@@ -97,28 +117,31 @@ export default function MapScreen({ navigation }) {
       };
 
       setRegion(nextRegion);
-      mapRef.current?.animateToRegion(nextRegion, 1000);
+
+      mapRef.current?.animateToRegion(nextRegion, 1_000);
 
       await loadGymsByCoords(
         nextRegion.latitude,
         nextRegion.longitude,
-        'sua localização atual'
+        "sua localização atual",
       );
-    } catch (error) {
+    } catch (error: unknown) {
       Alert.alert(
-        'Erro',
-        error.message || 'Não foi possível obter sua localização.'
+        "Erro",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível obter sua localização.",
       );
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSearch() {
+  async function handleSearch(): Promise<void> {
     Keyboard.dismiss();
 
     if (!query.trim()) {
-      Alert.alert('Atenção', 'Digite uma cidade, bairro ou região.');
+      Alert.alert("Atenção", "Digite uma cidade, bairro ou região.");
       return;
     }
 
@@ -127,7 +150,7 @@ export default function MapScreen({ navigation }) {
 
       const place = await geocodeRegion(query.trim());
 
-      const nextRegion = {
+      const nextRegion: Region = {
         latitude: place.latitude,
         longitude: place.longitude,
         latitudeDelta: 0.08,
@@ -135,20 +158,24 @@ export default function MapScreen({ navigation }) {
       };
 
       setRegion(nextRegion);
-      mapRef.current?.animateToRegion(nextRegion, 1000);
+
+      mapRef.current?.animateToRegion(nextRegion, 1_000);
 
       const data = await fetchNearbyGyms(
         nextRegion.latitude,
-        nextRegion.longitude
+        nextRegion.longitude,
       );
 
       setGyms(data);
       setSearchedPlace(query.trim());
-    } catch (error) {
+    } catch (error: unknown) {
       setGyms([]);
+
       Alert.alert(
-        'Busca sem resultado',
-        error.message || 'Não foi possível localizar a região.'
+        "Busca sem resultado",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível localizar a região.",
       );
     } finally {
       setLoading(false);
@@ -162,7 +189,7 @@ export default function MapScreen({ navigation }) {
       <View style={styles.searchPanel}>
         <View style={styles.logoRow}>
           <Image
-            source={require('../../assets/images/logo-fitmap.png')}
+            source={require("../../assets/images/logo-fitmap.png")}
             style={styles.logo}
             resizeMode="contain"
           />
@@ -171,7 +198,8 @@ export default function MapScreen({ navigation }) {
         <Text style={styles.screenTitle}>Encontre academias próximas</Text>
 
         <Text style={styles.screenSubtitle}>
-          Busque por cidade, bairro ou use sua localização atual para comparar academias no mapa.
+          Busque por cidade, bairro ou use sua localização atual para comparar
+          academias no mapa.
         </Text>
 
         <View style={styles.searchRow}>
@@ -192,20 +220,21 @@ export default function MapScreen({ navigation }) {
             activeOpacity={0.85}
           >
             <Text style={styles.searchButtonText}>
-              {loading ? '...' : 'Buscar'}
+              {loading ? "..." : "Buscar"}
             </Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          style={[styles.locationButton, loading && styles.disabledLocationButton]}
+          style={[
+            styles.locationButton,
+            loading && styles.disabledLocationButton,
+          ]}
           onPress={handleUseCurrentLocation}
           disabled={loading}
           activeOpacity={0.85}
         >
-          <Text style={styles.locationButtonText}>
-            Usar minha localização
-          </Text>
+          <Text style={styles.locationButtonText}>Usar minha localização</Text>
         </TouchableOpacity>
       </View>
 
@@ -213,7 +242,7 @@ export default function MapScreen({ navigation }) {
         <MapView
           ref={mapRef}
           style={styles.map}
-          initialRegion={region}
+          initialRegion={INITIAL_REGION}
           region={region}
         >
           <Marker
@@ -243,7 +272,7 @@ export default function MapScreen({ navigation }) {
         <View>
           <Text style={styles.resultsTitle}>
             {loading
-              ? 'Buscando academias...'
+              ? "Buscando academias..."
               : `${gyms.length} academia(s) encontrada(s)`}
           </Text>
 
@@ -262,15 +291,15 @@ export default function MapScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              sortMode === 'distance' && styles.filterButtonActive,
+              sortMode === "distance" && styles.filterButtonActive,
             ]}
-            onPress={() => setSortMode('distance')}
+            onPress={() => setSortMode("distance")}
             activeOpacity={0.85}
           >
             <Text
               style={[
                 styles.filterButtonText,
-                sortMode === 'distance' && styles.filterButtonTextActive,
+                sortMode === "distance" && styles.filterButtonTextActive,
               ]}
             >
               Mais próximas
@@ -280,15 +309,15 @@ export default function MapScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              sortMode === 'price' && styles.filterButtonActive,
+              sortMode === "price" && styles.filterButtonActive,
             ]}
-            onPress={() => setSortMode('price')}
+            onPress={() => setSortMode("price")}
             activeOpacity={0.85}
           >
             <Text
               style={[
                 styles.filterButtonText,
-                sortMode === 'price' && styles.filterButtonTextActive,
+                sortMode === "price" && styles.filterButtonTextActive,
               ]}
             >
               Menor preço
@@ -298,15 +327,15 @@ export default function MapScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.filterButton,
-              sortMode === 'contact' && styles.filterButtonActive,
+              sortMode === "contact" && styles.filterButtonActive,
             ]}
-            onPress={() => setSortMode('contact')}
+            onPress={() => setSortMode("contact")}
             activeOpacity={0.85}
           >
             <Text
               style={[
                 styles.filterButtonText,
-                sortMode === 'contact' && styles.filterButtonTextActive,
+                sortMode === "contact" && styles.filterButtonTextActive,
               ]}
             >
               Com contato
@@ -319,15 +348,20 @@ export default function MapScreen({ navigation }) {
         <TouchableOpacity
           style={styles.highlightBox}
           onPress={() =>
-            navigation.navigate('DetalhesAcademia', { gym: cheapestGym })
+            navigation.navigate("DetalhesAcademia", {
+              gym: cheapestGym,
+            })
           }
           activeOpacity={0.85}
         >
           <Text style={styles.highlightTag}>Mais em conta</Text>
+
           <Text style={styles.highlightTitle}>{cheapestGym.name}</Text>
+
           <Text style={styles.highlightPrice}>
             R$ {cheapestGym.monthlyPrice.toFixed(2)} por mês
           </Text>
+
           <Text style={styles.highlightText}>
             Toque para ver detalhes e rota.
           </Text>
@@ -337,7 +371,7 @@ export default function MapScreen({ navigation }) {
   );
 
   return (
-    <FlatList
+    <FlatList<Gym>
       style={styles.container}
       data={filteredGyms}
       keyExtractor={(item) => item.id}
@@ -345,7 +379,9 @@ export default function MapScreen({ navigation }) {
         <GymCard
           gym={item}
           onPress={() =>
-            navigation.navigate('DetalhesAcademia', { gym: item })
+            navigation.navigate("DetalhesAcademia", {
+              gym: item,
+            })
           }
         />
       )}
@@ -356,7 +392,8 @@ export default function MapScreen({ navigation }) {
       ListEmptyComponent={
         !loading ? (
           <Text style={styles.emptyText}>
-            Nenhuma academia encontrada ainda. Pesquise uma região ou use sua localização atual.
+            Nenhuma academia encontrada ainda. Pesquise uma região ou use sua
+            localização atual.
           </Text>
         ) : null
       }
@@ -367,20 +404,20 @@ export default function MapScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: "#F3F4F6",
   },
   listContent: {
     padding: 16,
     paddingBottom: 28,
   },
   searchPanel: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     marginBottom: 14,
-    shadowColor: '#111827',
+    shadowColor: "#111827",
     shadowOffset: {
       width: 0,
       height: 4,
@@ -390,7 +427,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   logoRow: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 10,
   },
   logo: {
@@ -399,153 +436,153 @@ const styles = StyleSheet.create({
   },
   screenTitle: {
     fontSize: 23,
-    fontWeight: '900',
-    color: '#111827',
+    fontWeight: "900",
+    color: "#111827",
     marginBottom: 6,
-    textAlign: 'center',
+    textAlign: "center",
   },
   screenSubtitle: {
     fontSize: 14,
-    color: '#4B5563',
+    color: "#4B5563",
     lineHeight: 20,
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   searchRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 10,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: "#F9FAFB",
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 13,
     borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    color: '#111827',
-    fontWeight: '600',
+    borderColor: "#D1D5DB",
+    color: "#111827",
+    fontWeight: "600",
   },
   searchButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
     borderRadius: 16,
     paddingHorizontal: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     minWidth: 82,
   },
   disabledButton: {
-    backgroundColor: '#93C5FD',
+    backgroundColor: "#93C5FD",
   },
   searchButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '900',
+    color: "#FFFFFF",
+    fontWeight: "900",
   },
   locationButton: {
-    backgroundColor: '#EAF2FF',
+    backgroundColor: "#EAF2FF",
     borderRadius: 16,
     paddingVertical: 13,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: "#BFDBFE",
   },
   disabledLocationButton: {
     opacity: 0.7,
   },
   locationButtonText: {
-    color: '#1D4ED8',
-    fontWeight: '900',
+    color: "#1D4ED8",
+    fontWeight: "900",
   },
   mapWrapper: {
     height: 270,
     borderRadius: 24,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: "#D1D5DB",
   },
   map: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   resultsCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
     marginBottom: 12,
   },
   resultsTitle: {
     fontSize: 16,
-    color: '#111827',
-    fontWeight: '900',
+    color: "#111827",
+    fontWeight: "900",
   },
   resultsSubtitle: {
     fontSize: 13,
-    color: '#6B7280',
+    color: "#6B7280",
     marginTop: 3,
     lineHeight: 18,
   },
   filterRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
     marginBottom: 12,
   },
   filterButton: {
     flex: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: "#E5E7EB",
     borderRadius: 999,
     paddingVertical: 10,
-    alignItems: 'center',
+    alignItems: "center",
   },
   filterButtonActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: "#2563EB",
   },
   filterButtonText: {
-    color: '#374151',
+    color: "#374151",
     fontSize: 12,
-    fontWeight: '900',
+    fontWeight: "900",
   },
   filterButtonTextActive: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
   },
   highlightBox: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: "#ECFDF5",
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: "#BBF7D0",
   },
   highlightTag: {
-    color: '#166534',
-    fontWeight: '900',
+    color: "#166534",
+    fontWeight: "900",
     fontSize: 12,
     marginBottom: 6,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
   highlightTitle: {
-    color: '#064E3B',
-    fontWeight: '900',
+    color: "#064E3B",
+    fontWeight: "900",
     fontSize: 17,
     marginBottom: 4,
   },
   highlightPrice: {
-    color: '#166534',
-    fontWeight: '900',
+    color: "#166534",
+    fontWeight: "900",
     fontSize: 15,
     marginBottom: 4,
   },
   highlightText: {
-    color: '#166534',
-    fontWeight: '700',
+    color: "#166534",
+    fontWeight: "700",
     fontSize: 13,
   },
   emptyText: {
-    textAlign: 'center',
-    color: '#6B7280',
+    textAlign: "center",
+    color: "#6B7280",
     marginTop: 16,
     lineHeight: 20,
   },

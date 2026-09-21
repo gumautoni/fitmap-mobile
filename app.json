@@ -8,12 +8,16 @@
     "userInterfaceStyle": "light",
     "scheme": "fitmap",
     "icon": "./assets/images/logo-fitmap.png",
-    "splash": {
-      "image": "./assets/images/logo-fitmap.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#111827"
-    },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo-fitmap.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#111827",
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-location",
         {

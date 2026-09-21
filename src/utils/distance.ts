@@ -1,4 +1,9 @@
-export function calculateDistanceKm(lat1, lon1, lat2, lon2) {
+export function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
   const latitude1 = Number(lat1);
   const longitude1 = Number(lon1);
   const latitude2 = Number(lat2);
@@ -15,7 +20,7 @@ export function calculateDistanceKm(lat1, lon1, lat2, lon2) {
     return 0;
   }
 
-  const toRad = (value) => (value * Math.PI) / 180;
+  const toRad = (value: number): number => (value * Math.PI) / 180;
   const earthRadiusKm = 6371;
 
   const dLat = toRad(latitude2 - latitude1);

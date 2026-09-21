@@ -8,24 +8,24 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    async function loadUser() {
+      try {
+        const session = await getData('fitmap_session');
+
+        if (session?.id && session?.email) {
+          setUser(session);
+        } else {
+          setUser(null);
+        }
+      } catch {
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+
     loadUser();
   }, []);
-
-  async function loadUser() {
-    try {
-      const session = await getData('fitmap_session');
-
-      if (session?.id && session?.email) {
-        setUser(session);
-      } else {
-        setUser(null);
-      }
-    } catch (error) {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function login(email, password) {
     const formattedEmail = email.trim().toLowerCase();
@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
     const foundUser = users.find(
       (item) =>
         item.email?.toLowerCase() === formattedEmail &&
-        item.password === formattedPassword
+        item.password === formattedPassword,
     );
 
     if (!foundUser) {
@@ -61,7 +61,7 @@ export function AuthProvider({ children }) {
     const users = (await getData('fitmap_users')) || [];
 
     const exists = users.some(
-      (item) => item.email?.toLowerCase() === formattedEmail
+      (item) => item.email?.toLowerCase() === formattedEmail,
     );
 
     if (exists) {

@@ -81,7 +81,7 @@ A logo foi aplicada nas principais telas do aplicativo, incluindo login, cadastr
 
 * React Native
 * Expo
-* JavaScript
+* TypeScript e JavaScript em migração incremental
 * React Navigation
 * Expo Location
 * Expo Camera
@@ -98,35 +98,46 @@ FitMap/
 ├── App.js
 ├── app.json
 ├── package.json
+├── tsconfig.json
+├── .env.example
 ├── assets/
 │   └── images/
 │       └── logo-fitmap.png
+├── docs/
+│   └── mobile-development.md
 └── src/
     ├── components/
     │   ├── CustomButton.js
     │   ├── CustomInput.js
     │   ├── GymCard.js
     │   └── TaskCard.js
+    ├── config/
+    │   └── environment.ts
     ├── context/
     │   └── AuthContext.js
     ├── navigation/
-    │   ├── AppNavigator.js
-    │   └── AuthNavigator.js
+    │   ├── AppNavigator.tsx
+    │   ├── AuthNavigator.tsx
+    │   └── types.ts
     ├── screens/
     │   ├── AddTaskScreen.js
     │   ├── CameraScreen.js
-    │   ├── GymDetailsScreen.js
+    │   ├── GymDetailsScreen.tsx
     │   ├── HomeScreen.js
     │   ├── LoginScreen.js
-    │   ├── MapScreen.js
+    │   ├── MapScreen.tsx
     │   ├── RegisterScreen.js
     │   └── TasksScreen.js
     ├── services/
-    │   ├── geocoding.js
-    │   ├── location.js
-    │   └── overpass.js
+    │   ├── apiClient.ts
+    │   ├── geocoding.ts
+    │   ├── location.ts
+    │   └── overpass.ts
+    ├── types/
+    │   ├── gym.ts
+    │   └── location.ts
     └── utils/
-        ├── distance.js
+        ├── distance.ts
         └── storage.js
 ```
 
@@ -136,38 +147,51 @@ Antes de executar o projeto, é necessário ter instalado:
 
 * Node.js
 * npm
-* Expo CLI ou uso via `npx expo`
-* Aplicativo Expo Go no celular, caso a execução seja feita em dispositivo físico
+* Expo Go no celular, caso a execução seja feita em dispositivo físico
 
 ## Instalação
 
-Clone ou extraia o projeto em uma pasta local e acesse a pasta principal do aplicativo:
+Acesse a pasta principal do aplicativo e instale as dependências:
 
 ```bash
-cd FitMap
+npm ci
 ```
 
-Instale as dependências:
+## Configuração de ambiente
 
-```bash
-npm install
+O projeto possui o arquivo `.env.example` com as configurações públicas necessárias para o aplicativo mobile.
+
+No Windows, crie o arquivo local `.env` utilizando:
+
+```powershell
+Copy-Item .env.example .env
 ```
+
+Configure a URL pública do backend:
+
+```env
+EXPO_PUBLIC_API_URL=http://YOUR_LOCAL_IP:8000/api/v1
+```
+
+Em um dispositivo físico, `YOUR_LOCAL_IP` deve ser substituído normalmente pelo endereço IP local do computador que está executando o backend.
+
+Variáveis `EXPO_PUBLIC_` ficam disponíveis no aplicativo cliente e nunca devem armazenar senhas, secrets, credenciais de banco de dados ou outras informações privadas do servidor.
 
 ## Execução do projeto
 
-Para iniciar o projeto em modo padrão:
+Para iniciar o projeto:
 
 ```bash
 npm start
 ```
 
-Para iniciar utilizando túnel, recomendado quando o celular não consegue acessar a rede local do computador:
+Para iniciar utilizando túnel:
 
 ```bash
 npm run start:tunnel
 ```
 
-Para iniciar em modo LAN:
+Para iniciar utilizando a rede local:
 
 ```bash
 npm run start:lan
@@ -185,10 +209,40 @@ Para executar no iOS:
 npm run ios
 ```
 
-Para executar no navegador:
+Android e iOS são as plataformas mobile intencionalmente suportadas pelo projeto.
+
+A versão web não é atualmente considerada uma plataforma suportada pelo FitMap.
+
+## Validação do mobile
+
+Para verificar a tipagem TypeScript:
 
 ```bash
-npm run web
+npm run typecheck
+```
+
+Para executar o lint:
+
+```bash
+npm run lint
+```
+
+Para verificar a formatação:
+
+```bash
+npm run format:check
+```
+
+Para aplicar a formatação aos arquivos TypeScript e arquivos de configuração:
+
+```bash
+npm run format
+```
+
+Mais detalhes sobre o fluxo de desenvolvimento mobile estão disponíveis em:
+
+```text
+docs/mobile-development.md
 ```
 
 ## Como usar o aplicativo
@@ -217,7 +271,7 @@ Os valores de mensalidade exibidos no aplicativo são estimativas utilizadas par
 
 ## Armazenamento local
 
-O FitMap utiliza AsyncStorage para armazenar dados localmente no dispositivo, incluindo:
+O FitMap ainda utiliza AsyncStorage em partes do protótipo para armazenar dados localmente no dispositivo, incluindo:
 
 * usuários cadastrados;
 * sessão ativa;
@@ -225,7 +279,7 @@ O FitMap utiliza AsyncStorage para armazenar dados localmente no dispositivo, in
 * status dos exercícios;
 * fotos vinculadas aos exercícios.
 
-Por se tratar de um protótipo acadêmico, a autenticação é feita localmente. Em uma versão de produção, seria recomendada a utilização de um backend ou serviço de autenticação dedicado.
+A autenticação local existente pertence ao protótipo original e será substituída posteriormente pela autenticação segura integrada ao backend.
 
 ## Permissões utilizadas
 
@@ -234,62 +288,81 @@ O aplicativo solicita permissões para:
 * localização: utilizada para buscar academias próximas ao usuário;
 * câmera: utilizada para registrar fotos dos exercícios concluídos.
 
-As permissões são solicitadas apenas quando necessárias para uso das funcionalidades correspondentes.
+As permissões são solicitadas quando necessárias para as funcionalidades correspondentes.
+
+## Migração para TypeScript
+
+O FitMap está sendo migrado gradualmente de JavaScript para TypeScript.
+
+Novos códigos de produção mobile devem utilizar TypeScript por padrão. Arquivos JavaScript existentes podem continuar funcionando durante a migração até que sejam modificados ou façam parte de uma implementação ativa.
+
+O projeto mantém a verificação estrita de tipos habilitada.
 
 ## Diferenciais do projeto
 
 * Interface visual padronizada com identidade própria.
 * Uso de mapa interativo.
 * Busca por cidade, bairro ou localização atual.
-* Fallback demonstrativo para evitar ausência total de resultados em regiões com poucos dados públicos.
+* Fallback demonstrativo para regiões com poucos dados públicos.
 * Registro de exercícios com foto.
-* Fluxo completo de autenticação, navegação e gerenciamento local.
-* Organização em componentes, telas, serviços, contexto e utilitários.
+* Navegação tipada progressivamente com TypeScript.
+* Cliente HTTP centralizado para futura integração com o backend.
+* Configuração da API baseada em ambiente.
+* Organização em componentes, telas, serviços, configuração, tipos, contexto e utilitários.
 
 ## Limitações conhecidas
 
 * Os dados de academias dependem da disponibilidade e qualidade das informações públicas do OpenStreetMap.
 * Telefones e sites podem não estar cadastrados para todas as academias.
 * A mensalidade exibida é estimada.
-* A autenticação é local e não utiliza servidor externo.
-* Fotos e dados ficam armazenados localmente no dispositivo.
+* O fluxo atual de autenticação do protótipo ainda utiliza armazenamento local.
+* Partes do aplicativo ainda estão em JavaScript durante a migração incremental.
+* Fotos e dados do fluxo de exercícios ainda ficam armazenados localmente no dispositivo.
 
 ## Possíveis melhorias futuras
 
-* Integração com backend próprio.
-* Autenticação com Firebase ou outro serviço seguro.
+* Integração completa do aplicativo com o backend.
+* Autenticação segura utilizando o backend próprio.
 * Cadastro real de academias parceiras.
 * Avaliações de usuários.
 * Favoritar academias.
 * Histórico de exercícios.
 * Perfil do usuário.
 * Edição de exercícios cadastrados.
-* Upload de fotos em nuvem.
+* Upload de fotos em armazenamento privado.
 * Filtros avançados por horário, modalidade, preço real e avaliação.
-* Versão final para publicação em lojas de aplicativos.
+* Publicação futura nas lojas de aplicativos.
 
 ## Status do projeto
 
-Protótipo funcional desenvolvido para apresentação acadêmica na disciplina de Laboratório de Desenvolvimento de Aplicativos Híbridos.
+O FitMap está em desenvolvimento ativo e evoluindo de um protótipo acadêmico mobile para uma aplicação com backend próprio, banco de dados, arquitetura documentada e integração progressiva entre mobile e API.
 
 ## Equipe
 
-Projeto desenvolvido por:
+O FitMap teve origem em um projeto acadêmico desenvolvido inicialmente por:
 
 * Gustavo Mautoni
+* Pedro Queiroz
 * Bryan Paz
-* Pedro Queiroz 
+
+O projeto teve continuidade como Trabalho de Conclusão de Curso (TCC), atualmente desenvolvido por:
+
+* Gustavo Mautoni
+* Pedro Queiroz
+
+A evolução técnica atual do projeto, incluindo arquitetura, backend, banco de dados, estruturação do repositório e modernização da aplicação mobile, está sendo conduzida por Gustavo Mautoni.
+
 
 ## My contributions
 
 In this project, I contributed to:
 
-- Mobile app structure and project organization
-- Task management flow
-- Camera registration flow for workout tasks
-- Local data storage using AsyncStorage
-- UI improvements and screen organization
-- Project documentation and repository organization
+* Mobile app structure and project organization
+* Task management flow
+* Camera registration flow for workout tasks
+* Local data storage using AsyncStorage
+* UI improvements and screen organization
+* Project documentation and repository organization
 
 ## Licença
 
