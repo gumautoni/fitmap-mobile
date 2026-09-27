@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  mobile:
+    name: Mobile validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22.15.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run TypeScript checks
+        run: npm run typecheck
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+  backend:
+    name: Backend validation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: fitmap_test
+          POSTGRES_USER: fitmap_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U fitmap_test -d fitmap_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.12.18"
+
+      - name: Install dependencies
+        run: uv sync --frozen --dev
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Run Ruff lint
+        run: uv run ruff check src tests alembic
+
+      - name: Check Ruff formatting
+        run: uv run ruff format --check src tests alembic
+
+      - name: Run Pyright
+        run: uv run pyright
+
+      - name: Run tests
+        run: uv run pytest
