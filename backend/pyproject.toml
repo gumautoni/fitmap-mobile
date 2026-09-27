@@ -25,13 +25,18 @@ module-name = "fitmap"
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.0",
     "pyright>=1.1.414",
+    "pytest>=9.1.1",
     "ruff>=0.16.8",
 ]
 
 [tool.ruff]
 line-length = 100
-src = ["src"]
+src = ["src", "tests"]
+extend-exclude = [
+    "alembic/versions/87fcd175df29_establish_persistence_baseline.py",
+]
 
 [tool.ruff.lint]
 select = [
@@ -46,6 +51,13 @@ select = [
 ]
 
 [tool.pyright]
-include = ["src"]
+include = ["src", "tests"]
 pythonVersion = "3.13"
 typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: tests that require external infrastructure such as PostgreSQL",
+]
