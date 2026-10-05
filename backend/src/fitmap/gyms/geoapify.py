@@ -7,6 +7,7 @@ from fitmap.gyms.providers import Coordinates, GymDetails, GymSearchResult
 
 _GEOAPIFY_PLACES_URL = "https://api.geoapify.com/v2/places"
 _GEOAPIFY_PLACE_DETAILS_URL = "https://api.geoapify.com/v2/place-details"
+_GEOAPIFY_GEOCODING_SEARCH_URL = "https://api.geoapify.com/v1/geocode/search"
 _GYM_CATEGORY = "sport.fitness.gym"
 _DEFAULT_LIMIT = 20
 
@@ -29,6 +30,20 @@ def _empty_features() -> list[_GeoapifyFeature]:
 
 class _GeoapifyPlacesResponse(BaseModel):
     features: list[_GeoapifyFeature] = Field(default_factory=_empty_features)
+
+
+class _GeoapifyGeocodingResult(BaseModel):
+    place_id: str | None = None
+
+
+def _empty_geocoding_results() -> list[_GeoapifyGeocodingResult]:
+    return []
+
+
+class _GeoapifyGeocodingResponse(BaseModel):
+    results: list[_GeoapifyGeocodingResult] = Field(
+        default_factory=_empty_geocoding_results
+    )
 
 
 class _GeoapifyContact(BaseModel):
@@ -123,28 +138,76 @@ class GeoapifyGymProvider:
 
         payload = _GeoapifyPlacesResponse.model_validate(response.json())
 
-        results: list[GymSearchResult] = []
+        return self._normalize_search_results(payload)
 
-        for feature in payload.features:
-            properties = feature.properties
+    async def search_text(
+        self,
+        *,
+        query: str,
+    ) -> list[GymSearchResult]:
+        normalized_query = query.strip()
 
-            if properties.name is None:
-                continue
+        if not normalized_query:
+            return []
 
-            results.append(
-                GymSearchResult(
-                    provider_name="geoapify",
-                    external_id=properties.place_id,
-                    name=properties.name,
-                    coordinates=Coordinates(
-                        latitude=properties.lat,
-                        longitude=properties.lon,
-                    ),
-                    address=properties.formatted,
-                )
+        geocoding_params: dict[str, Any] = {
+            "text": normalized_query,
+            "type": "locality",
+            "format": "json",
+            "limit": 1,
+            "lang": "pt",
+            "apiKey": self._api_key,
+        }
+
+        try:
+            response = await self._client.get(
+                _GEOAPIFY_GEOCODING_SEARCH_URL,
+                params=geocoding_params,
+                timeout=self._timeout_seconds,
             )
+            response.raise_for_status()
+        except httpx2.HTTPError as exc:
+            raise GeoapifyProviderError(
+                "Geoapify Geocoding API request failed."
+            ) from exc
 
-        return results
+        geocoding_payload = _GeoapifyGeocodingResponse.model_validate(
+            response.json()
+        )
+
+        if not geocoding_payload.results:
+            return []
+
+        location = geocoding_payload.results[0]
+
+        if location.place_id is None:
+            return []
+
+        places_params: dict[str, Any] = {
+            "categories": _GYM_CATEGORY,
+            "filter": f"place:{location.place_id}",
+            "limit": _DEFAULT_LIMIT,
+            "lang": "pt",
+            "apiKey": self._api_key,
+        }
+
+        try:
+            response = await self._client.get(
+                _GEOAPIFY_PLACES_URL,
+                params=places_params,
+                timeout=self._timeout_seconds,
+            )
+            response.raise_for_status()
+        except httpx2.HTTPError as exc:
+            raise GeoapifyProviderError(
+                "Geoapify Places API request failed."
+            ) from exc
+
+        places_payload = _GeoapifyPlacesResponse.model_validate(
+            response.json()
+        )
+
+        return self._normalize_search_results(places_payload)
 
     async def get_details(
         self,
@@ -229,3 +292,30 @@ class GeoapifyGymProvider:
             opening_hours=opening_hours,
             image_urls=image_urls,
         )
+
+    @staticmethod
+    def _normalize_search_results(
+        payload: _GeoapifyPlacesResponse,
+    ) -> list[GymSearchResult]:
+        results: list[GymSearchResult] = []
+
+        for feature in payload.features:
+            properties = feature.properties
+
+            if properties.name is None:
+                continue
+
+            results.append(
+                GymSearchResult(
+                    provider_name="geoapify",
+                    external_id=properties.place_id,
+                    name=properties.name,
+                    coordinates=Coordinates(
+                        latitude=properties.lat,
+                        longitude=properties.lon,
+                    ),
+                    address=properties.formatted,
+                )
+            )
+
+        return results

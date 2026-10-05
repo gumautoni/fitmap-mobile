@@ -160,6 +160,218 @@ def test_search_nearby_converts_timeout_to_provider_error() -> None:
     asyncio.run(run_search())
 
 
+def test_search_text_geocodes_location_and_normalizes_gym_results() -> None:
+    request_paths: list[str] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        request_paths.append(request.url.path)
+
+        if request.url.path == "/v1/geocode/search":
+            assert request.url.params["text"] == "Barra do Piraí, RJ"
+            assert request.url.params["type"] == "locality"
+            assert request.url.params["format"] == "json"
+            assert request.url.params["limit"] == "1"
+            assert request.url.params["lang"] == "pt"
+            assert request.url.params["apiKey"] == "test-api-key"
+
+            return httpx2.Response(
+                200,
+                request=request,
+                json={
+                    "results": [
+                        {
+                            "place_id": "location-place-123",
+                        }
+                    ]
+                },
+            )
+
+        assert request.url.path == "/v2/places"
+        assert request.url.params["categories"] == "sport.fitness.gym"
+        assert request.url.params["filter"] == "place:location-place-123"
+        assert request.url.params["limit"] == "20"
+        assert request.url.params["lang"] == "pt"
+        assert request.url.params["apiKey"] == "test-api-key"
+
+        return httpx2.Response(
+            200,
+            request=request,
+            json={
+                "features": [
+                    {
+                        "properties": {
+                            "place_id": "gym-place-123",
+                            "name": "Academia Barra Fitness",
+                            "formatted": "Barra do Piraí, RJ",
+                            "lat": -22.4708,
+                            "lon": -43.8258,
+                        }
+                    }
+                ]
+            },
+        )
+
+    async def run_search() -> None:
+        transport = httpx2.MockTransport(handler)
+
+        async with httpx2.AsyncClient(transport=transport) as client:
+            provider = GeoapifyGymProvider(
+                api_key="test-api-key",
+                client=client,
+            )
+
+            results = await provider.search_text(
+                query="  Barra do Piraí, RJ  ",
+            )
+
+        assert request_paths == [
+            "/v1/geocode/search",
+            "/v2/places",
+        ]
+        assert len(results) == 1
+
+        result = results[0]
+
+        assert result.provider_name == "geoapify"
+        assert result.external_id == "gym-place-123"
+        assert result.name == "Academia Barra Fitness"
+        assert result.address == "Barra do Piraí, RJ"
+        assert result.coordinates is not None
+        assert result.coordinates.latitude == -22.4708
+        assert result.coordinates.longitude == -43.8258
+
+    asyncio.run(run_search())
+
+
+def test_search_text_returns_empty_for_blank_query_without_request() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        pytest.fail(f"Unexpected external request: {request.url}")
+
+    async def run_search() -> None:
+        transport = httpx2.MockTransport(handler)
+
+        async with httpx2.AsyncClient(transport=transport) as client:
+            provider = GeoapifyGymProvider(
+                api_key="test-api-key",
+                client=client,
+            )
+
+            results = await provider.search_text(
+                query="   ",
+            )
+
+        assert results == []
+
+    asyncio.run(run_search())
+
+
+def test_search_text_returns_empty_when_location_is_not_found() -> None:
+    request_count = 0
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal request_count
+        request_count += 1
+
+        assert request.url.path == "/v1/geocode/search"
+
+        return httpx2.Response(
+            200,
+            request=request,
+            json={
+                "results": [],
+            },
+        )
+
+    async def run_search() -> None:
+        transport = httpx2.MockTransport(handler)
+
+        async with httpx2.AsyncClient(transport=transport) as client:
+            provider = GeoapifyGymProvider(
+                api_key="test-api-key",
+                client=client,
+            )
+
+            results = await provider.search_text(
+                query="Local inexistente",
+            )
+
+        assert results == []
+        assert request_count == 1
+
+    asyncio.run(run_search())
+
+
+def test_search_text_converts_geocoding_failure_to_provider_error() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        assert request.url.path == "/v1/geocode/search"
+
+        return httpx2.Response(
+            503,
+            request=request,
+        )
+
+    async def run_search() -> None:
+        transport = httpx2.MockTransport(handler)
+
+        async with httpx2.AsyncClient(transport=transport) as client:
+            provider = GeoapifyGymProvider(
+                api_key="test-api-key",
+                client=client,
+            )
+
+            with pytest.raises(
+                GeoapifyProviderError,
+                match=r"Geoapify Geocoding API request failed\.",
+            ):
+                await provider.search_text(
+                    query="Barra do Piraí, RJ",
+                )
+
+    asyncio.run(run_search())
+
+
+def test_search_text_converts_places_failure_to_provider_error() -> None:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if request.url.path == "/v1/geocode/search":
+            return httpx2.Response(
+                200,
+                request=request,
+                json={
+                    "results": [
+                        {
+                            "place_id": "location-place-123",
+                        }
+                    ]
+                },
+            )
+
+        assert request.url.path == "/v2/places"
+
+        return httpx2.Response(
+            503,
+            request=request,
+        )
+
+    async def run_search() -> None:
+        transport = httpx2.MockTransport(handler)
+
+        async with httpx2.AsyncClient(transport=transport) as client:
+            provider = GeoapifyGymProvider(
+                api_key="test-api-key",
+                client=client,
+            )
+
+            with pytest.raises(
+                GeoapifyProviderError,
+                match=r"Geoapify Places API request failed\.",
+            ):
+                await provider.search_text(
+                    query="Barra do Piraí, RJ",
+                )
+
+    asyncio.run(run_search())
+
+
 def test_get_details_normalizes_geoapify_details() -> None:
     def handler(request: httpx2.Request) -> httpx2.Response:
         assert request.url.path == "/v2/place-details"
