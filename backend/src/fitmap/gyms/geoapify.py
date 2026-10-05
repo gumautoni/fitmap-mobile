@@ -16,8 +16,8 @@ class _GeoapifyProperties(BaseModel):
     place_id: str
     name: str | None = None
     formatted: str | None = None
-    lat: float
-    lon: float
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
 
 
 class _GeoapifyFeature(BaseModel):
@@ -58,8 +58,8 @@ class _GeoapifyDetailsProperties(BaseModel):
     feature_type: str
     name: str | None = None
     formatted: str | None = None
-    lat: float | None = None
-    lon: float | None = None
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
     website: str | None = None
     opening_hours: str | None = None
     contact: _GeoapifyContact | None = None
@@ -82,6 +82,18 @@ class _GeoapifyPlaceDetailsResponse(BaseModel):
 
 class GeoapifyProviderError(Exception):
     pass
+
+
+def _parse_response[T: BaseModel](
+    response: httpx2.Response,
+    model_type: type[T],
+    *,
+    error_message: str,
+) -> T:
+    try:
+        return model_type.model_validate(response.json())
+    except (TypeError, ValueError) as exc:
+        raise GeoapifyProviderError(error_message) from exc
 
 
 class GeoapifyGymProvider:
@@ -136,7 +148,13 @@ class GeoapifyGymProvider:
                 "Geoapify Places API request failed."
             ) from exc
 
-        payload = _GeoapifyPlacesResponse.model_validate(response.json())
+        payload = _parse_response(
+            response,
+            _GeoapifyPlacesResponse,
+            error_message=(
+                "Geoapify Places API returned invalid response data."
+            ),
+        )
 
         return self._normalize_search_results(payload)
 
@@ -171,8 +189,12 @@ class GeoapifyGymProvider:
                 "Geoapify Geocoding API request failed."
             ) from exc
 
-        geocoding_payload = _GeoapifyGeocodingResponse.model_validate(
-            response.json()
+        geocoding_payload = _parse_response(
+            response,
+            _GeoapifyGeocodingResponse,
+            error_message=(
+                "Geoapify Geocoding API returned invalid response data."
+            ),
         )
 
         if not geocoding_payload.results:
@@ -203,8 +225,12 @@ class GeoapifyGymProvider:
                 "Geoapify Places API request failed."
             ) from exc
 
-        places_payload = _GeoapifyPlacesResponse.model_validate(
-            response.json()
+        places_payload = _parse_response(
+            response,
+            _GeoapifyPlacesResponse,
+            error_message=(
+                "Geoapify Places API returned invalid response data."
+            ),
         )
 
         return self._normalize_search_results(places_payload)
@@ -232,8 +258,12 @@ class GeoapifyGymProvider:
                 "Geoapify Place Details API request failed."
             ) from exc
 
-        payload = _GeoapifyPlaceDetailsResponse.model_validate(
-            response.json()
+        payload = _parse_response(
+            response,
+            _GeoapifyPlaceDetailsResponse,
+            error_message=(
+                "Geoapify Place Details API returned invalid response data."
+            ),
         )
 
         details_feature = next(
