@@ -3,9 +3,10 @@ from typing import Any
 import httpx2
 from pydantic import BaseModel, Field
 
-from fitmap.gyms.providers import Coordinates, GymSearchResult
+from fitmap.gyms.providers import Coordinates, GymDetails, GymSearchResult
 
 _GEOAPIFY_PLACES_URL = "https://api.geoapify.com/v2/places"
+_GEOAPIFY_PLACE_DETAILS_URL = "https://api.geoapify.com/v2/place-details"
 _GYM_CATEGORY = "sport.fitness.gym"
 _DEFAULT_LIMIT = 20
 
@@ -28,6 +29,40 @@ def _empty_features() -> list[_GeoapifyFeature]:
 
 class _GeoapifyPlacesResponse(BaseModel):
     features: list[_GeoapifyFeature] = Field(default_factory=_empty_features)
+
+
+class _GeoapifyContact(BaseModel):
+    phone: str | None = None
+
+
+class _GeoapifyWikiAndMedia(BaseModel):
+    image: str | None = None
+
+
+class _GeoapifyDetailsProperties(BaseModel):
+    feature_type: str
+    name: str | None = None
+    formatted: str | None = None
+    lat: float | None = None
+    lon: float | None = None
+    website: str | None = None
+    opening_hours: str | None = None
+    contact: _GeoapifyContact | None = None
+    wiki_and_media: _GeoapifyWikiAndMedia | None = None
+
+
+class _GeoapifyDetailsFeature(BaseModel):
+    properties: _GeoapifyDetailsProperties
+
+
+def _empty_detail_features() -> list[_GeoapifyDetailsFeature]:
+    return []
+
+
+class _GeoapifyPlaceDetailsResponse(BaseModel):
+    features: list[_GeoapifyDetailsFeature] = Field(
+        default_factory=_empty_detail_features
+    )
 
 
 class GeoapifyProviderError(Exception):
@@ -110,3 +145,87 @@ class GeoapifyGymProvider:
             )
 
         return results
+
+    async def get_details(
+        self,
+        *,
+        external_id: str,
+    ) -> GymDetails | None:
+        params: dict[str, Any] = {
+            "id": external_id,
+            "lang": "pt",
+            "apiKey": self._api_key,
+        }
+
+        try:
+            response = await self._client.get(
+                _GEOAPIFY_PLACE_DETAILS_URL,
+                params=params,
+                timeout=self._timeout_seconds,
+            )
+            response.raise_for_status()
+        except httpx2.HTTPError as exc:
+            raise GeoapifyProviderError(
+                "Geoapify Place Details API request failed."
+            ) from exc
+
+        payload = _GeoapifyPlaceDetailsResponse.model_validate(
+            response.json()
+        )
+
+        details_feature = next(
+            (
+                feature
+                for feature in payload.features
+                if feature.properties.feature_type == "details"
+            ),
+            None,
+        )
+
+        if details_feature is None:
+            return None
+
+        properties = details_feature.properties
+
+        if properties.name is None:
+            return None
+
+        coordinates: Coordinates | None = None
+
+        if properties.lat is not None and properties.lon is not None:
+            coordinates = Coordinates(
+                latitude=properties.lat,
+                longitude=properties.lon,
+            )
+
+        phone = (
+            properties.contact.phone
+            if properties.contact is not None
+            else None
+        )
+
+        image = (
+            properties.wiki_and_media.image
+            if properties.wiki_and_media is not None
+            else None
+        )
+
+        opening_hours = (
+            [properties.opening_hours]
+            if properties.opening_hours is not None
+            else None
+        )
+
+        image_urls = [image] if image is not None else []
+
+        return GymDetails(
+            provider_name="geoapify",
+            external_id=external_id,
+            name=properties.name,
+            coordinates=coordinates,
+            address=properties.formatted,
+            phone=phone,
+            website=properties.website,
+            opening_hours=opening_hours,
+            image_urls=image_urls,
+        )
