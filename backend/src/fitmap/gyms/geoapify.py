@@ -3,6 +3,7 @@ from typing import Any
 import httpx2
 from pydantic import BaseModel, Field
 
+from fitmap.gyms.cache import LocationPlaceIdCache
 from fitmap.gyms.providers import Coordinates, GymDetails, GymSearchResult
 
 _GEOAPIFY_PLACES_URL = "https://api.geoapify.com/v2/places"
@@ -103,10 +104,12 @@ class GeoapifyGymProvider:
         api_key: str,
         client: httpx2.AsyncClient,
         timeout_seconds: float = 5.0,
+        location_cache: LocationPlaceIdCache | None = None,
     ) -> None:
         self._api_key = api_key
         self._client = client
         self._timeout_seconds = timeout_seconds
+        self._location_cache = location_cache or LocationPlaceIdCache()
 
     async def search_nearby(
         self,
@@ -168,46 +171,56 @@ class GeoapifyGymProvider:
         if not normalized_query:
             return []
 
-        geocoding_params: dict[str, Any] = {
-            "text": normalized_query,
-            "type": "locality",
-            "format": "json",
-            "limit": 1,
-            "lang": "pt",
-            "apiKey": self._api_key,
-        }
+        place_id = self._location_cache.get(normalized_query)
 
-        try:
-            response = await self._client.get(
-                _GEOAPIFY_GEOCODING_SEARCH_URL,
-                params=geocoding_params,
-                timeout=self._timeout_seconds,
+        if place_id is None:
+            geocoding_params: dict[str, Any] = {
+                "text": normalized_query,
+                "type": "locality",
+                "format": "json",
+                "limit": 1,
+                "lang": "pt",
+                "apiKey": self._api_key,
+            }
+
+            try:
+                response = await self._client.get(
+                    _GEOAPIFY_GEOCODING_SEARCH_URL,
+                    params=geocoding_params,
+                    timeout=self._timeout_seconds,
+                )
+                response.raise_for_status()
+            except httpx2.HTTPError as exc:
+                raise GeoapifyProviderError(
+                    "Geoapify Geocoding API request failed."
+                ) from exc
+
+            geocoding_payload = _parse_response(
+                response,
+                _GeoapifyGeocodingResponse,
+                error_message=(
+                    "Geoapify Geocoding API returned invalid response data."
+                ),
             )
-            response.raise_for_status()
-        except httpx2.HTTPError as exc:
-            raise GeoapifyProviderError(
-                "Geoapify Geocoding API request failed."
-            ) from exc
 
-        geocoding_payload = _parse_response(
-            response,
-            _GeoapifyGeocodingResponse,
-            error_message=(
-                "Geoapify Geocoding API returned invalid response data."
-            ),
-        )
+            if not geocoding_payload.results:
+                return []
 
-        if not geocoding_payload.results:
-            return []
+            location = geocoding_payload.results[0]
 
-        location = geocoding_payload.results[0]
+            if location.place_id is None:
+                return []
 
-        if location.place_id is None:
-            return []
+            place_id = location.place_id
+
+            self._location_cache.set(
+                normalized_query,
+                place_id,
+            )
 
         places_params: dict[str, Any] = {
             "categories": _GYM_CATEGORY,
-            "filter": f"place:{location.place_id}",
+            "filter": f"place:{place_id}",
             "limit": _DEFAULT_LIMIT,
             "lang": "pt",
             "apiKey": self._api_key,
