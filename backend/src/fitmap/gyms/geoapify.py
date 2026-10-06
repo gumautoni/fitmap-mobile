@@ -42,9 +42,7 @@ def _empty_geocoding_results() -> list[_GeoapifyGeocodingResult]:
 
 
 class _GeoapifyGeocodingResponse(BaseModel):
-    results: list[_GeoapifyGeocodingResult] = Field(
-        default_factory=_empty_geocoding_results
-    )
+    results: list[_GeoapifyGeocodingResult] = Field(default_factory=_empty_geocoding_results)
 
 
 class _GeoapifyContact(BaseModel):
@@ -76,9 +74,7 @@ def _empty_detail_features() -> list[_GeoapifyDetailsFeature]:
 
 
 class _GeoapifyPlaceDetailsResponse(BaseModel):
-    features: list[_GeoapifyDetailsFeature] = Field(
-        default_factory=_empty_detail_features
-    )
+    features: list[_GeoapifyDetailsFeature] = Field(default_factory=_empty_detail_features)
 
 
 class GeoapifyProviderError(Exception):
@@ -125,15 +121,8 @@ class GeoapifyGymProvider:
 
         params: dict[str, Any] = {
             "categories": _GYM_CATEGORY,
-            "filter": (
-                f"circle:{coordinates.longitude},"
-                f"{coordinates.latitude},"
-                f"{radius_meters}"
-            ),
-            "bias": (
-                f"proximity:{coordinates.longitude},"
-                f"{coordinates.latitude}"
-            ),
+            "filter": (f"circle:{coordinates.longitude},{coordinates.latitude},{radius_meters}"),
+            "bias": (f"proximity:{coordinates.longitude},{coordinates.latitude}"),
             "limit": _DEFAULT_LIMIT,
             "lang": "pt",
             "apiKey": self._api_key,
@@ -147,16 +136,12 @@ class GeoapifyGymProvider:
             )
             response.raise_for_status()
         except httpx2.HTTPError as exc:
-            raise GeoapifyProviderError(
-                "Geoapify Places API request failed."
-            ) from exc
+            raise GeoapifyProviderError("Geoapify Places API request failed.") from exc
 
         payload = _parse_response(
             response,
             _GeoapifyPlacesResponse,
-            error_message=(
-                "Geoapify Places API returned invalid response data."
-            ),
+            error_message=("Geoapify Places API returned invalid response data."),
         )
 
         return self._normalize_search_results(payload)
@@ -191,16 +176,12 @@ class GeoapifyGymProvider:
                 )
                 response.raise_for_status()
             except httpx2.HTTPError as exc:
-                raise GeoapifyProviderError(
-                    "Geoapify Geocoding API request failed."
-                ) from exc
+                raise GeoapifyProviderError("Geoapify Geocoding API request failed.") from exc
 
             geocoding_payload = _parse_response(
                 response,
                 _GeoapifyGeocodingResponse,
-                error_message=(
-                    "Geoapify Geocoding API returned invalid response data."
-                ),
+                error_message=("Geoapify Geocoding API returned invalid response data."),
             )
 
             if not geocoding_payload.results:
@@ -234,16 +215,12 @@ class GeoapifyGymProvider:
             )
             response.raise_for_status()
         except httpx2.HTTPError as exc:
-            raise GeoapifyProviderError(
-                "Geoapify Places API request failed."
-            ) from exc
+            raise GeoapifyProviderError("Geoapify Places API request failed.") from exc
 
         places_payload = _parse_response(
             response,
             _GeoapifyPlacesResponse,
-            error_message=(
-                "Geoapify Places API returned invalid response data."
-            ),
+            error_message=("Geoapify Places API returned invalid response data."),
         )
 
         return self._normalize_search_results(places_payload)
@@ -267,16 +244,12 @@ class GeoapifyGymProvider:
             )
             response.raise_for_status()
         except httpx2.HTTPError as exc:
-            raise GeoapifyProviderError(
-                "Geoapify Place Details API request failed."
-            ) from exc
+            raise GeoapifyProviderError("Geoapify Place Details API request failed.") from exc
 
         payload = _parse_response(
             response,
             _GeoapifyPlaceDetailsResponse,
-            error_message=(
-                "Geoapify Place Details API returned invalid response data."
-            ),
+            error_message=("Geoapify Place Details API returned invalid response data."),
         )
 
         details_feature = next(
@@ -304,23 +277,11 @@ class GeoapifyGymProvider:
                 longitude=properties.lon,
             )
 
-        phone = (
-            properties.contact.phone
-            if properties.contact is not None
-            else None
-        )
+        phone = properties.contact.phone if properties.contact is not None else None
 
-        image = (
-            properties.wiki_and_media.image
-            if properties.wiki_and_media is not None
-            else None
-        )
+        image = properties.wiki_and_media.image if properties.wiki_and_media is not None else None
 
-        opening_hours = (
-            [properties.opening_hours]
-            if properties.opening_hours is not None
-            else None
-        )
+        opening_hours = [properties.opening_hours] if properties.opening_hours is not None else None
 
         image_urls = [image] if image is not None else []
 

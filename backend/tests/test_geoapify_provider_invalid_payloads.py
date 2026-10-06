@@ -59,9 +59,7 @@ def test_search_text_converts_invalid_geocoding_payload_to_provider_error() -> N
 
             with pytest.raises(
                 GeoapifyProviderError,
-                match=(
-                    r"Geoapify Geocoding API returned invalid response data\."
-                ),
+                match=(r"Geoapify Geocoding API returned invalid response data\."),
             ):
                 await provider.search_text(
                     query="Barra do Piraí, RJ",
@@ -100,9 +98,7 @@ def test_get_details_converts_invalid_coordinates_to_provider_error() -> None:
 
             with pytest.raises(
                 GeoapifyProviderError,
-                match=(
-                    r"Geoapify Place Details API returned invalid response data\."
-                ),
+                match=(r"Geoapify Place Details API returned invalid response data\."),
             ):
                 await provider.get_details(
                     external_id="geoapify-place-invalid",
