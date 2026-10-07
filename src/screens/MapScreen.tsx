@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import MapView, { Marker, type Region } from "react-native-maps";
 
+import { ApiClientError } from "../services/apiClient";
 import { searchGymsByLocation, type GymSearchResult } from "../services/gyms";
 
 const INITIAL_REGION: Region = {
@@ -33,6 +34,22 @@ function getGymRegion(gym: GymSearchResult): Region | null {
     latitudeDelta: RESULT_REGION_DELTA,
     longitudeDelta: RESULT_REGION_DELTA,
   };
+}
+
+function getSearchErrorMessage(error: unknown): string {
+  if (error instanceof ApiClientError) {
+    if (error.code === "gym_provider_unavailable") {
+      return "O serviço de academias está indisponível no momento. Tente novamente em instantes.";
+    }
+
+    return "Não foi possível concluir a busca de academias.";
+  }
+
+  if (error instanceof Error && error.message === "The request timed out.") {
+    return "A busca demorou mais do que o esperado. Tente novamente.";
+  }
+
+  return "Não foi possível conectar ao backend do FitMap. Verifique a conexão e tente novamente.";
 }
 
 export default function MapScreen() {
@@ -88,12 +105,8 @@ export default function MapScreen() {
       setGyms([]);
       setSearchedPlace(normalizedQuery);
       setHasSearched(true);
-
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível buscar academias no momento.",
-      );
+      setSelectedGymId(null);
+      setErrorMessage(getSearchErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -182,9 +195,11 @@ export default function MapScreen() {
         <Text style={styles.resultsTitle}>
           {loading
             ? "Buscando academias..."
-            : hasSearched
-              ? `${gyms.length} academia(s) encontrada(s)`
-              : "Busque uma região para começar"}
+            : errorMessage
+              ? "Não foi possível concluir a busca"
+              : hasSearched
+                ? `${gyms.length} academia(s) encontrada(s)`
+                : "Busque uma região para começar"}
         </Text>
 
         {searchedPlace ? (
@@ -198,7 +213,7 @@ export default function MapScreen() {
           </Text>
         )}
 
-        {hasSearched && gyms.length > 0 ? (
+        {hasSearched && gyms.length > 0 && !errorMessage ? (
           <Text style={styles.resultsMapInfo}>
             {mappableGyms.length} de {gyms.length} resultado(s) possuem
             localização disponível para exibição no mapa.
