@@ -14,7 +14,9 @@ from fitmap.gyms.providers import (
 _GEOAPIFY_PLACES_URL = "https://api.geoapify.com/v2/places"
 _GEOAPIFY_PLACE_DETAILS_URL = "https://api.geoapify.com/v2/place-details"
 _GEOAPIFY_GEOCODING_SEARCH_URL = "https://api.geoapify.com/v1/geocode/search"
-_GYM_CATEGORY = "sport.fitness.gym"
+
+_GYM_CATEGORIES = "sport.fitness.fitness_centre,sport.fitness.gym"
+
 _DEFAULT_LIMIT = 20
 
 
@@ -125,7 +127,7 @@ class GeoapifyGymProvider:
         )
 
         params: dict[str, Any] = {
-            "categories": _GYM_CATEGORY,
+            "categories": _GYM_CATEGORIES,
             "filter": (f"circle:{coordinates.longitude},{coordinates.latitude},{radius_meters}"),
             "bias": (f"proximity:{coordinates.longitude},{coordinates.latitude}"),
             "limit": _DEFAULT_LIMIT,
@@ -205,7 +207,7 @@ class GeoapifyGymProvider:
             )
 
         places_params: dict[str, Any] = {
-            "categories": _GYM_CATEGORY,
+            "categories": _GYM_CATEGORIES,
             "filter": f"place:{place_id}",
             "limit": _DEFAULT_LIMIT,
             "lang": "pt",
