@@ -1,3 +1,4 @@
+import * as Location from "expo-location";
 import React, { useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,7 +13,12 @@ import {
 import MapView, { Marker, type Region } from "react-native-maps";
 
 import { ApiClientError } from "../services/apiClient";
-import { searchGymsByLocation, type GymSearchResult } from "../services/gyms";
+import {
+  searchGymsByLocation,
+  searchNearbyGyms,
+  type GymSearchResult,
+} from "../services/gyms";
+import { calculateDistanceKm } from "../utils/distance";
 
 const INITIAL_REGION: Region = {
   latitude: -22.4708,
@@ -22,6 +28,14 @@ const INITIAL_REGION: Region = {
 };
 
 const RESULT_REGION_DELTA = 0.05;
+const NEARBY_RADIUS_METERS = 5_000;
+
+interface UserCoordinates {
+  latitude: number;
+  longitude: number;
+}
+
+type LoadingAction = "text" | "location" | null;
 
 function getGymRegion(gym: GymSearchResult): Region | null {
   if (!gym.coordinates) {
@@ -31,6 +45,15 @@ function getGymRegion(gym: GymSearchResult): Region | null {
   return {
     latitude: gym.coordinates.latitude,
     longitude: gym.coordinates.longitude,
+    latitudeDelta: RESULT_REGION_DELTA,
+    longitudeDelta: RESULT_REGION_DELTA,
+  };
+}
+
+function getCoordinatesRegion(coordinates: UserCoordinates): Region {
+  return {
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
     latitudeDelta: RESULT_REGION_DELTA,
     longitudeDelta: RESULT_REGION_DELTA,
   };
@@ -52,21 +75,59 @@ function getSearchErrorMessage(error: unknown): string {
   return "Não foi possível conectar ao backend do FitMap. Verifique a conexão e tente novamente.";
 }
 
+function formatDistance(distanceKm: number): string {
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)} m de distância`;
+  }
+
+  return `${distanceKm.toFixed(1).replace(".", ",")} km de distância`;
+}
+
 export default function MapScreen() {
   const mapRef = useRef<MapView | null>(null);
 
   const [query, setQuery] = useState("");
   const [gyms, setGyms] = useState<GymSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchedPlace, setSearchedPlace] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
+  const [userCoordinates, setUserCoordinates] =
+    useState<UserCoordinates | null>(null);
+
+  const loading = loadingAction !== null;
 
   const mappableGyms = useMemo(
     () => gyms.filter((gym) => gym.coordinates !== null),
     [gyms],
   );
+
+  function focusSearchResults(
+    results: GymSearchResult[],
+    fallbackCoordinates?: UserCoordinates,
+  ): void {
+    const firstGymWithCoordinates = results.find(
+      (gym) => gym.coordinates !== null,
+    );
+
+    if (firstGymWithCoordinates) {
+      const nextRegion = getGymRegion(firstGymWithCoordinates);
+
+      if (nextRegion) {
+        mapRef.current?.animateToRegion(nextRegion, 800);
+      }
+
+      return;
+    }
+
+    if (fallbackCoordinates) {
+      mapRef.current?.animateToRegion(
+        getCoordinatesRegion(fallbackCoordinates),
+        800,
+      );
+    }
+  }
 
   async function handleSearch(): Promise<void> {
     Keyboard.dismiss();
@@ -79,7 +140,7 @@ export default function MapScreen() {
     }
 
     try {
-      setLoading(true);
+      setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
       setSelectedGymId(null);
@@ -90,17 +151,7 @@ export default function MapScreen() {
       setSearchedPlace(normalizedQuery);
       setHasSearched(true);
 
-      const firstGymWithCoordinates = results.find(
-        (gym) => gym.coordinates !== null,
-      );
-
-      if (firstGymWithCoordinates) {
-        const nextRegion = getGymRegion(firstGymWithCoordinates);
-
-        if (nextRegion) {
-          mapRef.current?.animateToRegion(nextRegion, 800);
-        }
-      }
+      focusSearchResults(results);
     } catch (error: unknown) {
       setGyms([]);
       setSearchedPlace(normalizedQuery);
@@ -108,7 +159,75 @@ export default function MapScreen() {
       setSelectedGymId(null);
       setErrorMessage(getSearchErrorMessage(error));
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
+    }
+  }
+
+  async function handleUseCurrentLocation(): Promise<void> {
+    Keyboard.dismiss();
+    setLoadingAction("location");
+    setErrorMessage(null);
+
+    let currentCoordinates: UserCoordinates;
+
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+
+      if (permission.status !== "granted") {
+        setErrorMessage(
+          "Permissão de localização negada. Você ainda pode pesquisar academias por cidade, bairro ou região.",
+        );
+        return;
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      currentCoordinates = {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+      };
+
+      setUserCoordinates(currentCoordinates);
+    } catch {
+      setErrorMessage(
+        "Não foi possível obter sua localização atual. Verifique se a localização do aparelho está ativada e tente novamente.",
+      );
+      return;
+    } finally {
+      setLoadingAction(null);
+    }
+
+    try {
+      setLoadingAction("location");
+      setGyms([]);
+      setSelectedGymId(null);
+      setSearchedPlace("Sua localização atual");
+      setHasSearched(true);
+
+      const results = await searchNearbyGyms(
+        currentCoordinates.latitude,
+        currentCoordinates.longitude,
+        NEARBY_RADIUS_METERS,
+      );
+
+      setGyms(results);
+
+      focusSearchResults(results, currentCoordinates);
+    } catch (error: unknown) {
+      setGyms([]);
+      setSelectedGymId(null);
+      setSearchedPlace("Sua localização atual");
+      setHasSearched(true);
+      setErrorMessage(getSearchErrorMessage(error));
+
+      mapRef.current?.animateToRegion(
+        getCoordinatesRegion(currentCoordinates),
+        800,
+      );
+    } finally {
+      setLoadingAction(null);
     }
   }
 
@@ -128,8 +247,8 @@ export default function MapScreen() {
         <Text style={styles.screenTitle}>Encontre academias</Text>
 
         <Text style={styles.screenSubtitle}>
-          Pesquise por cidade, bairro ou região. Os resultados abaixo vêm do
-          backend do FitMap.
+          Pesquise por cidade, bairro ou região ou use sua localização atual
+          para encontrar academias próximas.
         </Text>
 
         <View style={styles.searchRow}>
@@ -155,10 +274,37 @@ export default function MapScreen() {
             activeOpacity={0.85}
           >
             <Text style={styles.searchButtonText}>
-              {loading ? "..." : "Buscar"}
+              {loadingAction === "text" ? "..." : "Buscar"}
             </Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.searchDivider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>ou</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.locationButton,
+            loading && styles.locationButtonDisabled,
+          ]}
+          onPress={handleUseCurrentLocation}
+          disabled={loading}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.locationButtonText}>
+            {loadingAction === "location"
+              ? "Obtendo sua localização..."
+              : "Usar minha localização"}
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.locationHint}>
+          O FitMap solicitará acesso à sua localização somente ao usar esta
+          opção.
+        </Text>
 
         {errorMessage ? (
           <View style={styles.errorBox}>
@@ -169,6 +315,15 @@ export default function MapScreen() {
 
       <View style={styles.mapWrapper}>
         <MapView ref={mapRef} style={styles.map} initialRegion={INITIAL_REGION}>
+          {userCoordinates ? (
+            <Marker
+              coordinate={userCoordinates}
+              title="Sua localização"
+              description="Localização atual utilizada pelo FitMap"
+              pinColor="#2563EB"
+            />
+          ) : null}
+
           {mappableGyms.map((gym) => {
             if (!gym.coordinates) {
               return null;
@@ -193,13 +348,15 @@ export default function MapScreen() {
 
       <View style={styles.resultsCard}>
         <Text style={styles.resultsTitle}>
-          {loading
-            ? "Buscando academias..."
-            : errorMessage
-              ? "Não foi possível concluir a busca"
-              : hasSearched
-                ? `${gyms.length} academia(s) encontrada(s)`
-                : "Busque uma região para começar"}
+          {loadingAction === "location"
+            ? "Buscando academias próximas..."
+            : loadingAction === "text"
+              ? "Buscando academias..."
+              : errorMessage
+                ? "Não foi possível concluir a busca"
+                : hasSearched
+                  ? `${gyms.length} academia(s) encontrada(s)`
+                  : "Busque uma região para começar"}
         </Text>
 
         {searchedPlace ? (
@@ -219,6 +376,12 @@ export default function MapScreen() {
             localização disponível para exibição no mapa.
           </Text>
         ) : null}
+
+        {userCoordinates && hasSearched && !errorMessage ? (
+          <Text style={styles.resultsMapInfo}>
+            Distâncias calculadas a partir da sua localização atual.
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -234,6 +397,16 @@ export default function MapScreen() {
       contentContainerStyle={styles.listContent}
       renderItem={({ item }) => {
         const isSelected = selectedGymId === item.id;
+
+        const distanceKm =
+          userCoordinates && item.coordinates
+            ? calculateDistanceKm(
+                userCoordinates.latitude,
+                userCoordinates.longitude,
+                item.coordinates.latitude,
+                item.coordinates.longitude,
+              )
+            : null;
 
         return (
           <TouchableOpacity
@@ -255,6 +428,12 @@ export default function MapScreen() {
               {item.address ?? "Endereço não informado"}
             </Text>
 
+            {distanceKm !== null ? (
+              <Text style={styles.gymDistance}>
+                {formatDistance(distanceKm)}
+              </Text>
+            ) : null}
+
             <Text style={styles.gymLocationStatus}>
               {item.coordinates
                 ? "Localização disponível no mapa"
@@ -268,7 +447,11 @@ export default function MapScreen() {
           {loading ? (
             <>
               <ActivityIndicator size="large" />
-              <Text style={styles.emptyText}>Buscando academias...</Text>
+              <Text style={styles.emptyText}>
+                {loadingAction === "location"
+                  ? "Buscando academias próximas..."
+                  : "Buscando academias..."}
+              </Text>
             </>
           ) : hasSearched && !errorMessage ? (
             <Text style={styles.emptyText}>
@@ -276,7 +459,8 @@ export default function MapScreen() {
             </Text>
           ) : !hasSearched ? (
             <Text style={styles.emptyText}>
-              Digite uma cidade, bairro ou região para iniciar a busca.
+              Digite uma cidade, bairro ou região ou use sua localização para
+              iniciar a busca.
             </Text>
           ) : null}
         </View>
@@ -353,6 +537,46 @@ const styles = StyleSheet.create({
   searchButtonText: {
     color: "#FFFFFF",
     fontWeight: "900",
+  },
+  searchDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 14,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E5E7EB",
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: "#9CA3AF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  locationButton: {
+    minHeight: 46,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  locationButtonDisabled: {
+    opacity: 0.6,
+  },
+  locationButtonText: {
+    color: "#1D4ED8",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  locationHint: {
+    marginTop: 8,
+    color: "#6B7280",
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: "center",
   },
   errorBox: {
     marginTop: 12,
@@ -445,6 +669,12 @@ const styles = StyleSheet.create({
     color: "#4B5563",
     fontSize: 14,
     lineHeight: 20,
+  },
+  gymDistance: {
+    marginTop: 9,
+    color: "#1D4ED8",
+    fontSize: 13,
+    fontWeight: "900",
   },
   gymLocationStatus: {
     marginTop: 9,
