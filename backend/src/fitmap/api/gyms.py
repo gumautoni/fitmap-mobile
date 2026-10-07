@@ -2,12 +2,13 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 import httpx2
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 
 from fitmap.api.errors import ApiError
 from fitmap.gyms.config import get_gym_provider_settings
 from fitmap.gyms.factory import create_geoapify_gym_provider
 from fitmap.gyms.providers import (
+    GymDetails,
     GymProvider,
     GymProviderError,
     GymSearchResult,
@@ -66,6 +67,14 @@ RadiusMetersQuery = Annotated[
     ),
 ]
 
+GymExternalIdPath = Annotated[
+    str,
+    Path(
+        min_length=1,
+        max_length=500,
+    ),
+]
+
 
 @router.get(
     "/search",
@@ -118,3 +127,32 @@ async def search_nearby_gyms(
             code="gym_provider_unavailable",
             message="Gym provider is unavailable.",
         ) from exc
+
+
+@router.get(
+    "/{external_id}",
+    response_model=GymDetails,
+)
+async def get_gym_details(
+    external_id: GymExternalIdPath,
+    provider: GymProviderDependency,
+) -> GymDetails:
+    try:
+        details = await provider.get_details(
+            external_id=external_id,
+        )
+    except GymProviderError as exc:
+        raise ApiError(
+            status_code=502,
+            code="gym_provider_unavailable",
+            message="Gym provider is unavailable.",
+        ) from exc
+
+    if details is None:
+        raise ApiError(
+            status_code=404,
+            code="gym_not_found",
+            message="Gym details were not found.",
+        )
+
+    return details

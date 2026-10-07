@@ -18,10 +18,13 @@ class StubGymProvider:
         self,
         *,
         search_results: list[GymSearchResult] | None = None,
+        details_result: GymDetails | None = None,
     ) -> None:
         self.search_results = search_results or []
+        self.details_result = details_result
         self.last_text_query: str | None = None
         self.last_nearby_search: tuple[float, float, int] | None = None
+        self.last_details_external_id: str | None = None
 
     async def search_nearby(
         self,
@@ -50,7 +53,8 @@ class StubGymProvider:
         *,
         external_id: str,
     ) -> GymDetails | None:
-        return None
+        self.last_details_external_id = external_id
+        return self.details_result
 
 
 class FailingGymProvider(StubGymProvider):
@@ -68,6 +72,13 @@ class FailingGymProvider(StubGymProvider):
         longitude: float,
         radius_meters: int,
     ) -> list[GymSearchResult]:
+        raise GymProviderError("Provider unavailable.")
+
+    async def get_details(
+        self,
+        *,
+        external_id: str,
+    ) -> GymDetails | None:
         raise GymProviderError("Provider unavailable.")
 
 
@@ -376,6 +387,105 @@ def test_search_nearby_gyms_returns_controlled_error_when_provider_fails(
                 "latitude": -22.4708,
                 "longitude": -43.8250,
             },
+        )
+
+    assert response.status_code == 502
+    assert response.json() == {
+        "error": {
+            "code": "gym_provider_unavailable",
+            "message": "Gym provider is unavailable.",
+        }
+    }
+
+
+def test_get_gym_details_returns_available_provider_data(
+    test_settings: Settings,
+) -> None:
+    provider = StubGymProvider(
+        details_result=GymDetails(
+            provider_name="geoapify",
+            external_id="gym-details-123",
+            name="Academia Central",
+            coordinates=Coordinates(
+                latitude=-22.4708,
+                longitude=-43.8250,
+            ),
+            address="Rua Principal, 123, Barra do Piraí, RJ",
+            phone="+55 24 99999-9999",
+            website="https://academiacentral.example",
+            opening_hours=["Mo-Fr 06:00-22:00"],
+            image_urls=["https://example.com/academia.jpg"],
+            amenities=[],
+        )
+    )
+
+    application = create_test_application(
+        settings=test_settings,
+        provider=provider,
+    )
+
+    with TestClient(application) as client:
+        response = client.get(
+            "/api/v1/gyms/gym-details-123",
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider_name": "geoapify",
+        "external_id": "gym-details-123",
+        "name": "Academia Central",
+        "coordinates": {
+            "latitude": -22.4708,
+            "longitude": -43.825,
+        },
+        "address": "Rua Principal, 123, Barra do Piraí, RJ",
+        "phone": "+55 24 99999-9999",
+        "website": "https://academiacentral.example",
+        "opening_hours": ["Mo-Fr 06:00-22:00"],
+        "image_urls": ["https://example.com/academia.jpg"],
+        "amenities": [],
+    }
+    assert provider.last_details_external_id == "gym-details-123"
+
+
+def test_get_gym_details_returns_not_found_when_details_are_unavailable(
+    test_settings: Settings,
+) -> None:
+    provider = StubGymProvider()
+
+    application = create_test_application(
+        settings=test_settings,
+        provider=provider,
+    )
+
+    with TestClient(application) as client:
+        response = client.get(
+            "/api/v1/gyms/missing-gym",
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": {
+            "code": "gym_not_found",
+            "message": "Gym details were not found.",
+        }
+    }
+    assert provider.last_details_external_id == "missing-gym"
+
+
+def test_get_gym_details_returns_controlled_error_when_provider_fails(
+    test_settings: Settings,
+) -> None:
+    provider = FailingGymProvider()
+
+    application = create_test_application(
+        settings=test_settings,
+        provider=provider,
+    )
+
+    with TestClient(application) as client:
+        response = client.get(
+            "/api/v1/gyms/gym-details-123",
         )
 
     assert response.status_code == 502
