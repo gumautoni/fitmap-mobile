@@ -21,5 +21,40 @@ services:
       retries: 10
       start_period: 5s
 
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: fitmap-backend:${FITMAP_IMAGE_TAG:-local}
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      FITMAP_DB_HOST: postgres
+      FITMAP_DB_PORT: 5432
+
+    ports:
+      - "${FITMAP_API_PORT:-8000}:8000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   fitmap_postgres_data:
