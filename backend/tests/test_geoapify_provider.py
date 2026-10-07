@@ -8,7 +8,7 @@ from fitmap.gyms.geoapify import GeoapifyGymProvider, GeoapifyProviderError
 
 def test_search_nearby_normalizes_geoapify_results() -> None:
     def handler(request: httpx2.Request) -> httpx2.Response:
-        assert request.url.params["categories"] == "sport.fitness.gym"
+        assert request.url.params["categories"] == "sport.fitness.fitness_centre,sport.fitness.gym"
         assert request.url.params["filter"] == "circle:-43.8258,-22.4708,5000"
         assert request.url.params["bias"] == "proximity:-43.8258,-22.4708"
         assert request.url.params["limit"] == "20"
@@ -187,7 +187,7 @@ def test_search_text_geocodes_location_and_normalizes_gym_results() -> None:
             )
 
         assert request.url.path == "/v2/places"
-        assert request.url.params["categories"] == "sport.fitness.gym"
+        assert request.url.params["categories"] == "sport.fitness.fitness_centre,sport.fitness.gym"
         assert request.url.params["filter"] == "place:location-place-123"
         assert request.url.params["limit"] == "20"
         assert request.url.params["lang"] == "pt"

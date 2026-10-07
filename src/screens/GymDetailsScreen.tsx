@@ -1,6 +1,6 @@
-import type { AppStackScreenProps } from "../navigation/types";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -11,70 +11,121 @@ import {
   View,
 } from "react-native";
 
+import type { AppStackScreenProps } from "../navigation/types";
+import { ApiClientError } from "../services/apiClient";
+import { getGymDetails, type GymDetails } from "../services/gyms";
+
 type Props = AppStackScreenProps<"DetalhesAcademia">;
 
-export default function GymDetailsScreen({ navigation, route }: Props) {
-  const gym = route.params?.gym;
-
-  if (!gym) {
-    return (
-      <View style={styles.errorContainer}>
-        <View style={styles.errorCard}>
-          <Image
-            source={require("../../assets/images/logo-fitmap.png")}
-            style={styles.errorLogo}
-            resizeMode="contain"
-          />
-
-          <Text style={styles.errorTitle}>Academia não encontrada</Text>
-
-          <Text style={styles.errorText}>
-            Não foi possível carregar os detalhes da academia selecionada.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.primaryButtonText}>Voltar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+function formatDistance(distanceKm: number): string {
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)} m`;
   }
 
-  const isDemo = gym.source === "demo";
-  const address = gym.address || "Endereço não informado";
-  const phone = gym.phone || "Não informado";
-  const website = gym.website || "";
-  const distance = Number(gym.distanceKm || 0);
-  const price = Number(gym.monthlyPrice || 0);
+  return `${distanceKm.toFixed(1).replace(".", ",")} km`;
+}
 
-  async function openRoute() {
-    try {
-      const url = `https://www.google.com/maps/search/?api=1&query=${gym.latitude},${gym.longitude}`;
-
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert("Erro", "Não foi possível abrir a rota no mapa.");
+function getDetailsErrorMessage(error: unknown): string {
+  if (error instanceof ApiClientError) {
+    if (error.code === "gym_not_found") {
+      return "Os detalhes desta academia não estão disponíveis.";
     }
+
+    if (error.code === "gym_provider_unavailable") {
+      return "O serviço de academias está indisponível no momento. Tente novamente em instantes.";
+    }
+
+    return "Não foi possível carregar os detalhes da academia.";
   }
 
-  async function openWebsite() {
-    if (!website) {
+  if (error instanceof Error && error.message === "The request timed out.") {
+    return "A busca pelos detalhes demorou mais do que o esperado. Tente novamente.";
+  }
+
+  return "Não foi possível conectar ao backend do FitMap. Verifique a conexão e tente novamente.";
+}
+
+export default function GymDetailsScreen({ navigation, route }: Props) {
+  const { gymId, distanceKm = null } = route.params;
+
+  const [gym, setGym] = useState<GymDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadDetails(): Promise<void> {
+      try {
+        setLoading(true);
+        setErrorMessage(null);
+
+        const details = await getGymDetails(gymId);
+
+        if (active) {
+          setGym(details);
+        }
+      } catch (error: unknown) {
+        if (active) {
+          setGym(null);
+          setErrorMessage(getDetailsErrorMessage(error));
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadDetails();
+
+    return () => {
+      active = false;
+    };
+  }, [gymId]);
+
+  async function openRoute(): Promise<void> {
+    if (!gym) {
+      return;
+    }
+
+    let destination: string | null = null;
+
+    if (gym.coordinates) {
+      destination = `${gym.coordinates.latitude},${gym.coordinates.longitude}`;
+    } else if (gym.address) {
+      destination = gym.address;
+    }
+
+    if (!destination) {
       Alert.alert(
-        "Site indisponível",
-        "Esta academia não possui site cadastrado.",
+        "Rota indisponível",
+        "Esta academia não possui localização ou endereço disponível.",
       );
       return;
     }
 
     try {
-      const hasProtocol =
-        website.startsWith("http://") || website.startsWith("https://");
+      const url =
+        `https://www.google.com/maps/dir/?api=1&destination=` +
+        encodeURIComponent(destination);
 
-      const url = hasProtocol ? website : `https://${website}`;
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Erro", "Não foi possível abrir a rota para esta academia.");
+    }
+  }
+
+  async function openWebsite(): Promise<void> {
+    if (!gym?.website) {
+      return;
+    }
+
+    try {
+      const hasProtocol =
+        gym.website.startsWith("http://") || gym.website.startsWith("https://");
+
+      const url = hasProtocol ? gym.website : `https://${gym.website}`;
 
       await Linking.openURL(url);
     } catch {
@@ -82,17 +133,13 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
     }
   }
 
-  async function callGym() {
-    if (!phone || phone === "Não informado") {
-      Alert.alert(
-        "Telefone indisponível",
-        "Esta academia não possui telefone cadastrado.",
-      );
+  async function callGym(): Promise<void> {
+    if (!gym?.phone) {
       return;
     }
 
     try {
-      const cleanPhone = phone.replace(/[^\d+]/g, "");
+      const cleanPhone = gym.phone.replace(/[^\d+]/g, "");
 
       await Linking.openURL(`tel:${cleanPhone}`);
     } catch {
@@ -100,108 +147,163 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
     }
   }
 
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" />
+
+        <Text style={styles.loadingText}>
+          Carregando detalhes da academia...
+        </Text>
+      </View>
+    );
+  }
+
+  if (!gym || errorMessage) {
+    return (
+      <View style={styles.centerContainer}>
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>
+            Não foi possível carregar a academia
+          </Text>
+
+          <Text style={styles.errorText}>
+            {errorMessage ??
+              "Os detalhes desta academia não estão disponíveis."}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryButtonText}>Voltar ao mapa</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  const hasRoute = Boolean(gym.coordinates || gym.address);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerCard}>
-        <View style={styles.logoBox}>
+        <Text style={styles.headerLabel}>Academia selecionada</Text>
+
+        <Text style={styles.title}>{gym.name}</Text>
+
+        <Text style={styles.address}>
+          {gym.address ?? "Endereço não informado"}
+        </Text>
+      </View>
+
+      {gym.imageUrls.length > 0 ? (
+        <View style={styles.imageCard}>
           <Image
-            source={require("../../assets/images/logo-fitmap.png")}
-            style={styles.logo}
-            resizeMode="contain"
+            source={{ uri: gym.imageUrls[0] }}
+            style={styles.gymImage}
+            resizeMode="cover"
           />
         </View>
+      ) : null}
 
-        <Text style={styles.label}>Academia selecionada</Text>
+      {distanceKm !== null ? (
+        <View style={styles.distanceCard}>
+          <Text style={styles.distanceLabel}>Distância da sua localização</Text>
 
-        <Text style={styles.title}>{gym.name || "Academia sem nome"}</Text>
-
-        <Text style={styles.address}>{address}</Text>
-
-        {isDemo ? (
-          <View style={styles.demoBadge}>
-            <Text style={styles.demoBadgeText}>Resultado demonstrativo</Text>
-          </View>
-        ) : null}
-      </View>
-
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Distância</Text>
-          <Text style={styles.statValue}>{distance.toFixed(2)} km</Text>
+          <Text style={styles.distanceValue}>{formatDistance(distanceKm)}</Text>
         </View>
-
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Preço estimado</Text>
-          <Text style={styles.statValue}>R$ {price.toFixed(2)}</Text>
-        </View>
-      </View>
+      ) : null}
 
       <View style={styles.infoCard}>
         <Text style={styles.sectionTitle}>Informações da academia</Text>
 
         <View style={styles.infoItem}>
           <Text style={styles.infoLabel}>Endereço</Text>
-          <Text style={styles.infoText}>{address}</Text>
+
+          <Text style={styles.infoText}>{gym.address ?? "Não informado"}</Text>
         </View>
 
         <View style={styles.infoItem}>
           <Text style={styles.infoLabel}>Telefone</Text>
-          <Text style={styles.infoText}>{phone}</Text>
+
+          <Text style={styles.infoText}>{gym.phone ?? "Não informado"}</Text>
         </View>
 
         <View style={styles.infoItem}>
           <Text style={styles.infoLabel}>Site</Text>
-          <Text style={styles.infoText}>{website || "Não informado"}</Text>
+
+          <Text style={styles.infoText}>{gym.website ?? "Não informado"}</Text>
+        </View>
+
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Horário de funcionamento</Text>
+
+          {gym.openingHours && gym.openingHours.length > 0 ? (
+            gym.openingHours.map((openingHour) => (
+              <Text key={openingHour} style={styles.infoText}>
+                {openingHour}
+              </Text>
+            ))
+          ) : (
+            <Text style={styles.infoText}>Não informado</Text>
+          )}
         </View>
       </View>
 
-      <View style={styles.noteCard}>
-        <Text style={styles.noteTitle}>Observação</Text>
+      {gym.amenities.length > 0 ? (
+        <View style={styles.infoCard}>
+          <Text style={styles.sectionTitle}>Estrutura disponível</Text>
 
-        {isDemo ? (
-          <Text style={styles.noteText}>
-            Este é um resultado demonstrativo criado automaticamente porque a
-            busca pública de academias não retornou dados suficientes para sua
-            localização atual.
-          </Text>
-        ) : (
-          <Text style={styles.noteText}>
-            As informações são obtidas de bases públicas de mapa. Alguns dados
-            podem estar incompletos, desatualizados ou sem telefone/site
-            cadastrado.
-          </Text>
-        )}
+          {gym.amenities.map((amenity) => (
+            <View key={amenity} style={styles.amenityItem}>
+              <Text style={styles.amenityText}>{amenity}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      <View style={styles.noteCard}>
+        <Text style={styles.noteTitle}>Sobre estas informações</Text>
 
         <Text style={styles.noteText}>
-          O valor da mensalidade é apenas uma estimativa para fins de comparação
-          no protótipo.
+          O FitMap exibe apenas informações disponíveis na fonte externa. Campos
+          ausentes são apresentados como não informados e não são estimados pelo
+          aplicativo.
         </Text>
       </View>
 
-      <TouchableOpacity
-        style={styles.primaryButton}
-        onPress={openRoute}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.primaryButtonText}>Abrir rota no mapa</Text>
-      </TouchableOpacity>
+      {hasRoute ? (
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={openRoute}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.primaryButtonText}>Abrir rota no mapa</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={callGym}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.secondaryButtonText}>Ligar</Text>
-        </TouchableOpacity>
+        {gym.phone ? (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={callGym}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.secondaryButtonText}>Ligar</Text>
+          </TouchableOpacity>
+        ) : null}
 
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={openWebsite}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.secondaryButtonText}>Abrir site</Text>
-        </TouchableOpacity>
+        {gym.website ? (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={openWebsite}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.secondaryButtonText}>Abrir site</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <TouchableOpacity
@@ -224,12 +326,18 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
   },
-  errorContainer: {
+  centerContainer: {
     flex: 1,
     backgroundColor: "#F3F4F6",
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
     padding: 20,
+  },
+  loadingText: {
+    marginTop: 14,
+    color: "#4B5563",
+    fontSize: 14,
+    fontWeight: "700",
   },
   errorCard: {
     width: "100%",
@@ -238,19 +346,13 @@ const styles = StyleSheet.create({
     padding: 22,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    alignItems: "center",
-  },
-  errorLogo: {
-    width: 200,
-    height: 120,
-    marginBottom: 8,
   },
   errorTitle: {
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: "900",
     color: "#111827",
-    marginBottom: 8,
     textAlign: "center",
+    marginBottom: 8,
   },
   errorText: {
     fontSize: 14,
@@ -265,18 +367,7 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 14,
   },
-  logoBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 12,
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  logo: {
-    width: 190,
-    height: 105,
-  },
-  label: {
+  headerLabel: {
     color: "#93C5FD",
     fontSize: 12,
     fontWeight: "900",
@@ -284,9 +375,9 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   title: {
+    color: "#FFFFFF",
     fontSize: 27,
     fontWeight: "900",
-    color: "#FFFFFF",
     marginBottom: 10,
   },
   address: {
@@ -294,49 +385,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-  demoBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: "#FEF3C7",
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginTop: 14,
-  },
-  demoBadgeText: {
-    color: "#92400E",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 14,
-  },
-  statCard: {
-    flex: 1,
+  imageCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
+    borderRadius: 22,
+    overflow: "hidden",
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    shadowColor: "#111827",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
   },
-  statLabel: {
-    color: "#6B7280",
+  gymImage: {
+    width: "100%",
+    height: 220,
+  },
+  distanceCard: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  distanceLabel: {
+    color: "#1E40AF",
     fontSize: 12,
     fontWeight: "900",
-    marginBottom: 6,
+    marginBottom: 5,
   },
-  statValue: {
-    color: "#2563EB",
-    fontSize: 20,
+  distanceValue: {
+    color: "#1D4ED8",
+    fontSize: 22,
     fontWeight: "900",
   },
   infoCard: {
@@ -346,14 +423,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#E5E7EB",
     marginBottom: 14,
-    shadowColor: "#111827",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
@@ -377,9 +446,23 @@ const styles = StyleSheet.create({
   },
   infoText: {
     color: "#374151",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
     lineHeight: 21,
+  },
+  amenityItem: {
+    backgroundColor: "#F9FAFB",
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  amenityText: {
+    color: "#374151",
+    fontSize: 14,
+    fontWeight: "700",
   },
   noteCard: {
     backgroundColor: "#ECFDF5",
@@ -390,37 +473,29 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   noteTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "900",
     color: "#166534",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   noteText: {
     color: "#166534",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
-    lineHeight: 21,
-    marginBottom: 8,
+    lineHeight: 20,
   },
   primaryButton: {
     backgroundColor: "#2563EB",
     borderRadius: 16,
     paddingVertical: 15,
+    paddingHorizontal: 16,
     alignItems: "center",
     marginBottom: 12,
-    shadowColor: "#111827",
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    elevation: 3,
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontWeight: "900",
     fontSize: 15,
+    fontWeight: "900",
   },
   actionRow: {
     flexDirection: "row",
@@ -432,6 +507,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EAF2FF",
     borderRadius: 16,
     paddingVertical: 14,
+    paddingHorizontal: 12,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#BFDBFE",

@@ -4,12 +4,19 @@ import httpx2
 from pydantic import BaseModel, Field
 
 from fitmap.gyms.cache import LocationPlaceIdCache
-from fitmap.gyms.providers import Coordinates, GymDetails, GymSearchResult
+from fitmap.gyms.providers import (
+    Coordinates,
+    GymDetails,
+    GymProviderError,
+    GymSearchResult,
+)
 
 _GEOAPIFY_PLACES_URL = "https://api.geoapify.com/v2/places"
 _GEOAPIFY_PLACE_DETAILS_URL = "https://api.geoapify.com/v2/place-details"
 _GEOAPIFY_GEOCODING_SEARCH_URL = "https://api.geoapify.com/v1/geocode/search"
-_GYM_CATEGORY = "sport.fitness.gym"
+
+_GYM_CATEGORIES = "sport.fitness.fitness_centre,sport.fitness.gym"
+
 _DEFAULT_LIMIT = 20
 
 
@@ -77,7 +84,7 @@ class _GeoapifyPlaceDetailsResponse(BaseModel):
     features: list[_GeoapifyDetailsFeature] = Field(default_factory=_empty_detail_features)
 
 
-class GeoapifyProviderError(Exception):
+class GeoapifyProviderError(GymProviderError):
     pass
 
 
@@ -120,7 +127,7 @@ class GeoapifyGymProvider:
         )
 
         params: dict[str, Any] = {
-            "categories": _GYM_CATEGORY,
+            "categories": _GYM_CATEGORIES,
             "filter": (f"circle:{coordinates.longitude},{coordinates.latitude},{radius_meters}"),
             "bias": (f"proximity:{coordinates.longitude},{coordinates.latitude}"),
             "limit": _DEFAULT_LIMIT,
@@ -141,7 +148,7 @@ class GeoapifyGymProvider:
         payload = _parse_response(
             response,
             _GeoapifyPlacesResponse,
-            error_message=("Geoapify Places API returned invalid response data."),
+            error_message="Geoapify Places API returned invalid response data.",
         )
 
         return self._normalize_search_results(payload)
@@ -200,7 +207,7 @@ class GeoapifyGymProvider:
             )
 
         places_params: dict[str, Any] = {
-            "categories": _GYM_CATEGORY,
+            "categories": _GYM_CATEGORIES,
             "filter": f"place:{place_id}",
             "limit": _DEFAULT_LIMIT,
             "lang": "pt",
@@ -220,7 +227,7 @@ class GeoapifyGymProvider:
         places_payload = _parse_response(
             response,
             _GeoapifyPlacesResponse,
-            error_message=("Geoapify Places API returned invalid response data."),
+            error_message="Geoapify Places API returned invalid response data.",
         )
 
         return self._normalize_search_results(places_payload)

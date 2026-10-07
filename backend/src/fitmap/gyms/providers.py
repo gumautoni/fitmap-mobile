@@ -24,6 +24,10 @@ class GymDetails(GymSearchResult):
     amenities: list[str] = Field(default_factory=list)
 
 
+class GymProviderError(Exception):
+    pass
+
+
 class GymProvider(Protocol):
     async def search_nearby(
         self,
