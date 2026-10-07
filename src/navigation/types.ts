@@ -1,7 +1,5 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import type { Gym } from "../types/gym";
-
 export type AppStackParamList = {
   Home: undefined;
   Mapa: undefined;
@@ -12,7 +10,8 @@ export type AppStackParamList = {
     taskTitle: string;
   };
   DetalhesAcademia: {
-    gym: Gym;
+    gymId: string;
+    distanceKm?: number | null;
   };
 };
 

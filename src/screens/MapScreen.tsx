@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import MapView, { Marker, type Region } from "react-native-maps";
 
+import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
   searchGymsByLocation,
@@ -36,6 +37,8 @@ interface UserCoordinates {
 }
 
 type LoadingAction = "text" | "location" | null;
+
+type Props = AppStackScreenProps<"Mapa">;
 
 function getGymRegion(gym: GymSearchResult): Region | null {
   if (!gym.coordinates) {
@@ -83,7 +86,7 @@ function formatDistance(distanceKm: number): string {
   return `${distanceKm.toFixed(1).replace(".", ",")} km de distância`;
 }
 
-export default function MapScreen() {
+export default function MapScreen({ navigation }: Props) {
   const mapRef = useRef<MapView | null>(null);
 
   const [query, setQuery] = useState("");
@@ -239,6 +242,18 @@ export default function MapScreen() {
     if (nextRegion) {
       mapRef.current?.animateToRegion(nextRegion, 500);
     }
+  }
+
+  function handleOpenGymDetails(
+    gym: GymSearchResult,
+    distanceKm: number | null,
+  ): void {
+    setSelectedGymId(gym.id);
+
+    navigation.navigate("DetalhesAcademia", {
+      gymId: gym.id,
+      distanceKm,
+    });
   }
 
   const listHeader = (
@@ -439,6 +454,14 @@ export default function MapScreen() {
                 ? "Localização disponível no mapa"
                 : "Localização exata não informada"}
             </Text>
+
+            <TouchableOpacity
+              style={styles.detailsButton}
+              onPress={() => handleOpenGymDetails(item, distanceKm)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.detailsButtonText}>Ver detalhes</Text>
+            </TouchableOpacity>
           </TouchableOpacity>
         );
       }}
@@ -681,6 +704,20 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 12,
     fontWeight: "700",
+  },
+  detailsButton: {
+    marginTop: 14,
+    backgroundColor: "#EAF2FF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingVertical: 11,
+    alignItems: "center",
+  },
+  detailsButtonText: {
+    color: "#1D4ED8",
+    fontSize: 13,
+    fontWeight: "900",
   },
   emptyContainer: {
     alignItems: "center",
