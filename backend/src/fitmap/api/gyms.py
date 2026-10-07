@@ -42,6 +42,30 @@ LocationQuery = Annotated[
     ),
 ]
 
+LatitudeQuery = Annotated[
+    float,
+    Query(
+        ge=-90,
+        le=90,
+    ),
+]
+
+LongitudeQuery = Annotated[
+    float,
+    Query(
+        ge=-180,
+        le=180,
+    ),
+]
+
+RadiusMetersQuery = Annotated[
+    int,
+    Query(
+        ge=100,
+        le=50_000,
+    ),
+]
+
 
 @router.get(
     "/search",
@@ -63,6 +87,30 @@ async def search_gyms(
     try:
         return await provider.search_text(
             query=normalized_query,
+        )
+    except GymProviderError as exc:
+        raise ApiError(
+            status_code=502,
+            code="gym_provider_unavailable",
+            message="Gym provider is unavailable.",
+        ) from exc
+
+
+@router.get(
+    "/nearby",
+    response_model=list[GymSearchResult],
+)
+async def search_nearby_gyms(
+    latitude: LatitudeQuery,
+    longitude: LongitudeQuery,
+    provider: GymProviderDependency,
+    radius_meters: RadiusMetersQuery = 5_000,
+) -> list[GymSearchResult]:
+    try:
+        return await provider.search_nearby(
+            latitude=latitude,
+            longitude=longitude,
+            radius_meters=radius_meters,
         )
     except GymProviderError as exc:
         raise ApiError(
