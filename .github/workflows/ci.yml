@@ -95,3 +95,46 @@ jobs:
 
       - name: Run tests
         run: uv run pytest
+
+  backend-container:
+    name: Backend container validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Build backend image
+        run: docker build --tag fitmap-backend:${{ github.sha }} ./backend
+
+      - name: Validate container security baseline
+        run: |
+          test "$(docker run --rm fitmap-backend:${{ github.sha }} id -u)" != "0"
+          docker run --rm fitmap-backend:${{ github.sha }} sh -c "test ! -f /app/.env"
+
+      - name: Start backend container
+        run: |
+          docker run \
+            --detach \
+            --name fitmap-backend-ci \
+            --env FITMAP_ENVIRONMENT=production \
+            --env FITMAP_DB_PASSWORD=ci-placeholder \
+            --publish 8000:8000 \
+            fitmap-backend:${{ github.sha }}
+
+      - name: Validate backend health
+        run: |
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8000/health; then
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          docker logs fitmap-backend-ci
+          exit 1
+
+      - name: Clean up backend container
+        if: always()
+        run: docker rm --force fitmap-backend-ci || true
