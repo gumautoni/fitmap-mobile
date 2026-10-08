@@ -5,7 +5,7 @@
     "description": "Aplicativo para localizar academias próximas, comparar opções e registrar exercícios concluídos.",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "scheme": "fitmap",
     "icon": "./assets/images/logo-fitmap.png",
     "plugins": [

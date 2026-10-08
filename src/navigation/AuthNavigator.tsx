@@ -3,24 +3,27 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "./types";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
+import { useAppTheme } from "../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export default function AuthNavigator() {
+  const { theme } = useAppTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: "#111827",
+          backgroundColor: theme.colors.surface,
         },
-        headerTintColor: "#FFFFFF",
+        headerTintColor: theme.colors.textPrimary,
         headerTitleStyle: {
-          fontWeight: "900",
+          fontFamily: theme.typography.fontFamily.bold,
           fontSize: 18,
         },
         headerShadowVisible: false,
         contentStyle: {
-          backgroundColor: "#F3F4F6",
+          backgroundColor: theme.colors.background,
         },
         animation: "slide_from_right",
       }}
