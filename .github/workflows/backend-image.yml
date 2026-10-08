@@ -17,6 +17,7 @@ permissions:
 jobs:
   publish:
     name: Publish backend image
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
