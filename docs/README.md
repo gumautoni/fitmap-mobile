@@ -20,6 +20,30 @@ ADRs should document the context, considered alternatives, selected decision and
 
 Contains the functional and non-functional requirements of FitMap.
 
+### `mobile-development.md`
+
+Documents the supported mobile development workflow, environment configuration, validation commands and React Native/Expo development conventions.
+
+### `testing.md`
+
+Documents the automated testing strategy, local validation commands, test isolation requirements and the relationship between local testing and CI.
+
+### `deployment.md`
+
+Documents the current backend container and deployment foundation, including:
+
+- Docker image construction;
+- local Docker Compose integration;
+- runtime configuration and secret handling;
+- explicit database migration procedures;
+- Pull Request container validation;
+- immutable backend artifacts published to GitHub Container Registry;
+- staging-before-production promotion;
+- rollback considerations;
+- current infrastructure limitations.
+
+The deployment process follows ADR 0009 and intentionally remains provider-neutral until a concrete staging or production hosting platform is selected.
+
 ## Documentation principles
 
 Technical documentation should:
