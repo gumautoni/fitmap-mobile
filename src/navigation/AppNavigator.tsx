@@ -7,24 +7,27 @@ import GymDetailsScreen from "../screens/GymDetailsScreen";
 import HomeScreen from "../screens/HomeScreen";
 import MapScreen from "../screens/MapScreen";
 import TasksScreen from "../screens/TasksScreen";
+import { useAppTheme } from "../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
 export default function AppNavigator() {
+  const { theme } = useAppTheme();
+
   return (
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
-          backgroundColor: "#111827",
+          backgroundColor: theme.colors.surface,
         },
-        headerTintColor: "#FFFFFF",
+        headerTintColor: theme.colors.textPrimary,
         headerTitleStyle: {
-          fontWeight: "900",
+          fontFamily: theme.typography.fontFamily.bold,
           fontSize: 18,
         },
         headerShadowVisible: false,
         contentStyle: {
-          backgroundColor: "#F3F4F6",
+          backgroundColor: theme.colors.background,
         },
         animation: "slide_from_right",
       }}
@@ -33,7 +36,7 @@ export default function AppNavigator() {
         name="Home"
         component={HomeScreen}
         options={{
-          title: "FitMap",
+          headerShown: false,
         }}
       />
 
