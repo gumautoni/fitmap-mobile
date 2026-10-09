@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowRight,
+  Dumbbell,
   MapPin,
   Monitor,
   Moon,
@@ -8,6 +9,7 @@ import {
   Palette,
   Search,
   Sun,
+  Zap,
 } from "lucide-react-native";
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
@@ -23,6 +25,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import FitMapPerformanceMark from "../components/FitMapPerformanceMark";
 import { AuthContext } from "../context/AuthContext";
 import { useAppTheme } from "../theme/ThemeProvider";
 
@@ -67,13 +70,14 @@ export default function HomeScreen({ navigation }) {
         Animated.sequence([
           Animated.timing(floatValue, {
             toValue: 1,
-            duration: 1800,
+            duration: 1900,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
+
           Animated.timing(floatValue, {
             toValue: 0,
-            duration: 1800,
+            duration: 1900,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
           }),
@@ -84,13 +88,14 @@ export default function HomeScreen({ navigation }) {
         Animated.sequence([
           Animated.timing(pulseValue, {
             toValue: 1,
-            duration: 1600,
+            duration: 1750,
             easing: Easing.out(Easing.ease),
             useNativeDriver: true,
           }),
+
           Animated.timing(pulseValue, {
             toValue: 0,
-            duration: 500,
+            duration: 450,
             easing: Easing.in(Easing.ease),
             useNativeDriver: true,
           }),
@@ -105,6 +110,7 @@ export default function HomeScreen({ navigation }) {
 
     return () => {
       active = false;
+
       floatAnimation?.stop();
       pulseAnimation?.stop();
     };
@@ -115,7 +121,13 @@ export default function HomeScreen({ navigation }) {
       {
         translateY: floatValue.interpolate({
           inputRange: [0, 1],
-          outputRange: [0, -7],
+          outputRange: [0, -8],
+        }),
+      },
+      {
+        rotate: floatValue.interpolate({
+          inputRange: [0, 1],
+          outputRange: ["-1deg", "1deg"],
         }),
       },
     ],
@@ -124,13 +136,14 @@ export default function HomeScreen({ navigation }) {
   const pulseStyle = {
     opacity: pulseValue.interpolate({
       inputRange: [0, 1],
-      outputRange: [0.38, 0],
+      outputRange: [0.22, 0],
     }),
+
     transform: [
       {
         scale: pulseValue.interpolate({
           inputRange: [0, 1],
-          outputRange: [0.78, 1.24],
+          outputRange: [0.74, 1.22],
         }),
       },
     ],
@@ -144,18 +157,21 @@ export default function HomeScreen({ navigation }) {
           void setPreference("light");
         },
       },
+
       {
         text: "Escuro",
         onPress: () => {
           void setPreference("dark");
         },
       },
+
       {
         text: "Seguir sistema",
         onPress: () => {
           void setPreference("system");
         },
       },
+
       {
         text: "Cancelar",
         style: "cancel",
@@ -219,30 +235,43 @@ export default function HomeScreen({ navigation }) {
         >
           <LinearGradient
             colors={[theme.colors.heroStart, theme.colors.heroEnd]}
-            start={{ x: 0.05, y: 0 }}
-            end={{ x: 1, y: 1 }}
+            start={{
+              x: 0,
+              y: 0,
+            }}
+            end={{
+              x: 1,
+              y: 1,
+            }}
             style={styles.hero}
           >
-            <View pointerEvents="none" style={styles.techBackground}>
-              <View style={styles.mapLineOne} />
-              <View style={styles.mapLineTwo} />
-              <View style={styles.mapLineThree} />
+            <View pointerEvents="none" style={styles.heroBackground}>
+              <View style={styles.performanceLineOne} />
+              <View style={styles.performanceLineTwo} />
+              <View style={styles.performanceLineThree} />
 
-              <View style={styles.mapNodeOne} />
-              <View style={styles.mapNodeTwo} />
+              <View style={styles.performanceNodeOne} />
+              <View style={styles.performanceNodeTwo} />
+              <View style={styles.performanceNodeThree} />
             </View>
 
             <View style={styles.heroCopy}>
               <View style={styles.heroEyebrow}>
-                <View style={styles.heroEyebrowDot} />
+                <Zap
+                  size={13}
+                  strokeWidth={2.4}
+                  color={theme.colors.techAccent}
+                />
 
-                <Text style={styles.heroEyebrowText}>EXPLORE</Text>
+                <Text style={styles.heroEyebrowText}>
+                  SEU TREINO COMEÇA AQUI
+                </Text>
               </View>
 
-              <Text style={styles.heroTitle}>Encontre uma academia</Text>
+              <Text style={styles.heroTitle}>Encontre onde treinar</Text>
 
               <Text style={styles.heroDescription}>
-                Descubra opções perto de você ou pesquise uma região.
+                Descubra academias próximas ou pesquise uma região para começar.
               </Text>
 
               <View style={styles.heroAction}>
@@ -256,31 +285,16 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
 
-            <View pointerEvents="none" style={styles.radarArea}>
-              <View style={styles.radarRingOuter} />
-              <View style={styles.radarRingMiddle} />
+            <View pointerEvents="none" style={styles.performanceVisual}>
+              <Animated.View style={[styles.performancePulse, pulseStyle]} />
 
-              <Animated.View style={[styles.radarPulse, pulseStyle]} />
-
-              <Animated.View
-                style={[styles.pinFloatContainer, floatingTransform]}
-              >
-                <View style={styles.pinGlow} />
-
-                <LinearGradient
-                  colors={["#FFFFFF", "#E7EAFF"]}
-                  style={styles.pinShell}
-                >
-                  <View style={styles.pinInner}>
-                    <MapPin
-                      size={31}
-                      strokeWidth={2.5}
-                      color={theme.colors.primary}
-                    />
-                  </View>
-                </LinearGradient>
-
-                <View style={styles.pinShadow} />
+              <Animated.View style={floatingTransform}>
+                <FitMapPerformanceMark
+                  size={142}
+                  primary={theme.colors.primary}
+                  primaryDark={theme.colors.primaryPressed}
+                  accent={theme.colors.techAccent}
+                />
               </Animated.View>
             </View>
           </LinearGradient>
@@ -290,7 +304,7 @@ export default function HomeScreen({ navigation }) {
           <View>
             <Text style={styles.sectionEyebrow}>DESCUBRA</Text>
 
-            <Text style={styles.sectionTitle}>Academias</Text>
+            <Text style={styles.sectionTitle}>Escolha onde treinar</Text>
           </View>
 
           <Pressable
@@ -319,25 +333,40 @@ export default function HomeScreen({ navigation }) {
             pressed && styles.cardPressed,
           ]}
         >
+          <View style={styles.discoveryAccent} />
+
           <View style={styles.discoveryMain}>
             <View style={styles.discoveryIcon}>
-              <Search
-                size={22}
+              <Dumbbell
+                size={25}
                 strokeWidth={2.2}
                 color={theme.colors.primary}
               />
             </View>
 
             <View style={styles.discoveryCopy}>
-              <Text style={styles.discoveryTitle}>Pesquise do seu jeito</Text>
+              <Text style={styles.discoveryTitle}>
+                Seu próximo espaço de treino
+              </Text>
 
               <Text style={styles.discoveryText}>
-                Cidade, bairro, região ou sua localização atual.
+                Busque por cidade, bairro ou região ou encontre opções usando
+                sua localização.
               </Text>
             </View>
           </View>
 
           <View style={styles.discoveryFooter}>
+            <View style={styles.capability}>
+              <Search
+                size={14}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+
+              <Text style={styles.capabilityText}>Busca</Text>
+            </View>
+
             <View style={styles.capability}>
               <Navigation
                 size={14}
@@ -429,7 +458,11 @@ function createStyles(theme) {
 
     appearanceButtonPressed: {
       opacity: 0.7,
-      transform: [{ scale: 0.97 }],
+      transform: [
+        {
+          scale: 0.97,
+        },
+      ],
     },
 
     paletteBadge: {
@@ -464,77 +497,104 @@ function createStyles(theme) {
     },
 
     heroPressed: {
-      transform: [{ scale: 0.992 }],
       opacity: 0.97,
+      transform: [
+        {
+          scale: 0.992,
+        },
+      ],
     },
 
     hero: {
-      minHeight: 270,
+      minHeight: 286,
       borderRadius: theme.radii.xl,
       padding: theme.spacing["2xl"],
       overflow: "hidden",
       justifyContent: "center",
     },
 
-    techBackground: {
+    heroBackground: {
       ...StyleSheet.absoluteFillObject,
-      opacity: 0.75,
+      opacity: 0.9,
     },
 
-    mapLineOne: {
+    performanceLineOne: {
+      position: "absolute",
+      width: 245,
+      height: 1,
+      right: -60,
+      top: 51,
+      backgroundColor: theme.colors.heroDetail,
+      transform: [
+        {
+          rotate: "-29deg",
+        },
+      ],
+    },
+
+    performanceLineTwo: {
       position: "absolute",
       width: 230,
       height: 1,
-      right: -45,
-      top: 61,
+      right: -35,
+      top: 144,
       backgroundColor: theme.colors.heroDetail,
-      transform: [{ rotate: "-32deg" }],
+      transform: [
+        {
+          rotate: "18deg",
+        },
+      ],
     },
 
-    mapLineTwo: {
+    performanceLineThree: {
       position: "absolute",
-      width: 210,
+      width: 170,
       height: 1,
-      right: -13,
-      top: 136,
+      right: 4,
+      bottom: 51,
       backgroundColor: theme.colors.heroDetail,
-      transform: [{ rotate: "20deg" }],
+      transform: [
+        {
+          rotate: "-15deg",
+        },
+      ],
     },
 
-    mapLineThree: {
-      position: "absolute",
-      width: 150,
-      height: 1,
-      right: 2,
-      bottom: 52,
-      backgroundColor: theme.colors.heroDetail,
-      transform: [{ rotate: "-18deg" }],
-    },
-
-    mapNodeOne: {
+    performanceNodeOne: {
       position: "absolute",
       width: 7,
       height: 7,
       borderRadius: 4,
-      right: 48,
-      top: 62,
+      right: 45,
+      top: 61,
       backgroundColor: theme.colors.techAccent,
-      opacity: 0.45,
+      opacity: 0.55,
     },
 
-    mapNodeTwo: {
+    performanceNodeTwo: {
       position: "absolute",
       width: 5,
       height: 5,
       borderRadius: 3,
-      right: 118,
-      bottom: 52,
+      right: 110,
+      bottom: 50,
       backgroundColor: theme.colors.heroText,
-      opacity: 0.25,
+      opacity: 0.28,
+    },
+
+    performanceNodeThree: {
+      position: "absolute",
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      right: 22,
+      bottom: 98,
+      backgroundColor: theme.colors.performanceAccent,
+      opacity: 0.66,
     },
 
     heroCopy: {
-      width: "62%",
+      width: "61%",
       zIndex: 3,
     },
 
@@ -545,26 +605,19 @@ function createStyles(theme) {
       marginBottom: theme.spacing.md,
     },
 
-    heroEyebrowDot: {
-      width: 7,
-      height: 7,
-      borderRadius: 4,
-      backgroundColor: theme.colors.techAccent,
-    },
-
     heroEyebrowText: {
       color: theme.colors.heroTextMuted,
       fontFamily: theme.typography.fontFamily.bold,
-      fontSize: theme.typography.size.caption,
-      letterSpacing: 1.6,
+      fontSize: 10,
+      letterSpacing: 1.15,
     },
 
     heroTitle: {
       color: theme.colors.heroText,
       fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 27,
-      lineHeight: 32,
-      letterSpacing: -0.8,
+      fontSize: 29,
+      lineHeight: 34,
+      letterSpacing: -0.9,
       marginBottom: theme.spacing.sm,
     },
 
@@ -586,11 +639,11 @@ function createStyles(theme) {
       paddingVertical: 12,
       borderRadius: theme.radii.md,
       shadowColor: "#0B1027",
-      shadowOpacity: 0.13,
-      shadowRadius: 12,
+      shadowOpacity: 0.15,
+      shadowRadius: 14,
       shadowOffset: {
         width: 0,
-        height: 7,
+        height: 8,
       },
       elevation: 4,
     },
@@ -601,99 +654,30 @@ function createStyles(theme) {
       fontSize: theme.typography.size.small,
     },
 
-    radarArea: {
+    performanceVisual: {
       position: "absolute",
-      width: 145,
-      height: 145,
-      right: -2,
+      width: 150,
+      height: 170,
+      right: -5,
       top: 42,
       alignItems: "center",
       justifyContent: "center",
       zIndex: 2,
     },
 
-    radarRingOuter: {
+    performancePulse: {
       position: "absolute",
-      width: 138,
-      height: 138,
-      borderRadius: 69,
-      borderWidth: 1,
-      borderColor: theme.colors.heroDetail,
-    },
-
-    radarRingMiddle: {
-      position: "absolute",
-      width: 96,
-      height: 96,
-      borderRadius: 48,
-      borderWidth: 1,
-      borderColor: theme.colors.heroDetail,
-    },
-
-    radarPulse: {
-      position: "absolute",
-      width: 115,
-      height: 115,
-      borderRadius: 58,
+      width: 120,
+      height: 120,
+      borderRadius: 60,
       backgroundColor: theme.colors.techAccent,
-    },
-
-    pinFloatContainer: {
-      width: 78,
-      height: 90,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-
-    pinGlow: {
-      position: "absolute",
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: theme.colors.techAccent,
-      opacity: 0.12,
-      transform: [{ scale: 1.25 }],
-    },
-
-    pinShell: {
-      width: 65,
-      height: 65,
-      borderRadius: 23,
-      alignItems: "center",
-      justifyContent: "center",
-      transform: [{ rotate: "8deg" }],
-      shadowColor: "#080B18",
-      shadowOpacity: 0.3,
-      shadowRadius: 16,
-      shadowOffset: {
-        width: 0,
-        height: 10,
-      },
-      elevation: 8,
-    },
-
-    pinInner: {
-      width: 51,
-      height: 51,
-      borderRadius: 18,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "rgba(255,255,255,0.86)",
-    },
-
-    pinShadow: {
-      width: 38,
-      height: 9,
-      borderRadius: 20,
-      backgroundColor: "rgba(5, 8, 22, 0.20)",
-      marginTop: 8,
-      transform: [{ scaleX: 1.15 }],
     },
 
     sectionHeader: {
       flexDirection: "row",
       alignItems: "flex-end",
       justifyContent: "space-between",
+      gap: theme.spacing.md,
       marginBottom: theme.spacing.lg,
     },
 
@@ -706,6 +690,7 @@ function createStyles(theme) {
     },
 
     sectionTitle: {
+      maxWidth: 220,
       color: theme.colors.textPrimary,
       fontFamily: theme.typography.fontFamily.extrabold,
       fontSize: theme.typography.size.sectionTitle,
@@ -731,24 +716,41 @@ function createStyles(theme) {
     },
 
     discoveryCard: {
+      position: "relative",
+      overflow: "hidden",
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       padding: theme.spacing.lg,
       shadowColor: "#0A0D15",
-      shadowOpacity: theme.mode === "dark" ? 0.2 : 0.045,
-      shadowRadius: 15,
+      shadowOpacity: theme.mode === "dark" ? 0.2 : 0.05,
+      shadowRadius: 16,
       shadowOffset: {
         width: 0,
-        height: 7,
+        height: 8,
       },
       elevation: 2,
     },
 
+    discoveryAccent: {
+      position: "absolute",
+      left: 0,
+      top: 18,
+      bottom: 18,
+      width: 3,
+      borderTopRightRadius: 3,
+      borderBottomRightRadius: 3,
+      backgroundColor: theme.colors.primary,
+    },
+
     cardPressed: {
-      opacity: 0.82,
-      transform: [{ scale: 0.995 }],
+      opacity: 0.83,
+      transform: [
+        {
+          scale: 0.995,
+        },
+      ],
     },
 
     discoveryMain: {
@@ -759,9 +761,9 @@ function createStyles(theme) {
     },
 
     discoveryIcon: {
-      width: 50,
-      height: 50,
-      borderRadius: 17,
+      width: 54,
+      height: 54,
+      borderRadius: 18,
       backgroundColor: theme.colors.primarySoft,
       alignItems: "center",
       justifyContent: "center",
@@ -776,7 +778,7 @@ function createStyles(theme) {
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: theme.typography.size.cardTitle,
       lineHeight: theme.typography.lineHeight.cardTitle,
-      marginBottom: 3,
+      marginBottom: 4,
     },
 
     discoveryText: {
@@ -789,6 +791,7 @@ function createStyles(theme) {
     discoveryFooter: {
       flexDirection: "row",
       alignItems: "center",
+      flexWrap: "wrap",
       gap: theme.spacing.sm,
     },
 
@@ -810,8 +813,8 @@ function createStyles(theme) {
 
     openButton: {
       marginLeft: "auto",
-      width: 38,
-      height: 38,
+      width: 39,
+      height: 39,
       borderRadius: 14,
       backgroundColor: theme.colors.primary,
       alignItems: "center",
