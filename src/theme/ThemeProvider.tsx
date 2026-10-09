@@ -42,8 +42,7 @@ function isThemePreference(value: string | null): value is ThemePreference {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const systemColorScheme = useColorScheme();
 
-  const [preference, setPreferenceState] =
-    useState<ThemePreference>("system");
+  const [preference, setPreferenceState] = useState<ThemePreference>("system");
 
   const [loading, setLoading] = useState(true);
 
@@ -52,9 +51,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
     async function loadPreference() {
       try {
-        const storedPreference = await AsyncStorage.getItem(
-          THEME_STORAGE_KEY,
-        );
+        const storedPreference = await AsyncStorage.getItem(THEME_STORAGE_KEY);
 
         if (active && isThemePreference(storedPreference)) {
           setPreferenceState(storedPreference);
@@ -82,17 +79,11 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   const theme = mode === "dark" ? darkTheme : lightTheme;
 
-  const setPreference = useCallback(
-    async (nextPreference: ThemePreference) => {
-      await AsyncStorage.setItem(
-        THEME_STORAGE_KEY,
-        nextPreference,
-      );
+  const setPreference = useCallback(async (nextPreference: ThemePreference) => {
+    await AsyncStorage.setItem(THEME_STORAGE_KEY, nextPreference);
 
-      setPreferenceState(nextPreference);
-    },
-    [],
-  );
+    setPreferenceState(nextPreference);
+  }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
@@ -107,9 +98,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   );
 
   return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
   );
 }
 
@@ -117,9 +106,7 @@ export function useAppTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
 
   if (!context) {
-    throw new Error(
-      "useAppTheme must be used inside ThemeProvider.",
-    );
+    throw new Error("useAppTheme must be used inside ThemeProvider.");
   }
 
   return context;
