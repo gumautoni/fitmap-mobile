@@ -12,6 +12,7 @@ os.environ["FITMAP_DB_PORT"] = "5434"
 os.environ["FITMAP_DB_NAME"] = "fitmap_test"
 os.environ["FITMAP_DB_USER"] = "fitmap_test"
 os.environ["FITMAP_DB_PASSWORD"] = "fitmap_test_password"
+os.environ["FITMAP_AUTH_JWT_SECRET"] = "fitmap-test-only-jwt-secret-not-for-production-use"
 
 from fitmap.config import Settings
 from fitmap.main import create_app
@@ -27,6 +28,7 @@ def test_settings() -> Settings:
         db_name="fitmap_test",
         db_user="fitmap_test",
         db_password=SecretStr("fitmap_test_password"),
+        auth_jwt_secret=SecretStr("fitmap-test-only-jwt-secret-not-for-production-use"),
     )
 
 
