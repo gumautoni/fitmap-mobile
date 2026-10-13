@@ -11,6 +11,7 @@ import {
 } from "../services/auth";
 import { ApiClientError } from "../services/apiClient";
 import {
+  clearLegacyAuthStorage,
   deleteRefreshToken,
   getRefreshToken,
   saveRefreshToken,
@@ -76,6 +77,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     async function restoreSession(): Promise<void> {
       try {
+        await clearLegacyAuthStorage();
+
         const storedRefreshToken = await getRefreshToken();
 
         if (!storedRefreshToken) {
