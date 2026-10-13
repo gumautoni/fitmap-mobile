@@ -164,7 +164,9 @@ class WorkoutExercise(Base):
         Uuid(as_uuid=True),
         ForeignKey(
             "exercises.id",
-            ondelete="RESTRICT",
+            name="workout_exercises_exercise_id_fkey",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         nullable=False,
         index=True,

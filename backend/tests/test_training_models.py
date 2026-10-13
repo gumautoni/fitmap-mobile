@@ -3,7 +3,7 @@ from decimal import Decimal
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import Engine, delete, select
+from sqlalchemy import Engine, delete, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -450,9 +450,10 @@ def test_referenced_exercise_cannot_be_deleted(
     db_session.flush()
 
     db_session.delete(exercise)
+    db_session.flush()
 
     with pytest.raises(IntegrityError):
-        db_session.flush()
+        db_session.execute(text("SET CONSTRAINTS workout_exercises_exercise_id_fkey IMMEDIATE"))
 
 
 def test_deleting_workout_removes_workout_exercise_records(
@@ -548,3 +549,68 @@ def test_deleting_user_removes_owned_workouts_and_custom_exercises(
 
     assert persisted_custom_exercise is None
     assert persisted_workout is None
+
+
+def test_deleting_user_removes_workout_using_owned_custom_exercise(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    custom_exercise = Exercise(
+        owner_user_id=user.id,
+        name="My Custom Exercise",
+    )
+    workout = Workout(
+        user_id=user.id,
+        name="My Workout",
+    )
+
+    db_session.add_all(
+        [
+            custom_exercise,
+            workout,
+        ]
+    )
+    db_session.flush()
+
+    workout_exercise = WorkoutExercise(
+        workout_id=workout.id,
+        exercise_id=custom_exercise.id,
+        position=1,
+    )
+
+    db_session.add(workout_exercise)
+    db_session.flush()
+
+    custom_exercise_id = custom_exercise.id
+    workout_id = workout.id
+    workout_exercise_id = workout_exercise.id
+
+    db_session.execute(
+        delete(User).where(
+            User.id == user.id,
+        )
+    )
+    db_session.flush()
+
+    db_session.execute(text("SET CONSTRAINTS workout_exercises_exercise_id_fkey IMMEDIATE"))
+
+    persisted_custom_exercise = db_session.scalar(
+        select(Exercise).where(
+            Exercise.id == custom_exercise_id,
+        )
+    )
+    persisted_workout = db_session.scalar(
+        select(Workout).where(
+            Workout.id == workout_id,
+        )
+    )
+    persisted_workout_exercise = db_session.scalar(
+        select(WorkoutExercise).where(
+            WorkoutExercise.id == workout_exercise_id,
+        )
+    )
+
+    assert persisted_custom_exercise is None
+    assert persisted_workout is None
+    assert persisted_workout_exercise is None
