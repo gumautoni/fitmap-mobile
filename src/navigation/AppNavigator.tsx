@@ -6,6 +6,7 @@ import CameraScreen from "../screens/CameraScreen";
 import GymDetailsScreen from "../screens/GymDetailsScreen";
 import HomeScreen from "../screens/HomeScreen";
 import MapScreen from "../screens/MapScreen";
+import ProfileScreen from "../screens/ProfileScreen";
 import TasksScreen from "../screens/TasksScreen";
 import { useAppTheme } from "../theme/ThemeProvider";
 
@@ -37,6 +38,14 @@ export default function AppNavigator() {
         component={HomeScreen}
         options={{
           headerShown: false,
+        }}
+      />
+
+      <Stack.Screen
+        name="Perfil"
+        component={ProfileScreen}
+        options={{
+          title: "Meu perfil",
         }}
       />
 

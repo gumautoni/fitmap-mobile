@@ -6,7 +6,7 @@
 
 **Mobile fitness platform for gym discovery and progressive workout tracking.**
 
-React Native + Expo mobile application backed by a Python/FastAPI API, PostgreSQL persistence, automated validation and containerized delivery foundations.
+React Native + Expo mobile application backed by a Python/FastAPI API, PostgreSQL persistence, secure backend-managed authentication, automated validation and containerized delivery foundations.
 
 </div>
 
@@ -14,13 +14,62 @@ React Native + Expo mobile application backed by a Python/FastAPI API, PostgreSQ
 
 FitMap is a mobile fitness platform designed to help users discover gyms and progressively manage their training experience in a single application.
 
-The project started as an academic mobile prototype and is evolving into a full application with its own backend, relational database, external-service integration, automated testing and documented architecture.
+The project started as an academic mobile prototype and is evolving into a full application with its own backend, relational database, secure authentication, user profile management, external-service integration, automated testing and documented architecture.
 
-The current implementation already provides a backend-integrated gym discovery experience while legacy prototype features are being migrated incrementally to the new architecture.
+The current implementation provides backend-integrated gym discovery, backend-managed authentication and persistent user-profile capabilities while legacy prototype features are being migrated incrementally to the approved architecture.
 
 FitMap is under active development as a Trabalho de Conclusão de Curso (TCC).
 
 ## Current capabilities
+
+### Authentication and account sessions
+
+FitMap now uses backend-managed authentication for the production mobile flow.
+
+Users can:
+
+- create an account;
+- authenticate using registered credentials;
+- restore an authenticated session after reopening the application;
+- refresh expired access credentials through refresh-token rotation;
+- access authenticated API functionality using their own identity;
+- log out and revoke the active backend session.
+
+Authentication credentials and sessions are handled by the FastAPI backend and PostgreSQL.
+
+Passwords are not stored locally by the mobile application.
+
+The mobile application stores the refresh token using Expo SecureStore and keeps access-token state inside the authenticated application context.
+
+Legacy AsyncStorage authentication data is removed during session restoration and is no longer used as the active authentication mechanism.
+
+### User profile
+
+Authenticated users can access a persistent personal profile integrated with the FitMap backend.
+
+The current profile experience supports:
+
+- viewing the authenticated account name and e-mail;
+- editing the user name;
+- viewing account creation information;
+- configuring a primary fitness goal;
+- configuring training-experience level;
+- configuring a weekly workout target;
+- configuring preferred workout duration;
+- configuring the preferred measurement system;
+- viewing profile-completion progress;
+- changing the application appearance;
+- logging out directly from the profile screen.
+
+Supported fitness-profile values are intentionally limited to information currently useful to FitMap.
+
+The profile does not collect unnecessary personal, medical or body-composition information.
+
+Profile ownership is derived from the authenticated backend identity. The mobile application does not provide an arbitrary user identifier when retrieving or updating the private profile.
+
+Profile data is persisted in PostgreSQL and remains isolated between user accounts.
+
+Profile-image storage is not currently implemented. The interface therefore uses initials as the user avatar.
 
 ### Gym discovery
 
@@ -59,17 +108,9 @@ When the provider supplies the information, the application can display:
 
 Unavailable external information remains unavailable instead of being replaced with fabricated production values.
 
-### Current prototype authentication
-
-The repository still contains the original local authentication flow used by the mobile prototype.
-
-Registration, login and the local session currently use AsyncStorage.
-
-This implementation is temporary and must not be interpreted as the final FitMap security model. Secure backend-managed authentication is tracked separately and will replace local password storage.
-
 ### Current prototype exercise flow
 
-The legacy mobile prototype also contains a local exercise-tracking flow.
+The legacy mobile prototype still contains a local exercise-tracking flow.
 
 Users can currently:
 
@@ -80,7 +121,7 @@ Users can currently:
 - capture a photo for an exercise;
 - associate the captured photo with the local exercise record.
 
-These records currently remain device-local through AsyncStorage.
+These exercise records currently remain device-local through AsyncStorage.
 
 The structured workout-planning, workout-session, training-history and progress domains defined by the FitMap architecture are separate future implementation work and are not represented as completed backend functionality.
 
@@ -111,7 +152,13 @@ Progress
 
 These boundaries represent the approved architecture of the platform.
 
-Their implementation is incremental. At the current project stage, the Gyms integration and the common backend/persistence foundations are substantially further developed than the Identity, Training and Progress business features.
+Their implementation is incremental.
+
+The Identity module currently includes backend-managed authentication, session management and persistent user-profile functionality.
+
+The Gyms module currently includes backend-integrated gym discovery and gym details.
+
+Training and Progress remain primarily represented by architecture, requirements and transitional prototype functionality and will continue to be migrated incrementally.
 
 ### Mobile
 
@@ -120,6 +167,8 @@ The mobile application uses React Native and Expo.
 New production mobile code uses TypeScript by default. Existing JavaScript files are being migrated incrementally rather than through a full rewrite.
 
 Backend communication is centralized through the mobile API-client layer.
+
+Authentication state is coordinated by the application authentication context, including access-token refresh and authenticated-request retry behavior.
 
 Supported platforms:
 
@@ -135,6 +184,14 @@ The backend uses Python 3.13 and FastAPI.
 Current backend responsibilities include:
 
 - versioned REST API routing;
+- account registration and authentication;
+- access-token validation;
+- refresh-token rotation;
+- backend session revocation;
+- authenticated identity resolution;
+- user-profile retrieval and update;
+- profile-preference validation and persistence;
+- user-data isolation;
 - gym search by textual location;
 - nearby gym discovery;
 - gym detail retrieval;
@@ -150,6 +207,23 @@ Current system endpoints:
 ```text
 GET /health
 GET /ready
+```
+
+Current authentication API endpoints under `/api/v1`:
+
+```text
+POST /auth/register
+POST /auth/login
+POST /auth/refresh
+GET  /auth/me
+POST /auth/logout
+```
+
+Current profile API endpoints under `/api/v1`:
+
+```text
+GET   /profile
+PATCH /profile
 ```
 
 Current gym API endpoints under `/api/v1`:
@@ -176,6 +250,13 @@ The backend uses:
 - Psycopg for PostgreSQL connectivity;
 - Alembic for versioned schema migrations.
 
+Current persistent Identity data includes:
+
+- users;
+- authentication sessions;
+- refresh tokens;
+- user fitness-profile preferences.
+
 Database migrations are explicit operations and are not automatically executed every time the API starts.
 
 ### External gym provider
@@ -200,6 +281,7 @@ The Geoapify API key is backend-only configuration and must never be stored in t
 - React Native Maps
 - Expo Location
 - Expo Camera
+- Expo SecureStore
 - AsyncStorage
 - Jest
 - React Native Testing Library
@@ -217,6 +299,8 @@ The Geoapify API key is backend-only configuration and must never be stored in t
 - Alembic
 - Uvicorn
 - httpx2
+- PyJWT
+- pwdlib with Argon2
 - pytest
 - Ruff
 - Pyright
@@ -388,6 +472,8 @@ FITMAP_DB_PASSWORD=change-me-local
 FITMAP_GEOAPIFY_API_KEY=replace-with-geoapify-api-key
 FITMAP_GEOAPIFY_TIMEOUT_SECONDS=5.0
 ```
+
+Authentication also requires the backend JWT secret configured according to the backend environment template.
 
 Use a valid Geoapify API key locally for real gym-provider requests.
 
@@ -624,11 +710,13 @@ They must not contain:
 - private tokens;
 - signing keys.
 
+Authentication refresh tokens are persisted using Expo SecureStore and are not stored in ordinary AsyncStorage.
+
 ### Backend
 
-Server-side configuration includes database and provider settings.
+Server-side configuration includes database, authentication and provider settings.
 
-Examples:
+Examples include:
 
 ```text
 FITMAP_ENVIRONMENT
@@ -638,6 +726,7 @@ FITMAP_DB_PORT
 FITMAP_DB_NAME
 FITMAP_DB_USER
 FITMAP_DB_PASSWORD
+FITMAP_AUTH_JWT_SECRET
 FITMAP_GEOAPIFY_API_KEY
 FITMAP_GEOAPIFY_TIMEOUT_SECONDS
 ```
@@ -690,6 +779,18 @@ The current repository includes:
 - React Native + Expo mobile application;
 - incremental TypeScript adoption;
 - centralized mobile API client;
+- backend-managed account registration and login;
+- secure password hashing;
+- access and refresh token-based sessions;
+- refresh-token rotation;
+- session restoration and logout;
+- authenticated backend identity resolution;
+- Expo SecureStore refresh-token persistence;
+- persistent authenticated user profiles;
+- fitness-related user preferences;
+- mobile profile-management experience;
+- user-profile completion state;
+- user-data isolation and profile authorization;
 - backend-integrated gym discovery;
 - real gym-provider abstraction;
 - textual and current-location gym search;
@@ -709,8 +810,6 @@ The current repository includes:
 
 The following features still belong to the original local prototype implementation:
 
-- local user registration and login;
-- AsyncStorage-based local session;
 - local exercise records;
 - local exercise completion state;
 - exercise-linked local photos.
@@ -721,14 +820,17 @@ These areas are being replaced incrementally by the approved backend architectur
 
 Future backlog items include capabilities such as:
 
-- secure backend-managed authentication;
-- user profiles;
+- password recovery;
+- authenticated password change;
+- account deletion workflow;
+- profile-image storage when justified by product scope;
 - favorite gyms;
 - structured workout planning;
 - workout execution and history;
 - private progress photos;
-- body metrics and fitness goals;
-- FitMap-managed gym ratings and reviews.
+- body metrics and measurable fitness goals;
+- FitMap-managed gym ratings and reviews;
+- supported notifications and workout reminders.
 
 Planned functionality is intentionally kept separate from the list of currently implemented features.
 
@@ -776,7 +878,7 @@ The project later continued as a TCC, currently developed by:
 - Gustavo Mautoni;
 - Pedro Queiroz.
 
-The current technical evolution of the repository, including architecture, backend, database, testing infrastructure, CI/CD foundations and progressive mobile modernization, is being led by Gustavo Mautoni.
+The current technical evolution of the repository, including architecture, backend, database, authentication, profile management, testing infrastructure, CI/CD foundations and progressive mobile modernization, is being led by Gustavo Mautoni.
 
 ## License
 

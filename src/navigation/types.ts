@@ -2,6 +2,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 export type AppStackParamList = {
   Home: undefined;
+  Perfil: undefined;
   Mapa: undefined;
   Tarefas: undefined;
   NovaTarefa: undefined;

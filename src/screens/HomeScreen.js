@@ -3,18 +3,13 @@ import {
   ArrowRight,
   Dumbbell,
   MapPin,
-  Monitor,
-  Moon,
   Navigation,
-  Palette,
   Search,
-  Sun,
   Zap,
 } from "lucide-react-native";
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   AccessibilityInfo,
-  Alert,
   Animated,
   Easing,
   Pressable,
@@ -29,22 +24,26 @@ import FitMapPerformanceMark from "../components/FitMapPerformanceMark";
 import { AuthContext } from "../context/AuthContext";
 import { useAppTheme } from "../theme/ThemeProvider";
 
-function AppearancePreferenceIcon({ preference, color }) {
-  if (preference === "light") {
-    return <Sun size={19} strokeWidth={2.2} color={color} />;
+function getInitials(name) {
+  const parts = name?.trim()?.split(/\s+/)?.filter(Boolean);
+
+  if (!parts?.length) {
+    return "FM";
   }
 
-  if (preference === "dark") {
-    return <Moon size={19} strokeWidth={2.2} color={color} />;
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
   }
 
-  return <Monitor size={19} strokeWidth={2.2} color={color} />;
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 export default function HomeScreen({ navigation }) {
-  const { user } = useContext(AuthContext);
+  const auth = useContext(AuthContext);
 
-  const { theme, preference, setPreference } = useAppTheme();
+  const user = auth?.user ?? null;
+
+  const { theme } = useAppTheme();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -53,6 +52,7 @@ export default function HomeScreen({ navigation }) {
   const [pulseValue] = useState(() => new Animated.Value(0));
 
   const firstName = user?.name?.trim()?.split(" ")[0] || "usuário";
+  const initials = getInitials(user?.name);
 
   useEffect(() => {
     let active = true;
@@ -149,36 +149,6 @@ export default function HomeScreen({ navigation }) {
     ],
   };
 
-  function openAppearanceSelector() {
-    Alert.alert("Aparência", "Escolha como o FitMap deve aparecer.", [
-      {
-        text: "Claro",
-        onPress: () => {
-          void setPreference("light");
-        },
-      },
-
-      {
-        text: "Escuro",
-        onPress: () => {
-          void setPreference("dark");
-        },
-      },
-
-      {
-        text: "Seguir sistema",
-        onPress: () => {
-          void setPreference("system");
-        },
-      },
-
-      {
-        text: "Cancelar",
-        style: "cancel",
-      },
-    ]);
-  }
-
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
@@ -195,24 +165,14 @@ export default function HomeScreen({ navigation }) {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Alterar aparência"
-            onPress={openAppearanceSelector}
+            accessibilityLabel="Abrir meu perfil"
+            onPress={() => navigation.navigate("Perfil")}
             style={({ pressed }) => [
-              styles.appearanceButton,
-              pressed && styles.appearanceButtonPressed,
+              styles.profileButton,
+              pressed && styles.profileButtonPressed,
             ]}
           >
-            <AppearancePreferenceIcon
-              preference={preference}
-              color={theme.colors.textSecondary}
-            />
-
-            <Palette
-              size={12}
-              strokeWidth={2.2}
-              color={theme.colors.primary}
-              style={styles.paletteBadge}
-            />
+            <Text style={styles.profileButtonText}>{initials}</Text>
           </Pressable>
         </View>
 
@@ -445,30 +405,39 @@ function createStyles(theme) {
       letterSpacing: -1,
     },
 
-    appearanceButton: {
+    profileButton: {
       width: 43,
       height: 43,
       borderRadius: 15,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.primary,
       borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.primary,
       alignItems: "center",
       justifyContent: "center",
+      shadowColor: "#0A0D15",
+      shadowOpacity: theme.mode === "dark" ? 0.2 : 0.08,
+      shadowRadius: 10,
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
+      elevation: 2,
     },
 
-    appearanceButtonPressed: {
-      opacity: 0.7,
+    profileButtonPressed: {
+      opacity: 0.76,
       transform: [
         {
-          scale: 0.97,
+          scale: 0.96,
         },
       ],
     },
 
-    paletteBadge: {
-      position: "absolute",
-      right: 5,
-      bottom: 5,
+    profileButtonText: {
+      color: theme.colors.textOnPrimary,
+      fontFamily: theme.typography.fontFamily.extrabold,
+      fontSize: 14,
+      letterSpacing: 0.2,
     },
 
     greetingBlock: {
