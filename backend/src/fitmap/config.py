@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     db_user: str = "fitmap"
     db_password: SecretStr
 
+    auth_jwt_secret: SecretStr
+    auth_jwt_algorithm: Literal["HS256"] = "HS256"
+    auth_jwt_issuer: str = "fitmap-api"
+    auth_jwt_audience: str = "fitmap-mobile"
+    auth_access_token_minutes: int = 15
+    auth_refresh_token_days: int = 30
+
 
 @lru_cache
 def get_settings() -> Settings:

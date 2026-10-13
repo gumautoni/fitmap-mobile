@@ -13,6 +13,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title=app_settings.app_name,
         version="0.1.0",
     )
+    application.state.settings = app_settings
 
     register_exception_handlers(application)
 

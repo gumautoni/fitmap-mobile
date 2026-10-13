@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState } from "react";
 import {
   Alert,
   Image,
@@ -8,15 +8,17 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
-import { AuthContext } from '../context/AuthContext';
-import CustomInput from '../components/CustomInput';
-import CustomButton from '../components/CustomButton';
+} from "react-native";
+
+import CustomButton from "../components/CustomButton";
+import CustomInput from "../components/CustomInput";
+import { AuthContext } from "../context/AuthContext";
 
 export default function LoginScreen({ navigation }) {
-  const { login } = useContext(AuthContext);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const auth = useContext(AuthContext);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   function isValidEmail(value) {
     return /\S+@\S+\.\S+/.test(value);
@@ -26,29 +28,30 @@ export default function LoginScreen({ navigation }) {
     Keyboard.dismiss();
 
     const formattedEmail = email.trim().toLowerCase();
-    const formattedPassword = password.trim();
 
-    if (!formattedEmail || !formattedPassword) {
-      Alert.alert('Atenção', 'Preencha o e-mail e a senha para continuar.');
+    if (!formattedEmail || !password) {
+      Alert.alert("Atenção", "Preencha o e-mail e a senha para continuar.");
       return;
     }
 
     if (!isValidEmail(formattedEmail)) {
-      Alert.alert('Atenção', 'Digite um e-mail válido.');
+      Alert.alert("Atenção", "Digite um e-mail válido.");
       return;
     }
 
-    if (formattedPassword.length < 4) {
-      Alert.alert('Atenção', 'A senha precisa ter pelo menos 4 caracteres.');
+    if (!auth) {
+      Alert.alert("Erro ao entrar", "A autenticação não está disponível.");
       return;
     }
 
     try {
-      await login(formattedEmail, formattedPassword);
+      await auth.login(formattedEmail, password);
     } catch (error) {
       Alert.alert(
-        'Erro ao entrar',
-        error.message || 'Não foi possível acessar sua conta. Verifique os dados informados.'
+        "Erro ao entrar",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível acessar sua conta.",
       );
     }
   }
@@ -56,12 +59,12 @@ export default function LoginScreen({ navigation }) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.card}>
         <View style={styles.logoArea}>
           <Image
-            source={require('../../assets/images/logo-fitmap.png')}
+            source={require("../../assets/images/logo-fitmap.png")}
             style={styles.logoImage}
             resizeMode="contain"
           />
@@ -74,10 +77,12 @@ export default function LoginScreen({ navigation }) {
         <Text style={styles.title}>Entrar na conta</Text>
 
         <Text style={styles.subtitle}>
-          Acesse o app para localizar academias próximas, comparar opções e acompanhar seus exercícios.
+          Acesse o app para localizar academias próximas, comparar opções e
+          acompanhar seus exercícios.
         </Text>
 
         <Text style={styles.label}>E-mail</Text>
+
         <CustomInput
           placeholder="Digite seu e-mail"
           value={email}
@@ -87,6 +92,7 @@ export default function LoginScreen({ navigation }) {
         />
 
         <Text style={styles.label}>Senha</Text>
+
         <CustomInput
           placeholder="Digite sua senha"
           value={password}
@@ -102,7 +108,7 @@ export default function LoginScreen({ navigation }) {
 
         <CustomButton
           title="Criar nova conta"
-          onPress={() => navigation.navigate('Cadastro')}
+          onPress={() => navigation.navigate("Cadastro")}
           variant="secondary"
         />
       </View>
@@ -113,19 +119,19 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 20,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: "#f3f4f6",
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 24,
     padding: 22,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: "#e5e7eb",
   },
   logoArea: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
   },
   logoImage: {
@@ -135,39 +141,39 @@ const styles = StyleSheet.create({
   },
   logoSubtitle: {
     fontSize: 13,
-    color: '#4b5563',
-    fontWeight: '700',
-    textAlign: 'center',
+    color: "#4b5563",
+    fontWeight: "700",
+    textAlign: "center",
   },
   title: {
     fontSize: 24,
-    fontWeight: '900',
-    color: '#111827',
+    fontWeight: "900",
+    color: "#111827",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
-    color: '#4b5563',
+    color: "#4b5563",
     marginBottom: 20,
     lineHeight: 22,
   },
   label: {
     fontSize: 14,
-    fontWeight: '800',
-    color: '#111827',
+    fontWeight: "800",
+    color: "#111827",
     marginBottom: 6,
     marginTop: 4,
   },
   divider: {
     height: 1,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: "#e5e7eb",
     marginVertical: 16,
   },
   registerText: {
-    textAlign: 'center',
-    color: '#4b5563',
+    textAlign: "center",
+    color: "#4b5563",
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 10,
   },
 });
