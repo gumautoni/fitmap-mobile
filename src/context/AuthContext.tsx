@@ -1,4 +1,11 @@
-import { createContext, type ReactNode, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import {
   getCurrentUser,
@@ -25,6 +32,10 @@ interface AuthContextValue {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<string>;
+  runAuthenticatedRequest: <T>(
+    request: (accessToken: string) => Promise<T>,
+  ) => Promise<T>;
+  updateAuthenticatedUser: (user: AuthUser) => void;
 }
 
 interface AuthProviderProps {
@@ -72,6 +83,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const accessTokenRef = useRef<string | null>(null);
+  const refreshPromiseRef = useRef<Promise<string> | null>(null);
+
+  const updateAccessToken = useCallback((token: string | null): void => {
+    accessTokenRef.current = token;
+    setAccessToken(token);
+  }, []);
+
+  const updateAuthenticatedUser = useCallback(
+    (authenticatedUser: AuthUser): void => {
+      setUser(authenticatedUser);
+    },
+    [],
+  );
+
+  const clearAuthenticationState = useCallback((): void => {
+    updateAccessToken(null);
+    setUser(null);
+  }, [updateAccessToken]);
+
   useEffect(() => {
     let active = true;
 
@@ -95,14 +126,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
-        setAccessToken(tokens.accessToken);
-        setUser(currentUser);
+        updateAccessToken(tokens.accessToken);
+        updateAuthenticatedUser(currentUser);
       } catch {
         await deleteRefreshToken().catch(() => undefined);
 
         if (active) {
-          setAccessToken(null);
-          setUser(null);
+          clearAuthenticationState();
         }
       } finally {
         if (active) {
@@ -116,7 +146,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [clearAuthenticationState, updateAccessToken, updateAuthenticatedUser]);
 
   async function persistAuthentication(
     authenticatedUser: AuthUser,
@@ -124,8 +154,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
   ): Promise<void> {
     await saveRefreshToken(tokens.refreshToken);
 
-    setAccessToken(tokens.accessToken);
-    setUser(authenticatedUser);
+    updateAccessToken(tokens.accessToken);
+    updateAuthenticatedUser(authenticatedUser);
   }
 
   async function login(email: string, password: string): Promise<void> {
@@ -158,12 +188,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  async function refreshAccessToken(): Promise<string> {
+  const performAccessTokenRefresh = useCallback(async (): Promise<string> => {
     const storedRefreshToken = await getRefreshToken();
 
     if (!storedRefreshToken) {
-      setAccessToken(null);
-      setUser(null);
+      clearAuthenticationState();
 
       throw new Error("Sua sessão expirou. Entre novamente.");
     }
@@ -173,24 +202,86 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       await saveRefreshToken(tokens.refreshToken);
 
-      setAccessToken(tokens.accessToken);
+      updateAccessToken(tokens.accessToken);
 
       return tokens.accessToken;
     } catch (error) {
       await deleteRefreshToken().catch(() => undefined);
 
-      setAccessToken(null);
-      setUser(null);
+      clearAuthenticationState();
 
       throw normalizeAuthError(error);
     }
-  }
+  }, [clearAuthenticationState, updateAccessToken]);
+
+  const refreshAccessToken = useCallback(async (): Promise<string> => {
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
+
+    const refreshPromise = performAccessTokenRefresh();
+
+    refreshPromiseRef.current = refreshPromise;
+
+    try {
+      return await refreshPromise;
+    } finally {
+      if (refreshPromiseRef.current === refreshPromise) {
+        refreshPromiseRef.current = null;
+      }
+    }
+  }, [performAccessTokenRefresh]);
+
+  const runAuthenticatedRequest = useCallback(
+    async function runAuthenticatedRequest<T>(
+      request: (accessToken: string) => Promise<T>,
+    ): Promise<T> {
+      const requestAccessToken = accessTokenRef.current;
+
+      if (!requestAccessToken) {
+        throw new Error("Sua sessão expirou. Entre novamente.");
+      }
+
+      try {
+        return await request(requestAccessToken);
+      } catch (error) {
+        if (
+          !(error instanceof ApiClientError) ||
+          error.code !== "invalid_access_token"
+        ) {
+          throw error;
+        }
+
+        const latestAccessToken = accessTokenRef.current;
+
+        if (latestAccessToken && latestAccessToken !== requestAccessToken) {
+          return request(latestAccessToken);
+        }
+
+        const refreshedAccessToken = await refreshAccessToken();
+
+        try {
+          return await request(refreshedAccessToken);
+        } catch (retryError) {
+          if (
+            retryError instanceof ApiClientError &&
+            retryError.code === "invalid_access_token"
+          ) {
+            await deleteRefreshToken().catch(() => undefined);
+            clearAuthenticationState();
+          }
+
+          throw retryError;
+        }
+      }
+    },
+    [clearAuthenticationState, refreshAccessToken],
+  );
 
   async function logout(): Promise<void> {
-    const currentAccessToken = accessToken;
+    const currentAccessToken = accessTokenRef.current;
 
-    setAccessToken(null);
-    setUser(null);
+    clearAuthenticationState();
 
     let backendLogoutSucceeded = false;
 
@@ -223,6 +314,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         register,
         logout,
         refreshAccessToken,
+        runAuthenticatedRequest,
+        updateAuthenticatedUser,
       }}
     >
       {children}
