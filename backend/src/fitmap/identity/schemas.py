@@ -4,6 +4,15 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
+def normalize_name(value: str) -> str:
+    normalized = " ".join(value.split())
+
+    if not normalized:
+        raise ValueError("Name must not be blank.")
+
+    return normalized
+
+
 class RegisterRequest(BaseModel):
     name: str = Field(
         min_length=1,
@@ -17,13 +26,8 @@ class RegisterRequest(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def normalize_name(cls, value: str) -> str:
-        normalized = " ".join(value.split())
-
-        if not normalized:
-            raise ValueError("Name must not be blank.")
-
-        return normalized
+    def normalize_name_field(cls, value: str) -> str:
+        return normalize_name(value)
 
 
 class LoginRequest(BaseModel):
@@ -41,6 +45,29 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     created_at: datetime
+
+
+class ProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    email: EmailStr
+    created_at: datetime
+
+
+class ProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(
+        min_length=1,
+        max_length=120,
+    )
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name_field(cls, value: str) -> str:
+        return normalize_name(value)
 
 
 class TokenResponse(BaseModel):
