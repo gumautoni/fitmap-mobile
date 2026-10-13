@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
@@ -22,6 +23,18 @@ class IssuedSessionTokens:
     refresh_token: str
     refresh_token_expires_at: datetime
     session_expires_at: datetime
+
+
+class RefreshRotationStatus(Enum):
+    ROTATED = "rotated"
+    INVALID = "invalid"
+    SESSION_REVOKED = "session_revoked"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class RefreshRotationResult:
+    status: RefreshRotationStatus
+    tokens: IssuedSessionTokens | None = None
 
 
 def issue_session(
@@ -86,23 +99,35 @@ def rotate_refresh_token(
     refresh_token: str,
     settings: Settings,
     rotated_at: datetime | None = None,
-) -> IssuedSessionTokens | None:
+) -> RefreshRotationResult:
     now = rotated_at or datetime.now(UTC)
     token_hash = hash_refresh_token(refresh_token)
 
     current_token = db_session.scalar(
-        select(AuthRefreshToken).where(AuthRefreshToken.token_hash == token_hash).with_for_update()
+        select(AuthRefreshToken)
+        .where(
+            AuthRefreshToken.token_hash == token_hash,
+        )
+        .with_for_update()
     )
 
     if current_token is None:
-        return None
+        return RefreshRotationResult(
+            status=RefreshRotationStatus.INVALID,
+        )
 
     auth_session = db_session.scalar(
-        select(AuthSession).where(AuthSession.id == current_token.session_id).with_for_update()
+        select(AuthSession)
+        .where(
+            AuthSession.id == current_token.session_id,
+        )
+        .with_for_update()
     )
 
     if auth_session is None:
-        return None
+        return RefreshRotationResult(
+            status=RefreshRotationStatus.INVALID,
+        )
 
     if current_token.consumed_at is not None or current_token.revoked_at is not None:
         _revoke_session(
@@ -110,7 +135,10 @@ def rotate_refresh_token(
             auth_session=auth_session,
             revoked_at=now,
         )
-        return None
+
+        return RefreshRotationResult(
+            status=RefreshRotationStatus.SESSION_REVOKED,
+        )
 
     if (
         auth_session.revoked_at is not None
@@ -122,7 +150,10 @@ def rotate_refresh_token(
             auth_session=auth_session,
             revoked_at=now,
         )
-        return None
+
+        return RefreshRotationResult(
+            status=RefreshRotationStatus.SESSION_REVOKED,
+        )
 
     current_token.consumed_at = now
     auth_session.last_used_at = now
@@ -154,13 +185,18 @@ def rotate_refresh_token(
         issued_at=now,
     )
 
-    return IssuedSessionTokens(
+    tokens = IssuedSessionTokens(
         session_id=auth_session.id,
         access_token=access_token,
         access_token_expires_at=access_token_expires_at,
         refresh_token=replacement_material.token,
         refresh_token_expires_at=replacement_expires_at,
         session_expires_at=auth_session.expires_at,
+    )
+
+    return RefreshRotationResult(
+        status=RefreshRotationStatus.ROTATED,
+        tokens=tokens,
     )
 
 
@@ -173,7 +209,11 @@ def revoke_session(
     now = revoked_at or datetime.now(UTC)
 
     auth_session = db_session.scalar(
-        select(AuthSession).where(AuthSession.id == session_id).with_for_update()
+        select(AuthSession)
+        .where(
+            AuthSession.id == session_id,
+        )
+        .with_for_update()
     )
 
     if auth_session is None:
@@ -224,5 +264,7 @@ def _revoke_session(
             AuthRefreshToken.session_id == auth_session.id,
             AuthRefreshToken.revoked_at.is_(None),
         )
-        .values(revoked_at=revoked_at)
+        .values(
+            revoked_at=revoked_at,
+        )
     )

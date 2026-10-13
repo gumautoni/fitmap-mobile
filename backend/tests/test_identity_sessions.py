@@ -10,6 +10,7 @@ from fitmap.config import Settings
 from fitmap.identity.models import AuthRefreshToken, AuthSession, User
 from fitmap.identity.security import decode_access_token, hash_refresh_token
 from fitmap.identity.sessions import (
+    RefreshRotationStatus,
     is_session_active,
     issue_session,
     revoke_session,
@@ -18,7 +19,9 @@ from fitmap.identity.sessions import (
 
 
 @pytest.fixture
-def db_session(database_engine: Engine) -> Iterator[Session]:
+def db_session(
+    database_engine: Engine,
+) -> Iterator[Session]:
     connection = database_engine.connect()
     transaction = connection.begin()
     session = Session(
@@ -30,20 +33,26 @@ def db_session(database_engine: Engine) -> Iterator[Session]:
         yield session
     finally:
         session.close()
+
         if transaction.is_active:
             transaction.rollback()
+
         connection.close()
 
 
-def _create_user(db_session: Session) -> User:
+def _create_user(
+    db_session: Session,
+) -> User:
     user = User(
         name="FitMap Test User",
         email=f"{uuid4()}@fitmap.test",
         password_hash="not-used-by-session-tests",
         is_active=True,
     )
+
     db_session.add(user)
     db_session.flush()
+
     return user
 
 
@@ -52,7 +61,9 @@ def test_issue_session_persists_session_and_hashed_refresh_token(
     test_settings: Settings,
 ) -> None:
     user = _create_user(db_session)
-    issued_at = datetime.now(UTC).replace(microsecond=0)
+    issued_at = datetime.now(UTC).replace(
+        microsecond=0,
+    )
 
     tokens = issue_session(
         db_session=db_session,
@@ -76,7 +87,7 @@ def test_issue_session_persists_session_and_hashed_refresh_token(
 
     assert auth_session.user_id == user.id
     assert auth_session.revoked_at is None
-    assert auth_session.expires_at == issued_at + timedelta(days=30)
+    assert auth_session.expires_at == (issued_at + timedelta(days=30))
 
     assert refresh_token.token_hash == hash_refresh_token(
         tokens.refresh_token,
@@ -100,8 +111,12 @@ def test_rotate_refresh_token_consumes_old_token_and_issues_replacement(
 ) -> None:
     user = _create_user(db_session)
 
-    rotated_at = datetime.now(UTC).replace(microsecond=0)
-    issued_at = rotated_at - timedelta(minutes=10)
+    rotated_at = datetime.now(UTC).replace(
+        microsecond=0,
+    )
+    issued_at = rotated_at - timedelta(
+        minutes=10,
+    )
 
     original = issue_session(
         db_session=db_session,
@@ -110,14 +125,18 @@ def test_rotate_refresh_token_consumes_old_token_and_issues_replacement(
         issued_at=issued_at,
     )
 
-    replacement = rotate_refresh_token(
+    rotation = rotate_refresh_token(
         db_session=db_session,
         refresh_token=original.refresh_token,
         settings=test_settings,
         rotated_at=rotated_at,
     )
 
-    assert replacement is not None
+    assert rotation.status is RefreshRotationStatus.ROTATED
+    assert rotation.tokens is not None
+
+    replacement = rotation.tokens
+
     assert replacement.session_id == original.session_id
     assert replacement.refresh_token != original.refresh_token
 
@@ -125,12 +144,18 @@ def test_rotate_refresh_token_consumes_old_token_and_issues_replacement(
 
     original_record = db_session.scalar(
         select(AuthRefreshToken).where(
-            AuthRefreshToken.token_hash == hash_refresh_token(original.refresh_token),
+            AuthRefreshToken.token_hash
+            == hash_refresh_token(
+                original.refresh_token,
+            ),
         )
     )
     replacement_record = db_session.scalar(
         select(AuthRefreshToken).where(
-            AuthRefreshToken.token_hash == hash_refresh_token(replacement.refresh_token),
+            AuthRefreshToken.token_hash
+            == hash_refresh_token(
+                replacement.refresh_token,
+            ),
         )
     )
     auth_session = db_session.get(
@@ -165,7 +190,9 @@ def test_reusing_consumed_refresh_token_revokes_entire_session(
     test_settings: Settings,
 ) -> None:
     user = _create_user(db_session)
-    issued_at = datetime.now(UTC).replace(microsecond=0)
+    issued_at = datetime.now(UTC).replace(
+        microsecond=0,
+    )
 
     original = issue_session(
         db_session=db_session,
@@ -178,12 +205,18 @@ def test_reusing_consumed_refresh_token_revokes_entire_session(
         db_session=db_session,
         refresh_token=original.refresh_token,
         settings=test_settings,
-        rotated_at=issued_at + timedelta(minutes=5),
+        rotated_at=issued_at
+        + timedelta(
+            minutes=5,
+        ),
     )
 
-    assert first_rotation is not None
+    assert first_rotation.status is RefreshRotationStatus.ROTATED
+    assert first_rotation.tokens is not None
 
-    reuse_detected_at = issued_at + timedelta(minutes=6)
+    reuse_detected_at = issued_at + timedelta(
+        minutes=6,
+    )
 
     second_rotation = rotate_refresh_token(
         db_session=db_session,
@@ -192,7 +225,8 @@ def test_reusing_consumed_refresh_token_revokes_entire_session(
         rotated_at=reuse_detected_at,
     )
 
-    assert second_rotation is None
+    assert second_rotation.status is RefreshRotationStatus.SESSION_REVOKED
+    assert second_rotation.tokens is None
 
     db_session.flush()
 
@@ -223,12 +257,65 @@ def test_reusing_consumed_refresh_token_revokes_entire_session(
     )
 
 
+def test_unknown_refresh_token_is_invalid_without_revoking_sessions(
+    db_session: Session,
+    test_settings: Settings,
+) -> None:
+    user = _create_user(db_session)
+    issued_at = datetime.now(UTC).replace(
+        microsecond=0,
+    )
+
+    issued = issue_session(
+        db_session=db_session,
+        user_id=user.id,
+        settings=test_settings,
+        issued_at=issued_at,
+    )
+
+    rotation = rotate_refresh_token(
+        db_session=db_session,
+        refresh_token="unknown-refresh-token",
+        settings=test_settings,
+        rotated_at=issued_at
+        + timedelta(
+            minutes=5,
+        ),
+    )
+
+    assert rotation.status is RefreshRotationStatus.INVALID
+    assert rotation.tokens is None
+
+    auth_session = db_session.get(
+        AuthSession,
+        issued.session_id,
+    )
+
+    assert auth_session is not None
+    assert auth_session.revoked_at is None
+
+    assert (
+        is_session_active(
+            db_session=db_session,
+            session_id=issued.session_id,
+            user_id=user.id,
+            checked_at=issued_at
+            + timedelta(
+                minutes=5,
+            ),
+        )
+        is True
+    )
+
+
 def test_revoke_session_invalidates_session_and_refresh_tokens(
     db_session: Session,
     test_settings: Settings,
 ) -> None:
     user = _create_user(db_session)
-    issued_at = datetime.now(UTC).replace(microsecond=0)
+    issued_at = datetime.now(UTC).replace(
+        microsecond=0,
+    )
 
     tokens = issue_session(
         db_session=db_session,
@@ -237,7 +324,9 @@ def test_revoke_session_invalidates_session_and_refresh_tokens(
         issued_at=issued_at,
     )
 
-    revoked_at = issued_at + timedelta(minutes=20)
+    revoked_at = issued_at + timedelta(
+        minutes=20,
+    )
 
     revoked = revoke_session(
         db_session=db_session,
@@ -281,7 +370,9 @@ def test_session_activity_checks_identity_and_expiration(
     test_settings: Settings,
 ) -> None:
     user = _create_user(db_session)
-    issued_at = datetime.now(UTC).replace(microsecond=0)
+    issued_at = datetime.now(UTC).replace(
+        microsecond=0,
+    )
 
     tokens = issue_session(
         db_session=db_session,
@@ -295,7 +386,10 @@ def test_session_activity_checks_identity_and_expiration(
             db_session=db_session,
             session_id=tokens.session_id,
             user_id=user.id,
-            checked_at=issued_at + timedelta(minutes=1),
+            checked_at=issued_at
+            + timedelta(
+                minutes=1,
+            ),
         )
         is True
     )
@@ -305,7 +399,10 @@ def test_session_activity_checks_identity_and_expiration(
             db_session=db_session,
             session_id=tokens.session_id,
             user_id=uuid4(),
-            checked_at=issued_at + timedelta(minutes=1),
+            checked_at=issued_at
+            + timedelta(
+                minutes=1,
+            ),
         )
         is False
     )
