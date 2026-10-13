@@ -119,6 +119,7 @@ jobs:
             --name fitmap-backend-ci \
             --env FITMAP_ENVIRONMENT=production \
             --env FITMAP_DB_PASSWORD=ci-placeholder \
+            --env FITMAP_AUTH_JWT_SECRET=ci-test-only-jwt-secret-not-for-production-use \
             --publish 8000:8000 \
             fitmap-backend:${{ github.sha }}
 
