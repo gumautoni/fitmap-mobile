@@ -4,6 +4,8 @@ export type AppStackParamList = {
   Home: undefined;
   Perfil: undefined;
   Mapa: undefined;
+  Treinos: undefined;
+  NovoTreino: undefined;
   Tarefas: undefined;
   NovaTarefa: undefined;
   Camera: {
