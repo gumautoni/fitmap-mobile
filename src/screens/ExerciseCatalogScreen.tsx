@@ -1,10 +1,12 @@
 import { useFocusEffect } from "@react-navigation/native";
 import {
   AlertCircle,
+  CheckCircle2,
   Dumbbell,
   Plus,
   RefreshCw,
   Search,
+  X,
 } from "lucide-react-native";
 import { useCallback, useContext, useMemo, useState } from "react";
 import {
@@ -23,6 +25,7 @@ import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
   addExerciseToWorkout,
+  createCustomExercise,
   getAvailableExercises,
   getWorkout,
   type TrainingExercise,
@@ -46,7 +49,7 @@ function getErrorMessage(error: unknown): string {
     }
 
     if (error.code === "request_validation_error") {
-      return "Não foi possível adicionar esse exercício ao treino.";
+      return "Confira os dados informados e tente novamente.";
     }
   }
 
@@ -65,6 +68,10 @@ function getErrorMessage(error: unknown): string {
   }
 
   return "Não foi possível concluir a solicitação.";
+}
+
+function normalizeExerciseName(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 export default function ExerciseCatalogScreen({
@@ -89,9 +96,18 @@ export default function ExerciseCatalogScreen({
   const [exercises, setExercises] = useState<TrainingExercise[]>([]);
   const [workoutName, setWorkoutName] = useState("");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [creatingCustom, setCreatingCustom] = useState(false);
+
   const [addingExerciseId, setAddingExerciseId] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const busy = addingExerciseId !== null || creatingCustom;
 
   const loadCatalog = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -111,6 +127,7 @@ export default function ExerciseCatalogScreen({
       );
 
       setWorkoutName(workout.name);
+
       setExercises(
         availableExercises.filter(
           (exercise) => !existingExerciseIds.has(exercise.id),
@@ -184,13 +201,78 @@ export default function ExerciseCatalogScreen({
     );
   }, [exercises, search]);
 
+  function toggleCustomForm(): void {
+    if (busy) {
+      return;
+    }
+
+    setError(null);
+    setSuccessMessage(null);
+
+    setShowCustomForm((current) => !current);
+
+    if (showCustomForm) {
+      setCustomName("");
+    }
+  }
+
+  async function handleCreateCustomExercise(): Promise<void> {
+    if (busy) {
+      return;
+    }
+
+    const normalizedName = normalizeExerciseName(customName);
+
+    if (!normalizedName) {
+      setError("Informe um nome para o exercício personalizado.");
+
+      return;
+    }
+
+    if (normalizedName.length > 120) {
+      setError("O nome do exercício deve ter no máximo 120 caracteres.");
+
+      return;
+    }
+
+    setCreatingCustom(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const createdExercise = await runAuthenticatedRequest((accessToken) =>
+        createCustomExercise(accessToken, normalizedName),
+      );
+
+      setExercises((currentExercises) => [
+        createdExercise,
+        ...currentExercises.filter(
+          (exercise) => exercise.id !== createdExercise.id,
+        ),
+      ]);
+
+      setCustomName("");
+      setShowCustomForm(false);
+      setSearch(createdExercise.name);
+
+      setSuccessMessage(
+        `"${createdExercise.name}" foi criado como exercício personalizado. Agora você pode adicioná-lo ao treino.`,
+      );
+    } catch (createError) {
+      setError(getErrorMessage(createError));
+    } finally {
+      setCreatingCustom(false);
+    }
+  }
+
   async function handleAddExercise(exercise: TrainingExercise): Promise<void> {
-    if (addingExerciseId !== null) {
+    if (busy) {
       return;
     }
 
     setAddingExerciseId(exercise.id);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       await runAuthenticatedRequest((accessToken) =>
@@ -269,6 +351,7 @@ export default function ExerciseCatalogScreen({
         style={styles.container}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
@@ -282,26 +365,158 @@ export default function ExerciseCatalogScreen({
           </Text>
         </View>
 
+        <View style={styles.customSection}>
+          <View style={styles.customHeader}>
+            <View style={styles.customHeaderCopy}>
+              <Text style={styles.customEyebrow}>PERSONALIZADO</Text>
+
+              <Text style={styles.customTitle}>Não encontrou o exercício?</Text>
+
+              <Text style={styles.customDescription}>
+                Crie um exercício privado para sua conta e use-o nos seus
+                treinos.
+              </Text>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                showCustomForm
+                  ? "Cancelar criação de exercício personalizado"
+                  : "Criar exercício personalizado"
+              }
+              disabled={busy}
+              onPress={toggleCustomForm}
+              style={({ pressed }) => [
+                styles.customToggleButton,
+                showCustomForm && styles.customToggleButtonOpen,
+                pressed && styles.buttonPressed,
+                busy && styles.buttonDisabled,
+              ]}
+            >
+              {showCustomForm ? (
+                <X
+                  size={20}
+                  strokeWidth={2.4}
+                  color={theme.colors.textSecondary}
+                />
+              ) : (
+                <Plus
+                  size={20}
+                  strokeWidth={2.4}
+                  color={theme.colors.textOnPrimary}
+                />
+              )}
+            </Pressable>
+          </View>
+
+          {showCustomForm ? (
+            <View style={styles.customForm}>
+              <Text style={styles.inputLabel}>Nome do exercício</Text>
+
+              <TextInput
+                value={customName}
+                onChangeText={setCustomName}
+                editable={!busy}
+                autoCapitalize="words"
+                autoCorrect={false}
+                maxLength={120}
+                returnKeyType="done"
+                onSubmitEditing={() => {
+                  void handleCreateCustomExercise();
+                }}
+                placeholder="Ex.: Remada unilateral no cabo"
+                placeholderTextColor={theme.colors.textMuted}
+                style={styles.customInput}
+              />
+
+              <Text style={styles.customHint}>
+                Esse exercício ficará disponível somente para sua conta.
+              </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={busy}
+                onPress={() => {
+                  void handleCreateCustomExercise();
+                }}
+                style={({ pressed }) => [
+                  styles.createButton,
+                  pressed && styles.buttonPressed,
+                  busy && styles.buttonDisabled,
+                ]}
+              >
+                {creatingCustom ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.textOnPrimary}
+                  />
+                ) : (
+                  <>
+                    <Plus
+                      size={18}
+                      strokeWidth={2.4}
+                      color={theme.colors.textOnPrimary}
+                    />
+
+                    <Text style={styles.createButtonText}>Criar exercício</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+
+        {successMessage ? (
+          <View style={styles.successMessage}>
+            <CheckCircle2
+              size={19}
+              strokeWidth={2.2}
+              color={theme.colors.success}
+            />
+
+            <Text style={styles.successMessageText}>{successMessage}</Text>
+          </View>
+        ) : null}
+
+        {error ? (
+          <View style={styles.inlineError}>
+            <AlertCircle
+              size={18}
+              strokeWidth={2.2}
+              color={theme.colors.danger}
+            />
+
+            <Text style={styles.inlineErrorText}>{error}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.searchContainer}>
           <Search size={19} strokeWidth={2.2} color={theme.colors.textMuted} />
 
           <TextInput
             value={search}
             onChangeText={setSearch}
-            editable={addingExerciseId === null}
+            editable={!busy}
             autoCapitalize="none"
             autoCorrect={false}
             placeholder="Buscar exercício"
             placeholderTextColor={theme.colors.textMuted}
             style={styles.searchInput}
           />
-        </View>
 
-        {error ? (
-          <View style={styles.inlineError}>
-            <Text style={styles.inlineErrorText}>{error}</Text>
-          </View>
-        ) : null}
+          {search ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Limpar busca"
+              disabled={busy}
+              onPress={() => setSearch("")}
+              hitSlop={8}
+            >
+              <X size={18} strokeWidth={2.2} color={theme.colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
 
         <View style={styles.sectionHeader}>
           <View>
@@ -332,7 +547,7 @@ export default function ExerciseCatalogScreen({
             </Text>
 
             <Text style={styles.emptyText}>
-              Não há outros exercícios disponíveis para este treino no momento.
+              Você ainda pode criar um exercício personalizado para este treino.
             </Text>
           </View>
         ) : filteredExercises.length === 0 ? (
@@ -345,7 +560,9 @@ export default function ExerciseCatalogScreen({
 
             <Text style={styles.emptyTitle}>Nenhum exercício encontrado</Text>
 
-            <Text style={styles.emptyText}>Tente buscar por outro nome.</Text>
+            <Text style={styles.emptyText}>
+              Tente buscar por outro nome ou crie um exercício personalizado.
+            </Text>
           </View>
         ) : (
           <View style={styles.exerciseList}>
@@ -390,14 +607,14 @@ export default function ExerciseCatalogScreen({
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Adicionar ${exercise.name}`}
-                    disabled={addingExerciseId !== null}
+                    disabled={busy}
                     onPress={() => {
                       void handleAddExercise(exercise);
                     }}
                     style={({ pressed }) => [
                       styles.addButton,
                       pressed && styles.buttonPressed,
-                      addingExerciseId !== null && styles.buttonDisabled,
+                      busy && styles.buttonDisabled,
                     ]}
                   >
                     {adding ? (
@@ -523,6 +740,155 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       lineHeight: theme.typography.lineHeight.body,
     },
 
+    customSection: {
+      marginBottom: theme.spacing.lg,
+      padding: theme.spacing.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.xl,
+      backgroundColor: theme.colors.surface,
+    },
+
+    customHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+    },
+
+    customHeaderCopy: {
+      flex: 1,
+    },
+
+    customEyebrow: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 10,
+      letterSpacing: 1.4,
+      marginBottom: 3,
+    },
+
+    customTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.extrabold,
+      fontSize: theme.typography.size.cardTitle,
+      lineHeight: theme.typography.lineHeight.cardTitle,
+    },
+
+    customDescription: {
+      marginTop: theme.spacing.xs,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    customToggleButton: {
+      width: 44,
+      height: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 14,
+      backgroundColor: theme.colors.primary,
+    },
+
+    customToggleButtonOpen: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    customForm: {
+      marginTop: theme.spacing.lg,
+      paddingTop: theme.spacing.lg,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.divider,
+    },
+
+    inputLabel: {
+      marginBottom: 7,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.caption,
+    },
+
+    customInput: {
+      minHeight: 52,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surfaceSecondary,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.body,
+    },
+
+    customHint: {
+      marginTop: theme.spacing.sm,
+      color: theme.colors.textMuted,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.caption,
+      lineHeight: theme.typography.lineHeight.caption,
+    },
+
+    createButton: {
+      minHeight: 48,
+      marginTop: theme.spacing.md,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.primary,
+    },
+
+    createButtonText: {
+      color: theme.colors.textOnPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+
+    successMessage: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.success,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+    },
+
+    successMessageText: {
+      flex: 1,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    inlineError: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+      padding: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.danger,
+      backgroundColor: theme.colors.surface,
+    },
+
+    inlineErrorText: {
+      flex: 1,
+      color: theme.colors.danger,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
     searchContainer: {
       minHeight: 52,
       flexDirection: "row",
@@ -541,22 +907,6 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       color: theme.colors.textPrimary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.body,
-    },
-
-    inlineError: {
-      marginBottom: theme.spacing.lg,
-      padding: theme.spacing.md,
-      borderRadius: theme.radii.md,
-      borderWidth: 1,
-      borderColor: theme.colors.danger,
-      backgroundColor: theme.colors.surface,
-    },
-
-    inlineErrorText: {
-      color: theme.colors.danger,
-      fontFamily: theme.typography.fontFamily.medium,
-      fontSize: theme.typography.size.small,
-      lineHeight: theme.typography.lineHeight.small,
     },
 
     sectionHeader: {
