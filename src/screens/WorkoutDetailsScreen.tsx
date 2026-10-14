@@ -2,6 +2,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import {
   AlertCircle,
   Archive,
+  ChevronRight,
   Dumbbell,
   Plus,
   RefreshCw,
@@ -463,7 +464,21 @@ export default function WorkoutDetailsScreen({
           ) : (
             <View style={styles.exerciseList}>
               {workout.exercises.map((exercise) => (
-                <View key={exercise.id} style={styles.exerciseCard}>
+                <Pressable
+                  key={exercise.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Configurar ${exercise.exerciseName}`}
+                  onPress={() =>
+                    navigation.navigate("ConfigurarExercicioTreino", {
+                      workoutId: workout.id,
+                      workoutExerciseId: exercise.id,
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.exerciseCard,
+                    pressed && styles.exerciseCardPressed,
+                  ]}
+                >
                   <View style={styles.exercisePosition}>
                     <Text style={styles.exercisePositionText}>
                       {exercise.position}
@@ -493,7 +508,13 @@ export default function WorkoutDetailsScreen({
                       <Text style={styles.exerciseNotes}>{exercise.notes}</Text>
                     ) : null}
                   </View>
-                </View>
+
+                  <ChevronRight
+                    size={20}
+                    strokeWidth={2.2}
+                    color={theme.colors.textMuted}
+                  />
+                </Pressable>
               ))}
             </View>
           )}
@@ -792,12 +813,22 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     exerciseCard: {
       flexDirection: "row",
+      alignItems: "center",
       gap: theme.spacing.md,
       padding: theme.spacing.lg,
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+    },
+
+    exerciseCardPressed: {
+      opacity: 0.72,
+      transform: [
+        {
+          scale: 0.995,
+        },
+      ],
     },
 
     exercisePosition: {

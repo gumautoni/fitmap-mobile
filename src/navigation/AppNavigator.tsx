@@ -10,6 +10,7 @@ import MapScreen from "../screens/MapScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import TasksScreen from "../screens/TasksScreen";
 import WorkoutDetailsScreen from "../screens/WorkoutDetailsScreen";
+import WorkoutExerciseConfigScreen from "../screens/WorkoutExerciseConfigScreen";
 import WorkoutsScreen from "../screens/WorkoutsScreen";
 import { useAppTheme } from "../theme/ThemeProvider";
 import type { AppStackParamList } from "./types";
@@ -90,6 +91,14 @@ export default function AppNavigator() {
         component={ExerciseCatalogScreen}
         options={{
           title: "Adicionar exercício",
+        }}
+      />
+
+      <Stack.Screen
+        name="ConfigurarExercicioTreino"
+        component={WorkoutExerciseConfigScreen}
+        options={{
+          title: "Configurar exercício",
         }}
       />
 
