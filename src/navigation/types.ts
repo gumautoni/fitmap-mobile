@@ -6,6 +6,9 @@ export type AppStackParamList = {
   Mapa: undefined;
   Treinos: undefined;
   NovoTreino: undefined;
+  DetalhesTreino: {
+    workoutId: string;
+  };
   Tarefas: undefined;
   NovaTarefa: undefined;
   Camera: {

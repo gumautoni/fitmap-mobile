@@ -8,6 +8,7 @@ import HomeScreen from "../screens/HomeScreen";
 import MapScreen from "../screens/MapScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import TasksScreen from "../screens/TasksScreen";
+import WorkoutDetailsScreen from "../screens/WorkoutDetailsScreen";
 import WorkoutsScreen from "../screens/WorkoutsScreen";
 import { useAppTheme } from "../theme/ThemeProvider";
 import type { AppStackParamList } from "./types";
@@ -72,6 +73,14 @@ export default function AppNavigator() {
         component={CreateWorkoutScreen}
         options={{
           title: "Novo treino",
+        }}
+      />
+
+      <Stack.Screen
+        name="DetalhesTreino"
+        component={WorkoutDetailsScreen}
+        options={{
+          title: "Detalhes do treino",
         }}
       />
 

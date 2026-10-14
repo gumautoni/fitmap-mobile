@@ -1,5 +1,11 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { AlertCircle, Dumbbell, Plus, RefreshCw } from "lucide-react-native";
+import {
+  AlertCircle,
+  ChevronRight,
+  Dumbbell,
+  Plus,
+  RefreshCw,
+} from "lucide-react-native";
 import { useCallback, useContext, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -248,7 +254,20 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
         ) : (
           <View style={styles.list}>
             {workouts.map((workout) => (
-              <View key={workout.id} style={styles.workoutCard}>
+              <Pressable
+                key={workout.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Abrir treino ${workout.name}`}
+                onPress={() =>
+                  navigation.navigate("DetalhesTreino", {
+                    workoutId: workout.id,
+                  })
+                }
+                style={({ pressed }) => [
+                  styles.workoutCard,
+                  pressed && styles.workoutCardPressed,
+                ]}
+              >
                 <View style={styles.workoutIcon}>
                   <Dumbbell
                     size={22}
@@ -265,10 +284,12 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                   </Text>
                 </View>
 
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>Ativo</Text>
-                </View>
-              </View>
+                <ChevronRight
+                  size={20}
+                  strokeWidth={2.2}
+                  color={theme.colors.textMuted}
+                />
+              </Pressable>
             ))}
           </View>
         )}
@@ -500,6 +521,15 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       backgroundColor: theme.colors.surface,
     },
 
+    workoutCardPressed: {
+      opacity: 0.72,
+      transform: [
+        {
+          scale: 0.995,
+        },
+      ],
+    },
+
     workoutIcon: {
       width: 46,
       height: 46,
@@ -523,19 +553,6 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       marginTop: 4,
       color: theme.colors.textMuted,
       fontFamily: theme.typography.fontFamily.medium,
-      fontSize: theme.typography.size.caption,
-    },
-
-    activeBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: theme.radii.full,
-      backgroundColor: theme.colors.primarySoft,
-    },
-
-    activeBadgeText: {
-      color: theme.colors.primary,
-      fontFamily: theme.typography.fontFamily.bold,
       fontSize: theme.typography.size.caption,
     },
 
