@@ -2,11 +2,14 @@ import { useFocusEffect } from "@react-navigation/native";
 import {
   AlertCircle,
   Archive,
+  ArrowDown,
+  ArrowUp,
   ChevronRight,
   Dumbbell,
   Plus,
   RefreshCw,
   Save,
+  Trash2,
 } from "lucide-react-native";
 import { useCallback, useContext, useMemo, useState } from "react";
 import {
@@ -27,8 +30,11 @@ import { ApiClientError } from "../services/apiClient";
 import {
   archiveWorkout,
   getWorkout,
+  removeWorkoutExercise,
   renameWorkout,
+  reorderWorkoutExercises,
   type Workout,
+  type WorkoutExercise,
 } from "../services/training";
 import { useAppTheme } from "../theme/ThemeProvider";
 
@@ -38,6 +44,10 @@ function getErrorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
     if (error.code === "workout_not_found") {
       return "Esse treino não foi encontrado.";
+    }
+
+    if (error.code === "workout_exercise_not_found") {
+      return "Esse exercício não foi encontrado no treino.";
     }
 
     if (error.code === "workout_archived") {
@@ -86,6 +96,20 @@ function formatLoad(load: string | null, unit: "kg" | "lb" | null): string {
   return `${load} ${unit}`;
 }
 
+function buildReorderedIds(
+  exercises: WorkoutExercise[],
+  currentIndex: number,
+  targetIndex: number,
+): string[] {
+  const reordered = [...exercises];
+
+  const [movedExercise] = reordered.splice(currentIndex, 1);
+
+  reordered.splice(targetIndex, 0, movedExercise);
+
+  return reordered.map((exercise) => exercise.id);
+}
+
 export default function WorkoutDetailsScreen({
   navigation,
   route,
@@ -110,7 +134,19 @@ export default function WorkoutDetailsScreen({
   const [loading, setLoading] = useState(true);
   const [savingName, setSavingName] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [removingExerciseId, setRemovingExerciseId] = useState<string | null>(
+    null,
+  );
+  const [reorderingExerciseId, setReorderingExerciseId] = useState<
+    string | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
+
+  const busy =
+    savingName ||
+    archiving ||
+    removingExerciseId !== null ||
+    reorderingExerciseId !== null;
 
   const loadWorkout = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -168,7 +204,7 @@ export default function WorkoutDetailsScreen({
   );
 
   async function handleSaveName(): Promise<void> {
-    if (!workout || savingName || archiving) {
+    if (!workout || busy) {
       return;
     }
 
@@ -216,7 +252,7 @@ export default function WorkoutDetailsScreen({
   }
 
   function confirmArchive(): void {
-    if (!workout || archiving || savingName) {
+    if (!workout || busy) {
       return;
     }
 
@@ -261,6 +297,108 @@ export default function WorkoutDetailsScreen({
       Alert.alert("Não foi possível arquivar", message);
     } finally {
       setArchiving(false);
+    }
+  }
+
+  function confirmRemoveExercise(exercise: WorkoutExercise): void {
+    if (!workout || busy) {
+      return;
+    }
+
+    Alert.alert(
+      "Remover exercício",
+      `Deseja remover "${exercise.exerciseName}" deste treino? A configuração desse exercício será removida do planejamento.`,
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: () => {
+            void handleRemoveExercise(exercise);
+          },
+        },
+      ],
+    );
+  }
+
+  async function handleRemoveExercise(
+    exercise: WorkoutExercise,
+  ): Promise<void> {
+    if (!workout) {
+      return;
+    }
+
+    setRemovingExerciseId(exercise.id);
+    setError(null);
+
+    try {
+      const updatedWorkout = await runAuthenticatedRequest(
+        async (accessToken) => {
+          await removeWorkoutExercise(accessToken, workout.id, exercise.id);
+
+          return getWorkout(accessToken, workout.id);
+        },
+      );
+
+      setWorkout(updatedWorkout);
+    } catch (removeError) {
+      const message = getErrorMessage(removeError);
+
+      setError(message);
+
+      Alert.alert("Não foi possível remover", message);
+    } finally {
+      setRemovingExerciseId(null);
+    }
+  }
+
+  async function handleMoveExercise(
+    currentIndex: number,
+    direction: "up" | "down",
+  ): Promise<void> {
+    if (!workout || busy) {
+      return;
+    }
+
+    const exercise = workout.exercises[currentIndex];
+
+    if (!exercise) {
+      return;
+    }
+
+    const targetIndex =
+      direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= workout.exercises.length) {
+      return;
+    }
+
+    const reorderedIds = buildReorderedIds(
+      workout.exercises,
+      currentIndex,
+      targetIndex,
+    );
+
+    setReorderingExerciseId(exercise.id);
+    setError(null);
+
+    try {
+      const updatedWorkout = await runAuthenticatedRequest((accessToken) =>
+        reorderWorkoutExercises(accessToken, workout.id, reorderedIds),
+      );
+
+      setWorkout(updatedWorkout);
+    } catch (reorderError) {
+      const message = getErrorMessage(reorderError);
+
+      setError(message);
+
+      Alert.alert("Não foi possível reordenar", message);
+    } finally {
+      setReorderingExerciseId(null);
     }
   }
 
@@ -357,7 +495,7 @@ export default function WorkoutDetailsScreen({
             <TextInput
               value={name}
               onChangeText={setName}
-              editable={!savingName && !archiving}
+              editable={!busy}
               autoCapitalize="sentences"
               autoCorrect={false}
               maxLength={120}
@@ -373,14 +511,14 @@ export default function WorkoutDetailsScreen({
             {nameChanged ? (
               <Pressable
                 accessibilityRole="button"
-                disabled={savingName || archiving}
+                disabled={busy}
                 onPress={() => {
                   void handleSaveName();
                 }}
                 style={({ pressed }) => [
                   styles.saveButton,
                   pressed && styles.buttonPressed,
-                  (savingName || archiving) && styles.buttonDisabled,
+                  busy && styles.buttonDisabled,
                 ]}
               >
                 {savingName ? (
@@ -422,6 +560,7 @@ export default function WorkoutDetailsScreen({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Adicionar exercício ao treino"
+            disabled={busy}
             onPress={() =>
               navigation.navigate("CatalogoExercicios", {
                 workoutId: workout.id,
@@ -430,6 +569,7 @@ export default function WorkoutDetailsScreen({
             style={({ pressed }) => [
               styles.addExerciseButton,
               pressed && styles.buttonPressed,
+              busy && styles.buttonDisabled,
             ]}
           >
             <Plus
@@ -463,59 +603,165 @@ export default function WorkoutDetailsScreen({
             </View>
           ) : (
             <View style={styles.exerciseList}>
-              {workout.exercises.map((exercise) => (
-                <Pressable
-                  key={exercise.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Configurar ${exercise.exerciseName}`}
-                  onPress={() =>
-                    navigation.navigate("ConfigurarExercicioTreino", {
-                      workoutId: workout.id,
-                      workoutExerciseId: exercise.id,
-                    })
-                  }
-                  style={({ pressed }) => [
-                    styles.exerciseCard,
-                    pressed && styles.exerciseCardPressed,
-                  ]}
-                >
-                  <View style={styles.exercisePosition}>
-                    <Text style={styles.exercisePositionText}>
-                      {exercise.position}
-                    </Text>
+              {workout.exercises.map((exercise, index) => {
+                const removing = removingExerciseId === exercise.id;
+
+                const reordering = reorderingExerciseId === exercise.id;
+
+                const first = index === 0;
+
+                const last = index === workout.exercises.length - 1;
+
+                return (
+                  <View key={exercise.id} style={styles.exerciseCard}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Configurar ${exercise.exerciseName}`}
+                      disabled={busy}
+                      onPress={() =>
+                        navigation.navigate("ConfigurarExercicioTreino", {
+                          workoutId: workout.id,
+                          workoutExerciseId: exercise.id,
+                        })
+                      }
+                      style={({ pressed }) => [
+                        styles.exerciseMain,
+                        pressed && styles.exerciseCardPressed,
+                      ]}
+                    >
+                      <View style={styles.exercisePosition}>
+                        <Text style={styles.exercisePositionText}>
+                          {exercise.position}
+                        </Text>
+                      </View>
+
+                      <View style={styles.exerciseCopy}>
+                        <Text style={styles.exerciseName}>
+                          {exercise.exerciseName}
+                        </Text>
+
+                        <Text style={styles.exerciseMeta}>
+                          {formatTarget(exercise.targetSets, "série", "séries")}
+                          {" • "}
+                          {formatTarget(
+                            exercise.targetRepetitions,
+                            "repetição",
+                            "repetições",
+                          )}
+                        </Text>
+
+                        <Text style={styles.exerciseMeta}>
+                          {formatLoad(
+                            exercise.targetLoad,
+                            exercise.targetLoadUnit,
+                          )}
+                        </Text>
+
+                        {exercise.notes ? (
+                          <Text style={styles.exerciseNotes} numberOfLines={2}>
+                            {exercise.notes}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <ChevronRight
+                        size={20}
+                        strokeWidth={2.2}
+                        color={theme.colors.textMuted}
+                      />
+                    </Pressable>
+
+                    <View style={styles.exerciseActions}>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mover ${exercise.exerciseName} para cima`}
+                        disabled={busy || first}
+                        onPress={() => {
+                          void handleMoveExercise(index, "up");
+                        }}
+                        style={({ pressed }) => [
+                          styles.orderButton,
+                          (busy || first) && styles.actionButtonDisabled,
+                          pressed && !first && styles.buttonPressed,
+                        ]}
+                      >
+                        {reordering ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={theme.colors.primary}
+                          />
+                        ) : (
+                          <ArrowUp
+                            size={18}
+                            strokeWidth={2.2}
+                            color={
+                              first
+                                ? theme.colors.textMuted
+                                : theme.colors.primary
+                            }
+                          />
+                        )}
+                      </Pressable>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mover ${exercise.exerciseName} para baixo`}
+                        disabled={busy || last}
+                        onPress={() => {
+                          void handleMoveExercise(index, "down");
+                        }}
+                        style={({ pressed }) => [
+                          styles.orderButton,
+                          (busy || last) && styles.actionButtonDisabled,
+                          pressed && !last && styles.buttonPressed,
+                        ]}
+                      >
+                        {reordering ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={theme.colors.primary}
+                          />
+                        ) : (
+                          <ArrowDown
+                            size={18}
+                            strokeWidth={2.2}
+                            color={
+                              last
+                                ? theme.colors.textMuted
+                                : theme.colors.primary
+                            }
+                          />
+                        )}
+                      </Pressable>
+
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remover ${exercise.exerciseName}`}
+                        disabled={busy}
+                        onPress={() => confirmRemoveExercise(exercise)}
+                        style={({ pressed }) => [
+                          styles.removeButton,
+                          busy && styles.actionButtonDisabled,
+                          pressed && styles.buttonPressed,
+                        ]}
+                      >
+                        {removing ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={theme.colors.danger}
+                          />
+                        ) : (
+                          <Trash2
+                            size={18}
+                            strokeWidth={2.2}
+                            color={theme.colors.danger}
+                          />
+                        )}
+                      </Pressable>
+                    </View>
                   </View>
-
-                  <View style={styles.exerciseCopy}>
-                    <Text style={styles.exerciseName}>
-                      {exercise.exerciseName}
-                    </Text>
-
-                    <Text style={styles.exerciseMeta}>
-                      {formatTarget(exercise.targetSets, "série", "séries")}
-                      {" • "}
-                      {formatTarget(
-                        exercise.targetRepetitions,
-                        "repetição",
-                        "repetições",
-                      )}
-                    </Text>
-
-                    <Text style={styles.exerciseMeta}>
-                      {formatLoad(exercise.targetLoad, exercise.targetLoadUnit)}
-                    </Text>
-
-                    {exercise.notes ? (
-                      <Text style={styles.exerciseNotes}>{exercise.notes}</Text>
-                    ) : null}
-                  </View>
-
-                  <ChevronRight
-                    size={20}
-                    strokeWidth={2.2}
-                    color={theme.colors.textMuted}
-                  />
-                </Pressable>
-              ))}
+                );
+              })}
             </View>
           )}
         </View>
@@ -538,12 +784,12 @@ export default function WorkoutDetailsScreen({
 
           <Pressable
             accessibilityRole="button"
-            disabled={archiving || savingName}
+            disabled={busy}
             onPress={confirmArchive}
             style={({ pressed }) => [
               styles.archiveButton,
               pressed && styles.buttonPressed,
-              (archiving || savingName) && styles.buttonDisabled,
+              busy && styles.buttonDisabled,
             ]}
           >
             {archiving ? (
@@ -812,23 +1058,22 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     exerciseCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: theme.spacing.md,
-      padding: theme.spacing.lg,
+      overflow: "hidden",
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
     },
 
+    exerciseMain: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      padding: theme.spacing.lg,
+    },
+
     exerciseCardPressed: {
       opacity: 0.72,
-      transform: [
-        {
-          scale: 0.995,
-        },
-      ],
     },
 
     exercisePosition: {
@@ -869,6 +1114,43 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontFamily: theme.typography.fontFamily.regular,
       fontSize: theme.typography.size.caption,
       lineHeight: theme.typography.lineHeight.caption,
+    },
+
+    exerciseActions: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.lg,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.divider,
+    },
+
+    orderButton: {
+      width: 42,
+      height: 42,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: 13,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    removeButton: {
+      width: 42,
+      height: 42,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: theme.colors.danger,
+      borderRadius: 13,
+      backgroundColor: theme.colors.surface,
+    },
+
+    actionButtonDisabled: {
+      opacity: 0.35,
     },
 
     inlineError: {
