@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Archive,
   Dumbbell,
+  Plus,
   RefreshCw,
   Save,
 } from "lucide-react-native";
@@ -339,7 +340,7 @@ export default function WorkoutDetailsScreen({
           <Text style={styles.title}>{workout.name}</Text>
 
           <Text style={styles.subtitle}>
-            Edite as informações do treino e acompanhe os exercícios adicionados
+            Edite as informações do treino e organize os exercícios adicionados
             ao planejamento.
           </Text>
         </View>
@@ -417,6 +418,30 @@ export default function WorkoutDetailsScreen({
             </View>
           </View>
 
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Adicionar exercício ao treino"
+            onPress={() =>
+              navigation.navigate("CatalogoExercicios", {
+                workoutId: workout.id,
+              })
+            }
+            style={({ pressed }) => [
+              styles.addExerciseButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <Plus
+              size={19}
+              strokeWidth={2.5}
+              color={theme.colors.textOnPrimary}
+            />
+
+            <Text style={styles.addExerciseButtonText}>
+              Adicionar exercício
+            </Text>
+          </Pressable>
+
           {workout.exercises.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.emptyIcon}>
@@ -431,8 +456,8 @@ export default function WorkoutDetailsScreen({
 
               <Text style={styles.emptyText}>
                 Este treino pode permanecer vazio enquanto estiver sendo
-                configurado. A inclusão de exercícios será feita pelo catálogo
-                FitMap.
+                configurado. Adicione exercícios do catálogo FitMap quando
+                estiver pronto.
               </Text>
             </View>
           ) : (
@@ -705,6 +730,23 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       color: theme.colors.primary,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: theme.typography.size.small,
+    },
+
+    addExerciseButton: {
+      minHeight: 50,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.primary,
+    },
+
+    addExerciseButtonText: {
+      color: theme.colors.textOnPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.body,
     },
 
     emptyCard: {

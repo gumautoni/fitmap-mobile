@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AddTaskScreen from "../screens/AddTaskScreen";
 import CameraScreen from "../screens/CameraScreen";
 import CreateWorkoutScreen from "../screens/CreateWorkoutScreen";
+import ExerciseCatalogScreen from "../screens/ExerciseCatalogScreen";
 import GymDetailsScreen from "../screens/GymDetailsScreen";
 import HomeScreen from "../screens/HomeScreen";
 import MapScreen from "../screens/MapScreen";
@@ -81,6 +82,14 @@ export default function AppNavigator() {
         component={WorkoutDetailsScreen}
         options={{
           title: "Detalhes do treino",
+        }}
+      />
+
+      <Stack.Screen
+        name="CatalogoExercicios"
+        component={ExerciseCatalogScreen}
+        options={{
+          title: "Adicionar exercício",
         }}
       />
 

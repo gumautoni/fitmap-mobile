@@ -9,6 +9,9 @@ export type AppStackParamList = {
   DetalhesTreino: {
     workoutId: string;
   };
+  CatalogoExercicios: {
+    workoutId: string;
+  };
   Tarefas: undefined;
   NovaTarefa: undefined;
   Camera: {
