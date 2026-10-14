@@ -4,6 +4,18 @@ export type AppStackParamList = {
   Home: undefined;
   Perfil: undefined;
   Mapa: undefined;
+  Treinos: undefined;
+  NovoTreino: undefined;
+  DetalhesTreino: {
+    workoutId: string;
+  };
+  CatalogoExercicios: {
+    workoutId: string;
+  };
+  ConfigurarExercicioTreino: {
+    workoutId: string;
+    workoutExerciseId: string;
+  };
   Tarefas: undefined;
   NovaTarefa: undefined;
   Camera: {

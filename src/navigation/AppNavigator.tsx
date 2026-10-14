@@ -1,14 +1,19 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import type { AppStackParamList } from "./types";
 import AddTaskScreen from "../screens/AddTaskScreen";
 import CameraScreen from "../screens/CameraScreen";
+import CreateWorkoutScreen from "../screens/CreateWorkoutScreen";
+import ExerciseCatalogScreen from "../screens/ExerciseCatalogScreen";
 import GymDetailsScreen from "../screens/GymDetailsScreen";
 import HomeScreen from "../screens/HomeScreen";
 import MapScreen from "../screens/MapScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import TasksScreen from "../screens/TasksScreen";
+import WorkoutDetailsScreen from "../screens/WorkoutDetailsScreen";
+import WorkoutExerciseConfigScreen from "../screens/WorkoutExerciseConfigScreen";
+import WorkoutsScreen from "../screens/WorkoutsScreen";
 import { useAppTheme } from "../theme/ThemeProvider";
+import type { AppStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
@@ -54,6 +59,46 @@ export default function AppNavigator() {
         component={MapScreen}
         options={{
           title: "Mapa de academias",
+        }}
+      />
+
+      <Stack.Screen
+        name="Treinos"
+        component={WorkoutsScreen}
+        options={{
+          title: "Meus treinos",
+        }}
+      />
+
+      <Stack.Screen
+        name="NovoTreino"
+        component={CreateWorkoutScreen}
+        options={{
+          title: "Novo treino",
+        }}
+      />
+
+      <Stack.Screen
+        name="DetalhesTreino"
+        component={WorkoutDetailsScreen}
+        options={{
+          title: "Detalhes do treino",
+        }}
+      />
+
+      <Stack.Screen
+        name="CatalogoExercicios"
+        component={ExerciseCatalogScreen}
+        options={{
+          title: "Adicionar exercício",
+        }}
+      />
+
+      <Stack.Screen
+        name="ConfigurarExercicioTreino"
+        component={WorkoutExerciseConfigScreen}
+        options={{
+          title: "Configurar exercício",
         }}
       />
 

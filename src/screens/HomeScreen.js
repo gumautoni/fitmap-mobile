@@ -262,6 +262,81 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.sectionHeader}>
           <View>
+            <Text style={styles.sectionEyebrow}>ORGANIZE</Text>
+
+            <Text style={styles.sectionTitle}>Planeje seus treinos</Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Abrir meus treinos"
+            onPress={() => navigation.navigate("Treinos")}
+            style={({ pressed }) => [
+              styles.textAction,
+              pressed && styles.textActionPressed,
+            ]}
+          >
+            <Text style={styles.textActionLabel}>Ver treinos</Text>
+
+            <ArrowRight
+              size={16}
+              strokeWidth={2.3}
+              color={theme.colors.primary}
+            />
+          </Pressable>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Abrir meus treinos"
+          onPress={() => navigation.navigate("Treinos")}
+          style={({ pressed }) => [
+            styles.trainingCard,
+            pressed && styles.cardPressed,
+          ]}
+        >
+          <View style={styles.trainingAccent} />
+
+          <View style={styles.trainingMain}>
+            <View style={styles.trainingIcon}>
+              <Dumbbell
+                size={25}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+            </View>
+
+            <View style={styles.trainingCopy}>
+              <Text style={styles.trainingTitle}>Meus treinos</Text>
+
+              <Text style={styles.trainingText}>
+                Crie planejamentos e organize exercícios, séries, repetições,
+                cargas e observações.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.trainingFooter}>
+            <View style={styles.trainingStatus}>
+              <View style={styles.trainingStatusDot} />
+
+              <Text style={styles.trainingStatusText}>
+                Sincronizado com sua conta
+              </Text>
+            </View>
+
+            <View style={styles.openButton}>
+              <ArrowRight
+                size={18}
+                strokeWidth={2.4}
+                color={theme.colors.textOnPrimary}
+              />
+            </View>
+          </View>
+        </Pressable>
+
+        <View style={styles.sectionHeader}>
+          <View>
             <Text style={styles.sectionEyebrow}>DESCUBRA</Text>
 
             <Text style={styles.sectionTitle}>Escolha onde treinar</Text>
@@ -682,6 +757,97 @@ function createStyles(theme) {
       color: theme.colors.primary,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: theme.typography.size.small,
+    },
+
+    trainingCard: {
+      position: "relative",
+      overflow: "hidden",
+      marginBottom: theme.spacing["3xl"],
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.xl,
+      padding: theme.spacing.lg,
+      shadowColor: "#0A0D15",
+      shadowOpacity: theme.mode === "dark" ? 0.2 : 0.05,
+      shadowRadius: 16,
+      shadowOffset: {
+        width: 0,
+        height: 8,
+      },
+      elevation: 2,
+    },
+
+    trainingAccent: {
+      position: "absolute",
+      left: 0,
+      top: 18,
+      bottom: 18,
+      width: 3,
+      borderTopRightRadius: 3,
+      borderBottomRightRadius: 3,
+      backgroundColor: theme.colors.primary,
+    },
+
+    trainingMain: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      marginBottom: theme.spacing.lg,
+    },
+
+    trainingIcon: {
+      width: 54,
+      height: 54,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 18,
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    trainingCopy: {
+      flex: 1,
+    },
+
+    trainingTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.cardTitle,
+      lineHeight: theme.typography.lineHeight.cardTitle,
+      marginBottom: 4,
+    },
+
+    trainingText: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    trainingFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+    },
+
+    trainingStatus: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+    },
+
+    trainingStatusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: theme.colors.success,
+    },
+
+    trainingStatusText: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.caption,
     },
 
     discoveryCard: {
