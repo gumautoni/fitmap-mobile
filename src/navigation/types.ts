@@ -9,6 +9,9 @@ export type AppStackParamList = {
   DetalhesTreino: {
     workoutId: string;
   };
+  ExecutarTreino: {
+    workoutId: string;
+  };
   CatalogoExercicios: {
     workoutId: string;
   };
