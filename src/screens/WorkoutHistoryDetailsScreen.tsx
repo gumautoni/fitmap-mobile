@@ -135,8 +135,35 @@ export default function WorkoutHistoryDetailsScreen({
   }, [runAuthenticatedRequest, workoutSessionId]);
 
   useEffect(() => {
-    void loadSession();
-  }, [loadSession]);
+    let active = true;
+
+    runAuthenticatedRequest((accessToken) =>
+      getWorkoutSession(accessToken, workoutSessionId),
+    )
+      .then((loadedSession) => {
+        if (!active) {
+          return;
+        }
+
+        setWorkoutSession(loadedSession);
+      })
+      .catch((loadError: unknown) => {
+        if (!active) {
+          return;
+        }
+
+        setError(getErrorMessage(loadError));
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [runAuthenticatedRequest, workoutSessionId]);
 
   useEffect(() => {
     if (!workoutSession) {
