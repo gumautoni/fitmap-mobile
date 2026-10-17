@@ -1,4 +1,5 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Pressable, Text } from "react-native";
 
 import AddTaskScreen from "../screens/AddTaskScreen";
 import CameraScreen from "../screens/CameraScreen";
@@ -11,6 +12,9 @@ import ProfileScreen from "../screens/ProfileScreen";
 import TasksScreen from "../screens/TasksScreen";
 import WorkoutDetailsScreen from "../screens/WorkoutDetailsScreen";
 import WorkoutExerciseConfigScreen from "../screens/WorkoutExerciseConfigScreen";
+import WorkoutHistoryDetailsScreen from "../screens/WorkoutHistoryDetailsScreen";
+import WorkoutHistoryScreen from "../screens/WorkoutHistoryScreen";
+import WorkoutSessionScreen from "../screens/WorkoutSessionScreen";
 import WorkoutsScreen from "../screens/WorkoutsScreen";
 import { useAppTheme } from "../theme/ThemeProvider";
 import type { AppStackParamList } from "./types";
@@ -65,9 +69,31 @@ export default function AppNavigator() {
       <Stack.Screen
         name="Treinos"
         component={WorkoutsScreen}
-        options={{
+        options={({ navigation }) => ({
           title: "Meus treinos",
-        }}
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Abrir histórico de treinos"
+              onPress={() => navigation.navigate("HistoricoTreinos")}
+              style={({ pressed }) => ({
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+                opacity: pressed ? 0.65 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: theme.colors.primary,
+                  fontFamily: theme.typography.fontFamily.bold,
+                  fontSize: theme.typography.size.small,
+                }}
+              >
+                Histórico
+              </Text>
+            </Pressable>
+          ),
+        })}
       />
 
       <Stack.Screen
@@ -81,8 +107,58 @@ export default function AppNavigator() {
       <Stack.Screen
         name="DetalhesTreino"
         component={WorkoutDetailsScreen}
-        options={{
+        options={({ navigation, route }) => ({
           title: "Detalhes do treino",
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Executar treino"
+              onPress={() =>
+                navigation.navigate("ExecutarTreino", {
+                  workoutId: route.params.workoutId,
+                })
+              }
+              style={({ pressed }) => ({
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+                opacity: pressed ? 0.65 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: theme.colors.primary,
+                  fontFamily: theme.typography.fontFamily.bold,
+                  fontSize: theme.typography.size.small,
+                }}
+              >
+                Treinar
+              </Text>
+            </Pressable>
+          ),
+        })}
+      />
+
+      <Stack.Screen
+        name="ExecutarTreino"
+        component={WorkoutSessionScreen}
+        options={{
+          title: "Treino em andamento",
+        }}
+      />
+
+      <Stack.Screen
+        name="HistoricoTreinos"
+        component={WorkoutHistoryScreen}
+        options={{
+          title: "Histórico",
+        }}
+      />
+
+      <Stack.Screen
+        name="DetalhesHistoricoTreino"
+        component={WorkoutHistoryDetailsScreen}
+        options={{
+          title: "Treino concluído",
         }}
       />
 

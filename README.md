@@ -16,7 +16,7 @@ FitMap is a mobile fitness platform designed to help users discover gyms and pro
 
 The project started as an academic mobile prototype and is evolving into a full application with its own backend, relational database, secure authentication, user profile management, external-service integration, automated testing and documented architecture.
 
-The current implementation provides backend-integrated gym discovery, backend-managed authentication and persistent user-profile capabilities while legacy prototype features are being migrated incrementally to the approved architecture.
+The current implementation provides backend-integrated gym discovery, backend-managed authentication, persistent user-profile capabilities and a structured Training domain with workout planning, workout execution and completed-session history. Legacy prototype features are being migrated incrementally to the approved architecture.
 
 FitMap is under active development as a Trabalho de Conclusão de Curso (TCC).
 
@@ -108,22 +108,56 @@ When the provider supplies the information, the application can display:
 
 Unavailable external information remains unavailable instead of being replaced with fabricated production values.
 
-### Current prototype exercise flow
+### Workout planning, execution and history
 
-The legacy mobile prototype still contains a local exercise-tracking flow.
+Authenticated users can manage structured workouts through the Training module.
+
+The current workout-planning flow supports:
+
+- creating workouts;
+- viewing owned workouts;
+- configuring exercises from the exercise catalog;
+- defining target sets and repetitions;
+- defining target load and load unit when applicable;
+- adding exercise-specific planning notes;
+- reordering and removing configured exercises;
+- archiving and restoring workouts.
+
+Workout execution is persisted independently from the mutable workout plan.
+
+Users can:
+
+- start an eligible configured workout;
+- resume an existing active workout session;
+- record performed sets;
+- record actual repetitions;
+- record actual load and load unit;
+- mark exercises as completed or reopen them during an active session;
+- finish a workout and persist it to history;
+- cancel an active workout through a confirmation flow.
+
+A user can have at most one active workout session at a time.
+
+Completed sessions remain available through workout history. Historical details preserve the workout and exercise information captured at execution time, together with the actual sets, repetitions and load recorded by the user. This historical snapshot remains meaningful even if the source workout is later changed or archived.
+
+Workout, session and history ownership is derived from the authenticated backend identity.
+
+### Legacy prototype exercise flow
+
+The original mobile prototype still contains a separate device-local exercise-tracking flow.
 
 Users can currently:
 
-- create an exercise entry;
+- create a local exercise entry;
 - add a description;
-- mark an exercise as completed or pending;
-- delete an exercise;
-- capture a photo for an exercise;
-- associate the captured photo with the local exercise record.
+- mark the local entry as completed or pending;
+- delete the local entry;
+- capture a photo for the local exercise record;
+- associate the captured photo with that record.
 
-These exercise records currently remain device-local through AsyncStorage.
+These legacy records remain device-local through AsyncStorage and are separate from the backend-integrated Training domain.
 
-The structured workout-planning, workout-session, training-history and progress domains defined by the FitMap architecture are separate future implementation work and are not represented as completed backend functionality.
+Progress tracking beyond completed workout history remains future implementation work.
 
 ## Architecture
 
@@ -158,7 +192,9 @@ The Identity module currently includes backend-managed authentication, session m
 
 The Gyms module currently includes backend-integrated gym discovery and gym details.
 
-Training and Progress remain primarily represented by architecture, requirements and transitional prototype functionality and will continue to be migrated incrementally.
+The Training module currently includes an exercise catalog, workout planning, persisted workout sessions, performed-set recording and completed-session history.
+
+The Progress module remains primarily represented by architecture and requirements and will continue to be implemented incrementally.
 
 ### Mobile
 
@@ -196,6 +232,16 @@ Current backend responsibilities include:
 - nearby gym discovery;
 - gym detail retrieval;
 - external gym-provider isolation;
+- exercise-catalog access;
+- authenticated workout planning;
+- workout exercise configuration and ordering;
+- workout archiving and restoration;
+- workout-session lifecycle management;
+- performed-set, repetition and load recording;
+- workout-session completion and cancellation;
+- completed workout history;
+- historical workout-execution integrity;
+- training-data ownership and user isolation;
 - standardized API errors;
 - PostgreSQL connectivity;
 - health and readiness endpoints;
@@ -234,6 +280,38 @@ GET /gyms/nearby
 GET /gyms/{external_id}
 ```
 
+Current Training API endpoints under `/api/v1` include:
+
+```text
+GET    /training/exercises
+POST   /training/exercises
+
+GET    /training/workouts
+POST   /training/workouts
+GET    /training/workouts/{workout_id}
+PATCH  /training/workouts/{workout_id}
+POST   /training/workouts/{workout_id}/archive
+POST   /training/workouts/{workout_id}/restore
+POST   /training/workouts/{workout_id}/exercises
+PATCH  /training/workouts/{workout_id}/exercises/{workout_exercise_id}
+DELETE /training/workouts/{workout_id}/exercises/{workout_exercise_id}
+PUT    /training/workouts/{workout_id}/exercises/reorder
+
+POST   /training/workouts/{workout_id}/sessions
+GET    /training/sessions/active
+GET    /training/sessions/{workout_session_id}
+PATCH  /training/sessions/{workout_session_id}
+POST   /training/sessions/{workout_session_id}/finish
+POST   /training/sessions/{workout_session_id}/cancel
+
+PATCH  /training/sessions/{workout_session_id}/exercises/{exercise_execution_id}
+POST   /training/sessions/{workout_session_id}/exercises/{exercise_execution_id}/sets
+PATCH  /training/sessions/{workout_session_id}/exercises/{exercise_execution_id}/sets/{set_execution_id}
+DELETE /training/sessions/{workout_session_id}/exercises/{exercise_execution_id}/sets/{set_execution_id}
+
+GET    /training/history
+```
+
 Interactive FastAPI documentation is available locally at:
 
 ```text
@@ -256,6 +334,15 @@ Current persistent Identity data includes:
 - authentication sessions;
 - refresh tokens;
 - user fitness-profile preferences.
+
+Current persistent Training data includes:
+
+- workouts;
+- configured workout exercises;
+- workout sessions;
+- exercise executions;
+- performed set executions;
+- historical execution snapshots required to preserve completed-session meaning.
 
 Database migrations are explicit operations and are not automatically executed every time the API starts.
 
@@ -795,6 +882,18 @@ The current repository includes:
 - real gym-provider abstraction;
 - textual and current-location gym search;
 - interactive gym map and details;
+- backend-integrated exercise catalog;
+- structured workout creation and management;
+- workout exercise configuration and ordering;
+- workout archiving and restoration;
+- persisted workout-session execution;
+- actual set, repetition and load recording;
+- exercise-completion state during workout execution;
+- active-session resume behavior;
+- workout-session finish and cancellation flows;
+- completed workout history and session details;
+- historical execution snapshots independent from mutable workout plans;
+- authenticated ownership and isolation of private training data;
 - Python/FastAPI backend foundation;
 - modular-monolith structure;
 - PostgreSQL connectivity;
@@ -825,8 +924,6 @@ Future backlog items include capabilities such as:
 - account deletion workflow;
 - profile-image storage when justified by product scope;
 - favorite gyms;
-- structured workout planning;
-- workout execution and history;
 - private progress photos;
 - body metrics and measurable fitness goals;
 - FitMap-managed gym ratings and reviews;
