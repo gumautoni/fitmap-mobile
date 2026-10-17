@@ -4,6 +4,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 
 import fitmap.identity.models
+import fitmap.progress.models
 import fitmap.training.models  # noqa: F401
 from fitmap.config import get_settings
 from fitmap.persistence.base import Base
