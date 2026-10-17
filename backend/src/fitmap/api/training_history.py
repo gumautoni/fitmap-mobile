@@ -1,3 +1,5 @@
+from fastapi import APIRouter
+
 from fitmap.api.dependencies import (
     CurrentIdentityDependency,
     DatabaseSessionDependency,
@@ -7,8 +9,6 @@ from fitmap.training.history_schemas import (
     WorkoutHistorySummaryResponse,
 )
 from fitmap.training.models import WorkoutSession
-
-from fastapi import APIRouter
 
 router = APIRouter(
     prefix="/training",
