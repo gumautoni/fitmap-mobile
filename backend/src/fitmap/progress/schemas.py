@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from fitmap.training.schemas import LoadUnit
 
@@ -32,3 +32,15 @@ class ExercisePerformanceResponse(BaseModel):
     exercise_id: UUID
     exercise_name: str
     points: list[ExercisePerformancePointResponse]
+
+
+class ProgressPhotoResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    id: UUID
+    workout_session_id: UUID | None
+    media_type: str
+    recorded_at: datetime
+    created_at: datetime

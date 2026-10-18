@@ -17,6 +17,10 @@ class ProgressPhotoError(Exception):
     pass
 
 
+class ProgressPhotoNotFoundError(ProgressPhotoError):
+    pass
+
+
 class ProgressPhotoWorkoutSessionNotFoundError(ProgressPhotoError):
     pass
 
@@ -88,3 +92,22 @@ def list_progress_photos(
     )
 
     return list(db_session.scalars(statement).all())
+
+
+def get_owned_progress_photo(
+    *,
+    db_session: Session,
+    user_id: UUID,
+    progress_photo_id: UUID,
+) -> ProgressPhoto:
+    progress_photo = db_session.scalar(
+        select(ProgressPhoto).where(
+            ProgressPhoto.id == progress_photo_id,
+            ProgressPhoto.user_id == user_id,
+        )
+    )
+
+    if progress_photo is None:
+        raise ProgressPhotoNotFoundError("Progress photo was not found.")
+
+    return progress_photo
