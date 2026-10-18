@@ -21,6 +21,22 @@ services:
       retries: 10
       start_period: 5s
 
+  s3mock:
+    image: adobe/s3mock:5.2.3
+    restart: unless-stopped
+
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: ${FITMAP_MEDIA_BUCKET_NAME:-fitmap-private-media}
+      COM_ADOBE_TESTING_S3MOCK_STORE_REGION: ${FITMAP_MEDIA_REGION_NAME:-us-east-1}
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+
+    ports:
+      - "${FITMAP_MEDIA_PORT:-9090}:9090"
+
+    volumes:
+      - fitmap_s3mock_data:/s3mockroot
+
   api:
     build:
       context: .
@@ -35,6 +51,11 @@ services:
     environment:
       FITMAP_DB_HOST: postgres
       FITMAP_DB_PORT: 5432
+      FITMAP_MEDIA_BUCKET_NAME: ${FITMAP_MEDIA_BUCKET_NAME:-fitmap-private-media}
+      FITMAP_MEDIA_REGION_NAME: ${FITMAP_MEDIA_REGION_NAME:-us-east-1}
+      FITMAP_MEDIA_ENDPOINT_URL: http://s3mock:9090
+      FITMAP_MEDIA_ACCESS_KEY_ID: ${FITMAP_MEDIA_ACCESS_KEY_ID:-test}
+      FITMAP_MEDIA_SECRET_ACCESS_KEY: ${FITMAP_MEDIA_SECRET_ACCESS_KEY:-test}
 
     ports:
       - "${FITMAP_API_PORT:-8000}:8000"
@@ -42,6 +63,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      s3mock:
+        condition: service_started
 
     healthcheck:
       test:
@@ -58,3 +81,4 @@ services:
 
 volumes:
   fitmap_postgres_data:
+  fitmap_s3mock_data:

@@ -1,4 +1,5 @@
 import boto3
+from botocore.config import Config
 from mypy_boto3_s3 import S3Client
 
 from fitmap.media.config import MediaStorageSettings
@@ -10,12 +11,23 @@ def create_private_object_storage(
     *,
     settings: MediaStorageSettings,
 ) -> PrivateObjectStorage:
+    client_config = (
+        Config(
+            s3={
+                "addressing_style": "path",
+            }
+        )
+        if settings.endpoint_url
+        else None
+    )
+
     client: S3Client = boto3.client(  # pyright: ignore[reportUnknownMemberType]
         "s3",
         region_name=settings.region_name,
         endpoint_url=settings.endpoint_url,
         aws_access_key_id=settings.access_key_id.get_secret_value(),
         aws_secret_access_key=settings.secret_access_key.get_secret_value(),
+        config=client_config,
     )
 
     return S3PrivateObjectStorage(
