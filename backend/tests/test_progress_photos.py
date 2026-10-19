@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from fitmap.identity.models import User
 from fitmap.media.storage import StoredMedia
+from fitmap.progress.models import ProgressPhoto
 from fitmap.progress.photos import (
     ProgressPhotoWorkoutSessionNotFoundError,
     create_progress_photo,
@@ -175,6 +176,61 @@ def test_progress_photo_can_reference_owned_workout_session(
         db_session.commit()
 
         assert progress_photo.workout_session_id == workout_session.id
+
+
+def test_progress_photo_survives_workout_session_deletion(
+    database_engine: Engine,
+    created_user_ids: list[UUID],
+) -> None:
+    user = create_user(
+        database_engine=database_engine,
+        created_user_ids=created_user_ids,
+    )
+    workout_session = create_workout_session(
+        database_engine=database_engine,
+        user_id=user.id,
+    )
+    storage = InMemoryPrivateObjectStorage()
+
+    with Session(database_engine) as db_session:
+        progress_photo = create_progress_photo(
+            db_session=db_session,
+            storage=storage,
+            user_id=user.id,
+            data=b"\xff\xd8\xffimage-data",
+            media_type="image/jpeg",
+            recorded_at=datetime.now(UTC),
+            workout_session_id=workout_session.id,
+        )
+
+        db_session.commit()
+        db_session.refresh(progress_photo)
+
+        progress_photo_id = progress_photo.id
+        storage_key = progress_photo.storage_key
+
+    with Session(database_engine) as db_session:
+        persisted_workout_session = db_session.get(
+            WorkoutSession,
+            workout_session.id,
+        )
+
+        assert persisted_workout_session is not None
+
+        db_session.delete(persisted_workout_session)
+        db_session.commit()
+
+    with Session(database_engine) as db_session:
+        persisted_progress_photo = db_session.get(
+            ProgressPhoto,
+            progress_photo_id,
+        )
+
+        assert persisted_progress_photo is not None
+        assert persisted_progress_photo.workout_session_id is None
+        assert persisted_progress_photo.storage_key == storage_key
+
+    assert storage_key in storage.objects
 
 
 def test_progress_photo_rejects_another_users_workout_session(
