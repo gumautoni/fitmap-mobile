@@ -5,6 +5,7 @@ import {
   MapPin,
   Navigation,
   Search,
+  TrendingUp,
   Zap,
 } from "lucide-react-native";
 import React, { useContext, useEffect, useMemo, useState } from "react";
@@ -48,7 +49,6 @@ export default function HomeScreen({ navigation }) {
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [floatValue] = useState(() => new Animated.Value(0));
-
   const [pulseValue] = useState(() => new Animated.Value(0));
 
   const firstName = user?.name?.trim()?.split(" ")[0] || "usuário";
@@ -323,6 +323,93 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.trainingStatusText}>
                 Sincronizado com sua conta
               </Text>
+            </View>
+
+            <View style={styles.openButton}>
+              <ArrowRight
+                size={18}
+                strokeWidth={2.4}
+                color={theme.colors.textOnPrimary}
+              />
+            </View>
+          </View>
+        </Pressable>
+
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionEyebrow}>EVOLUÇÃO</Text>
+
+            <Text style={styles.sectionTitle}>Acompanhe seu progresso</Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Abrir meu progresso"
+            onPress={() => navigation.navigate("Progresso")}
+            style={({ pressed }) => [
+              styles.textAction,
+              pressed && styles.textActionPressed,
+            ]}
+          >
+            <Text style={styles.textActionLabel}>Ver progresso</Text>
+
+            <ArrowRight
+              size={16}
+              strokeWidth={2.3}
+              color={theme.colors.primary}
+            />
+          </Pressable>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Abrir meu progresso"
+          onPress={() => navigation.navigate("Progresso")}
+          style={({ pressed }) => [
+            styles.progressCard,
+            pressed && styles.cardPressed,
+          ]}
+        >
+          <View style={styles.progressAccent} />
+
+          <View style={styles.progressMain}>
+            <View style={styles.progressIcon}>
+              <TrendingUp
+                size={25}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+            </View>
+
+            <View style={styles.progressCopy}>
+              <Text style={styles.progressTitle}>Meu progresso</Text>
+
+              <Text style={styles.progressText}>
+                Consulte sua frequência de treino e a evolução registrada nos
+                exercícios concluídos.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.progressFooter}>
+            <View style={styles.progressCapability}>
+              <TrendingUp
+                size={14}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+
+              <Text style={styles.progressCapabilityText}>Desempenho</Text>
+            </View>
+
+            <View style={styles.progressCapability}>
+              <Dumbbell
+                size={14}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+
+              <Text style={styles.progressCapabilityText}>Histórico real</Text>
             </View>
 
             <View style={styles.openButton}>
@@ -845,6 +932,94 @@ function createStyles(theme) {
     },
 
     trainingStatusText: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.caption,
+    },
+
+    progressCard: {
+      position: "relative",
+      overflow: "hidden",
+      marginBottom: theme.spacing["3xl"],
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.xl,
+      padding: theme.spacing.lg,
+      shadowColor: "#0A0D15",
+      shadowOpacity: theme.mode === "dark" ? 0.2 : 0.05,
+      shadowRadius: 16,
+      shadowOffset: {
+        width: 0,
+        height: 8,
+      },
+      elevation: 2,
+    },
+
+    progressAccent: {
+      position: "absolute",
+      left: 0,
+      top: 18,
+      bottom: 18,
+      width: 3,
+      borderTopRightRadius: 3,
+      borderBottomRightRadius: 3,
+      backgroundColor: theme.colors.performanceAccent,
+    },
+
+    progressMain: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      marginBottom: theme.spacing.lg,
+    },
+
+    progressIcon: {
+      width: 54,
+      height: 54,
+      borderRadius: 18,
+      backgroundColor: theme.colors.primarySoft,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    progressCopy: {
+      flex: 1,
+    },
+
+    progressTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.cardTitle,
+      lineHeight: theme.typography.lineHeight.cardTitle,
+      marginBottom: 4,
+    },
+
+    progressText: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    progressFooter: {
+      flexDirection: "row",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+    },
+
+    progressCapability: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      backgroundColor: theme.colors.surfaceSecondary,
+      borderRadius: theme.radii.full,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+    },
+
+    progressCapabilityText: {
       color: theme.colors.textSecondary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.caption,

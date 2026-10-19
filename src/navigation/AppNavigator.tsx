@@ -9,6 +9,7 @@ import GymDetailsScreen from "../screens/GymDetailsScreen";
 import HomeScreen from "../screens/HomeScreen";
 import MapScreen from "../screens/MapScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import ProgressScreen from "../screens/ProgressScreen";
 import TasksScreen from "../screens/TasksScreen";
 import WorkoutDetailsScreen from "../screens/WorkoutDetailsScreen";
 import WorkoutExerciseConfigScreen from "../screens/WorkoutExerciseConfigScreen";
@@ -159,6 +160,14 @@ export default function AppNavigator() {
         component={WorkoutHistoryDetailsScreen}
         options={{
           title: "Treino concluído",
+        }}
+      />
+
+      <Stack.Screen
+        name="Progresso"
+        component={ProgressScreen}
+        options={{
+          title: "Meu progresso",
         }}
       />
 

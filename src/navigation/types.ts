@@ -16,6 +16,7 @@ export type AppStackParamList = {
   DetalhesHistoricoTreino: {
     workoutSessionId: string;
   };
+  Progresso: undefined;
   CatalogoExercicios: {
     workoutId: string;
   };
