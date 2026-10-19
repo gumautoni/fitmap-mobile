@@ -1,15 +1,22 @@
 import { useFocusEffect } from "@react-navigation/native";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
 import {
   Activity,
   AlertCircle,
   CalendarDays,
   Dumbbell,
+  ImagePlus,
+  Images,
   RefreshCw,
+  ShieldCheck,
   TrendingUp,
 } from "lucide-react-native";
 import { useCallback, useContext, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,17 +29,33 @@ import { AuthContext } from "../context/AuthContext";
 import { ApiClientError } from "../services/apiClient";
 import {
   getExercisePerformance,
+  getProgressPhotos,
+  getProgressPhotoSource,
   getProgressStatistics,
+  uploadProgressPhoto,
   type BasicProgressStatistics,
   type ExercisePerformance,
   type ExercisePerformancePoint,
+  type ProgressPhoto,
 } from "../services/progress";
 import { useAppTheme } from "../theme/ThemeProvider";
 
+const MAX_PROGRESS_PHOTO_WIDTH = 2000;
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
-    if (error.code === "invalid_access_token") {
-      return "Sua sessão expirou. Entre novamente.";
+    switch (error.code) {
+      case "invalid_access_token":
+        return "Sua sessão expirou. Entre novamente.";
+
+      case "invalid_progress_photo":
+        return "A imagem selecionada não pôde ser enviada.";
+
+      case "media_storage_unavailable":
+        return "O armazenamento privado de fotos está indisponível no momento.";
+
+      default:
+        break;
     }
   }
 
@@ -102,6 +125,28 @@ function getLoadEvolution(performance: ExercisePerformance): string | null {
   return comparisons.length > 0 ? comparisons.join(" • ") : null;
 }
 
+async function normalizeProgressPhoto(
+  asset: ImagePicker.ImagePickerAsset,
+): Promise<string> {
+  const context = ImageManipulator.ImageManipulator.manipulate(asset.uri);
+
+  if (asset.width > MAX_PROGRESS_PHOTO_WIDTH) {
+    context.resize({
+      width: MAX_PROGRESS_PHOTO_WIDTH,
+      height: null,
+    });
+  }
+
+  const renderedImage = await context.renderAsync();
+
+  const normalizedImage = await renderedImage.saveAsync({
+    compress: 0.82,
+    format: ImageManipulator.SaveFormat.JPEG,
+  });
+
+  return normalizedImage.uri;
+}
+
 export default function ProgressScreen() {
   const auth = useContext(AuthContext);
 
@@ -109,7 +154,7 @@ export default function ProgressScreen() {
     throw new Error("ProgressScreen must be rendered inside AuthProvider.");
   }
 
-  const { runAuthenticatedRequest } = auth;
+  const { accessToken, runAuthenticatedRequest } = auth;
 
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -118,24 +163,29 @@ export default function ProgressScreen() {
     null,
   );
   const [performance, setPerformance] = useState<ExercisePerformance[]>([]);
+  const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const loadProgress = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
 
     try {
-      const [loadedStatistics, loadedPerformance] =
-        await runAuthenticatedRequest((accessToken) =>
+      const [loadedStatistics, loadedPerformance, loadedPhotos] =
+        await runAuthenticatedRequest((requestAccessToken) =>
           Promise.all([
-            getProgressStatistics(accessToken),
-            getExercisePerformance(accessToken),
+            getProgressStatistics(requestAccessToken),
+            getExercisePerformance(requestAccessToken),
+            getProgressPhotos(requestAccessToken),
           ]),
         );
 
       setStatistics(loadedStatistics);
       setPerformance(loadedPerformance);
+      setPhotos(loadedPhotos);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -150,19 +200,21 @@ export default function ProgressScreen() {
       setLoading(true);
       setError(null);
 
-      runAuthenticatedRequest((accessToken) =>
+      runAuthenticatedRequest((requestAccessToken) =>
         Promise.all([
-          getProgressStatistics(accessToken),
-          getExercisePerformance(accessToken),
+          getProgressStatistics(requestAccessToken),
+          getExercisePerformance(requestAccessToken),
+          getProgressPhotos(requestAccessToken),
         ]),
       )
-        .then(([loadedStatistics, loadedPerformance]) => {
+        .then(([loadedStatistics, loadedPerformance, loadedPhotos]) => {
           if (!active) {
             return;
           }
 
           setStatistics(loadedStatistics);
           setPerformance(loadedPerformance);
+          setPhotos(loadedPhotos);
         })
         .catch((loadError: unknown) => {
           if (active) {
@@ -180,6 +232,66 @@ export default function ProgressScreen() {
       };
     }, [runAuthenticatedRequest]),
   );
+
+  async function handleAddProgressPhoto(): Promise<void> {
+    if (uploadingPhoto) {
+      return;
+    }
+
+    setPhotoError(null);
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      Alert.alert(
+        "Acesso às fotos",
+        "Permita que o FitMap acesse sua galeria para selecionar uma foto de progresso.",
+      );
+
+      return;
+    }
+
+    const selection = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 1,
+    });
+
+    if (selection.canceled || !selection.assets[0]) {
+      return;
+    }
+
+    setUploadingPhoto(true);
+
+    try {
+      const normalizedUri = await normalizeProgressPhoto(selection.assets[0]);
+
+      const uploadedPhoto = await runAuthenticatedRequest(
+        (requestAccessToken) =>
+          uploadProgressPhoto(requestAccessToken, {
+            uri: normalizedUri,
+            mediaType: "image/jpeg",
+            fileName: `progress-${Date.now()}.jpg`,
+            recordedAt: new Date().toISOString(),
+          }),
+      );
+
+      setPhotos((currentPhotos) => [uploadedPhoto, ...currentPhotos]);
+
+      Alert.alert(
+        "Foto adicionada",
+        "Sua foto de progresso foi salva de forma privada.",
+      );
+    } catch (uploadError) {
+      const message = getErrorMessage(uploadError);
+
+      setPhotoError(message);
+
+      Alert.alert("Não foi possível adicionar a foto", message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   if (loading && !statistics) {
     return (
@@ -256,8 +368,8 @@ export default function ProgressScreen() {
           <Text style={styles.title}>Meu progresso</Text>
 
           <Text style={styles.subtitle}>
-            Acompanhe sua frequência de treino e a evolução registrada durante
-            suas execuções concluídas.
+            Acompanhe sua frequência de treino, evolução de desempenho e seus
+            registros visuais privados.
           </Text>
         </View>
 
@@ -355,6 +467,130 @@ export default function ProgressScreen() {
             </Text>
           </View>
         ) : null}
+
+        <View style={styles.photoSection}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionEyebrow}>REGISTRO VISUAL</Text>
+
+              <Text style={styles.sectionTitle}>Fotos de progresso</Text>
+            </View>
+
+            <Images size={23} strokeWidth={2.2} color={theme.colors.primary} />
+          </View>
+
+          <Text style={styles.sectionDescription}>
+            Registre sua evolução visual independentemente da conclusão de um
+            treino.
+          </Text>
+
+          <View style={styles.privacyNotice}>
+            <ShieldCheck
+              size={18}
+              strokeWidth={2.2}
+              color={theme.colors.success}
+            />
+
+            <Text style={styles.privacyNoticeText}>
+              Suas fotos são privadas e ficam disponíveis somente na sua conta.
+            </Text>
+          </View>
+
+          {photoError ? (
+            <View style={styles.inlineError}>
+              <AlertCircle
+                size={18}
+                strokeWidth={2}
+                color={theme.colors.danger}
+              />
+
+              <Text style={styles.inlineErrorText}>{photoError}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Adicionar foto de progresso"
+            disabled={uploadingPhoto}
+            onPress={() => {
+              void handleAddProgressPhoto();
+            }}
+            style={({ pressed }) => [
+              styles.addPhotoButton,
+              pressed && styles.buttonPressed,
+              uploadingPhoto && styles.buttonDisabled,
+            ]}
+          >
+            {uploadingPhoto ? (
+              <ActivityIndicator
+                size="small"
+                color={theme.colors.textOnPrimary}
+              />
+            ) : (
+              <ImagePlus
+                size={20}
+                strokeWidth={2.3}
+                color={theme.colors.textOnPrimary}
+              />
+            )}
+
+            <Text style={styles.addPhotoButtonText}>
+              {uploadingPhoto ? "Enviando foto..." : "Adicionar foto"}
+            </Text>
+          </Pressable>
+
+          {photos.length === 0 ? (
+            <View style={styles.photoEmptyCard}>
+              <View style={styles.photoEmptyIcon}>
+                <Images
+                  size={30}
+                  strokeWidth={1.9}
+                  color={theme.colors.primary}
+                />
+              </View>
+
+              <Text style={styles.photoEmptyTitle}>
+                Nenhuma foto registrada
+              </Text>
+
+              <Text style={styles.photoEmptyText}>
+                Adicione uma foto para começar seu histórico visual de
+                progresso.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.photoGrid}>
+              {photos.map((photo) => (
+                <View key={photo.id} style={styles.photoCard}>
+                  {accessToken ? (
+                    <Image
+                      source={getProgressPhotoSource(accessToken, photo.id)}
+                      style={styles.progressPhoto}
+                      resizeMode="cover"
+                      accessibilityLabel={`Foto de progresso registrada em ${formatDate(photo.recordedAt)}`}
+                    />
+                  ) : (
+                    <View style={styles.photoUnavailable}>
+                      <Images
+                        size={26}
+                        strokeWidth={1.9}
+                        color={theme.colors.textMuted}
+                      />
+                    </View>
+                  )}
+
+                  <View style={styles.photoMeta}>
+                    <Text style={styles.photoDate}>
+                      {formatDate(photo.recordedAt)}
+                    </Text>
+
+                    <Text style={styles.photoPrivacy}>Privada</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
 
         <View style={styles.performanceSection}>
           <View style={styles.sectionHeader}>
@@ -581,6 +817,10 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       opacity: 0.72,
     },
 
+    buttonDisabled: {
+      opacity: 0.55,
+    },
+
     header: {
       marginBottom: theme.spacing.xl,
     },
@@ -768,6 +1008,133 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontSize: theme.typography.size.small,
       lineHeight: theme.typography.lineHeight.small,
       textAlign: "center",
+    },
+
+    photoSection: {
+      marginTop: theme.spacing.xl,
+      paddingTop: theme.spacing.xl,
+      paddingBottom: theme.spacing["2xl"],
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.divider,
+    },
+
+    privacyNotice: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+      padding: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+    },
+
+    privacyNoticeText: {
+      flex: 1,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    addPhotoButton: {
+      minHeight: 52,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.primary,
+    },
+
+    addPhotoButtonText: {
+      color: theme.colors.textOnPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.body,
+    },
+
+    photoEmptyCard: {
+      alignItems: "center",
+      paddingHorizontal: theme.spacing.xl,
+      paddingVertical: theme.spacing["2xl"],
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.xl,
+      backgroundColor: theme.colors.surface,
+    },
+
+    photoEmptyIcon: {
+      width: 62,
+      height: 62,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: theme.spacing.lg,
+      borderRadius: 20,
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    photoEmptyTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.bodyLarge,
+      textAlign: "center",
+    },
+
+    photoEmptyText: {
+      marginTop: theme.spacing.sm,
+      color: theme.colors.textMuted,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+      textAlign: "center",
+    },
+
+    photoGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.md,
+    },
+
+    photoCard: {
+      width: "47.8%",
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+    },
+
+    progressPhoto: {
+      width: "100%",
+      aspectRatio: 0.82,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    photoUnavailable: {
+      width: "100%",
+      aspectRatio: 0.82,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    photoMeta: {
+      padding: theme.spacing.md,
+    },
+
+    photoDate: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+
+    photoPrivacy: {
+      marginTop: 3,
+      color: theme.colors.success,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.caption,
     },
 
     performanceSection: {

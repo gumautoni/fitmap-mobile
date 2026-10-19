@@ -1,5 +1,9 @@
+import { File, UploadType } from "expo-file-system";
+
 import { environment } from "../config/environment";
-import { apiClient } from "./apiClient";
+import { ApiClientError, apiClient } from "./apiClient";
+
+const PHOTO_UPLOAD_TIMEOUT_MS = 30_000;
 
 export type LoadUnit = "kg" | "lb";
 
@@ -36,6 +40,21 @@ export interface ProgressPhoto {
   mediaType: string;
   recordedAt: string;
   createdAt: string;
+}
+
+export interface UploadProgressPhotoInput {
+  uri: string;
+  mediaType: string;
+  fileName?: string | null;
+  recordedAt: string;
+  workoutSessionId?: string | null;
+}
+
+interface ApiErrorBody {
+  error?: {
+    code?: string;
+    message?: string;
+  };
 }
 
 interface BasicProgressStatisticsResponse {
@@ -120,6 +139,42 @@ function normalizeProgressPhoto(photo: ProgressPhotoResponse): ProgressPhoto {
   };
 }
 
+function parseUploadBody(body: string): unknown {
+  if (!body) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
+function getUploadErrorDetails(payload: unknown): {
+  code: string | null;
+  message: string;
+} {
+  if (typeof payload === "object" && payload !== null && "error" in payload) {
+    const { error } = payload as ApiErrorBody;
+
+    if (error && typeof error === "object") {
+      return {
+        code: typeof error.code === "string" ? error.code : null,
+        message:
+          typeof error.message === "string"
+            ? error.message
+            : "The request could not be completed.",
+      };
+    }
+  }
+
+  return {
+    code: null,
+    message: "The request could not be completed.",
+  };
+}
+
 export async function getProgressStatistics(
   accessToken: string,
 ): Promise<BasicProgressStatistics> {
@@ -157,6 +212,64 @@ export async function getProgressPhotos(
   );
 
   return response.map(normalizeProgressPhoto);
+}
+
+export async function uploadProgressPhoto(
+  accessToken: string,
+  input: UploadProgressPhotoInput,
+): Promise<ProgressPhoto> {
+  const file = new File(input.uri);
+
+  const parameters: Record<string, string> = {
+    recorded_at: input.recordedAt,
+  };
+
+  if (input.workoutSessionId) {
+    parameters.workout_session_id = input.workoutSessionId;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    PHOTO_UPLOAD_TIMEOUT_MS,
+  );
+
+  try {
+    const result = await file.upload(`${environment.apiUrl}/progress/photos`, {
+      httpMethod: "POST",
+      uploadType: UploadType.MULTIPART,
+      fieldName: "photo",
+      mimeType: input.mediaType,
+      parameters,
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      signal: controller.signal,
+    });
+
+    const payload = parseUploadBody(result.body);
+
+    if (result.status < 200 || result.status >= 300) {
+      const error = getUploadErrorDetails(payload);
+
+      throw new ApiClientError(error.message, result.status, error.code);
+    }
+
+    return normalizeProgressPhoto(payload as ProgressPhotoResponse);
+  } catch (error) {
+    if (error instanceof ApiClientError) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("The request timed out.");
+    }
+
+    throw new Error("The backend could not be reached.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export function getProgressPhotoSource(
