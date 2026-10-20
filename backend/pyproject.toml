@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.20.0",
+    "boto3>=1.43.114",
     "email-validator>=2.3.0",
     "fastapi>=0.141.1",
     "httpx2>=2.13.0",
@@ -16,6 +17,7 @@ dependencies = [
     "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.15.0",
     "pyjwt>=2.15.1",
+    "python-multipart>=0.0.32",
     "sqlalchemy>=2.0,<2.1",
     "uvicorn[standard]>=0.53.0",
 ]
@@ -29,6 +31,7 @@ module-name = "fitmap"
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]>=1.43.114",
     "pyright>=1.1.414",
     "pytest>=9.1.1",
     "ruff>=0.16.8",
