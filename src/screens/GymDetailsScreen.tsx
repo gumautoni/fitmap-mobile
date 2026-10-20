@@ -8,13 +8,14 @@ import {
   Dumbbell,
   ExternalLink,
   Globe2,
+  Heart,
   Images,
   MapPin,
   Navigation,
   Phone,
   ShieldCheck,
 } from "lucide-react-native";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -28,9 +29,17 @@ import {
   View,
 } from "react-native";
 
+import { AuthContext } from "../context/AuthContext";
 import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
-import { getGymDetails, type GymDetails } from "../services/gyms";
+import {
+  addFavoriteGym,
+  getFavoriteGyms,
+  getGymDetails,
+  removeFavoriteGym,
+  type FavoriteGym,
+  type GymDetails,
+} from "../services/gyms";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 type Props = AppStackScreenProps<"DetalhesAcademia">;
@@ -63,7 +72,41 @@ function getDetailsErrorMessage(error: unknown): string {
   return "Não foi possível conectar ao backend do FitMap. Verifique a conexão e tente novamente.";
 }
 
+function getFavoriteErrorMessage(error: unknown): string {
+  if (error instanceof ApiClientError) {
+    if (error.code === "gym_provider_unavailable") {
+      return "O serviço de academias está indisponível para salvar este favorito.";
+    }
+
+    return "Não foi possível atualizar o favorito desta academia.";
+  }
+
+  if (error instanceof Error) {
+    if (error.message === "The request timed out.") {
+      return "A atualização do favorito demorou mais do que o esperado.";
+    }
+
+    if (error.message === "The backend could not be reached.") {
+      return "Não foi possível conectar ao servidor para atualizar o favorito.";
+    }
+
+    if (error.message === "Sua sessão expirou. Entre novamente.") {
+      return error.message;
+    }
+  }
+
+  return "Não foi possível atualizar o favorito desta academia.";
+}
+
 export default function GymDetailsScreen({ navigation, route }: Props) {
+  const auth = useContext(AuthContext);
+
+  if (!auth) {
+    throw new Error("GymDetailsScreen must be rendered inside AuthProvider.");
+  }
+
+  const { runAuthenticatedRequest } = auth;
+
   const { gymId, distanceKm = null } = route.params;
 
   const { width: windowWidth } = useWindowDimensions();
@@ -75,12 +118,18 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
   const galleryWidth = Math.max(windowWidth - theme.spacing.xl * 2, 0);
 
   const [gym, setGym] = useState<GymDetails | null>(null);
-
   const [loading, setLoading] = useState(true);
-
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  const [favorite, setFavorite] = useState<FavoriteGym | null>(null);
+  const [favoriteLoading, setFavoriteLoading] = useState(true);
+  const [favoriteUpdating, setFavoriteUpdating] = useState(false);
+  const [favoriteStatusReady, setFavoriteStatusReady] = useState(false);
+  const [favoriteErrorMessage, setFavoriteErrorMessage] = useState<
+    string | null
+  >(null);
+  const [favoriteReloadVersion, setFavoriteReloadVersion] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -114,6 +163,94 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
       active = false;
     };
   }, [gymId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadFavoriteStatus(): Promise<void> {
+      try {
+        setFavoriteLoading(true);
+        setFavoriteStatusReady(false);
+        setFavoriteErrorMessage(null);
+
+        const favorites = await runAuthenticatedRequest((accessToken) =>
+          getFavoriteGyms(accessToken),
+        );
+
+        if (active) {
+          setFavorite(
+            favorites.find((item) => item.externalId === gymId) ?? null,
+          );
+          setFavoriteStatusReady(true);
+        }
+      } catch (error: unknown) {
+        if (active) {
+          setFavorite(null);
+          setFavoriteStatusReady(false);
+          setFavoriteErrorMessage(getFavoriteErrorMessage(error));
+        }
+      } finally {
+        if (active) {
+          setFavoriteLoading(false);
+        }
+      }
+    }
+
+    void loadFavoriteStatus();
+
+    return () => {
+      active = false;
+    };
+  }, [favoriteReloadVersion, gymId, runAuthenticatedRequest]);
+
+  async function toggleFavorite(): Promise<void> {
+    if (!gym || favoriteLoading || favoriteUpdating || !favoriteStatusReady) {
+      return;
+    }
+
+    try {
+      setFavoriteUpdating(true);
+      setFavoriteErrorMessage(null);
+
+      if (favorite) {
+        await runAuthenticatedRequest((accessToken) =>
+          removeFavoriteGym(accessToken, favorite.gymId),
+        );
+
+        setFavorite(null);
+
+        return;
+      }
+
+      const createdFavorite = await runAuthenticatedRequest((accessToken) =>
+        addFavoriteGym(accessToken, gym.id),
+      );
+
+      setFavorite(createdFavorite);
+    } catch (error: unknown) {
+      if (
+        error instanceof ApiClientError &&
+        error.code === "favorite_gym_already_exists"
+      ) {
+        setFavoriteReloadVersion((version) => version + 1);
+
+        return;
+      }
+
+      if (
+        error instanceof ApiClientError &&
+        error.code === "favorite_gym_not_found"
+      ) {
+        setFavorite(null);
+
+        return;
+      }
+
+      setFavoriteErrorMessage(getFavoriteErrorMessage(error));
+    } finally {
+      setFavoriteUpdating(false);
+    }
+  }
 
   async function openRoute(): Promise<void> {
     if (!gym) {
@@ -235,12 +372,12 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
   }
 
   const hasRoute = Boolean(gym.coordinates || gym.address);
-
   const hasContactActions = Boolean(gym.phone || gym.website);
-
   const hasImages = gym.imageUrls.length > 0;
-
   const hasMultipleImages = gym.imageUrls.length > 1;
+
+  const favoriteActionDisabled =
+    favoriteLoading || favoriteUpdating || !favoriteStatusReady;
 
   return (
     <ScrollView
@@ -312,6 +449,19 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
               <View style={styles.liveDot} />
 
               <Text style={styles.heroMetaText}>No mapa</Text>
+            </View>
+          ) : null}
+
+          {favorite ? (
+            <View style={styles.heroMetaPill}>
+              <Heart
+                size={13}
+                strokeWidth={2.3}
+                color={theme.colors.techAccent}
+                fill={theme.colors.techAccent}
+              />
+
+              <Text style={styles.heroMetaText}>Favorita</Text>
             </View>
           ) : null}
         </View>
@@ -419,6 +569,104 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
       ) : null}
 
       <View style={styles.actionsSection}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            favorite
+              ? "Remover academia dos favoritos"
+              : "Adicionar academia aos favoritos"
+          }
+          onPress={() => {
+            void toggleFavorite();
+          }}
+          disabled={favoriteActionDisabled}
+          style={({ pressed }) => [
+            styles.favoriteAction,
+            favorite && styles.favoriteActionActive,
+            favoriteActionDisabled && styles.actionDisabled,
+            pressed && !favoriteActionDisabled && styles.buttonPressed,
+          ]}
+        >
+          <View
+            style={[
+              styles.favoriteActionIcon,
+              favorite && styles.favoriteActionIconActive,
+            ]}
+          >
+            {favoriteLoading || favoriteUpdating ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Heart
+                size={20}
+                strokeWidth={2.3}
+                color={theme.colors.primary}
+                fill={favorite ? theme.colors.primary : "none"}
+              />
+            )}
+          </View>
+
+          <View style={styles.favoriteActionCopy}>
+            <Text style={styles.favoriteActionTitle}>
+              {favoriteLoading
+                ? "Sincronizando favorito"
+                : favoriteUpdating
+                  ? favorite
+                    ? "Removendo dos favoritos..."
+                    : "Salvando nos favoritos..."
+                  : favorite
+                    ? "Remover dos favoritos"
+                    : "Adicionar aos favoritos"}
+            </Text>
+
+            <Text style={styles.favoriteActionText}>
+              {favorite
+                ? "Esta academia está salva na sua conta FitMap."
+                : "Salve esta academia para encontrá-la rapidamente depois."}
+            </Text>
+          </View>
+
+          {!favoriteLoading && !favoriteUpdating ? (
+            <Heart
+              size={18}
+              strokeWidth={2.3}
+              color={theme.colors.primary}
+              fill={favorite ? theme.colors.primary : "none"}
+            />
+          ) : null}
+        </Pressable>
+
+        {favoriteErrorMessage ? (
+          <View style={styles.favoriteErrorBox}>
+            <AlertCircle
+              size={18}
+              strokeWidth={2.2}
+              color={theme.colors.danger}
+            />
+
+            <View style={styles.favoriteErrorCopy}>
+              <Text style={styles.favoriteErrorText}>
+                {favoriteErrorMessage}
+              </Text>
+
+              {!favoriteStatusReady ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tentar sincronizar favorito novamente"
+                  onPress={() => {
+                    setFavoriteReloadVersion((version) => version + 1);
+                  }}
+                  style={({ pressed }) => [
+                    styles.favoriteRetryButton,
+                    pressed && styles.secondaryActionPressed,
+                  ]}
+                >
+                  <Text style={styles.favoriteRetryText}>Tentar novamente</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        ) : null}
+
         {hasRoute ? (
           <Pressable
             accessibilityRole="button"
@@ -974,6 +1222,95 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     actionsSection: {
       gap: theme.spacing.md,
       marginBottom: theme.spacing["3xl"],
+    },
+
+    favoriteAction: {
+      minHeight: 72,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+
+    favoriteActionActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    favoriteActionIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    favoriteActionIconActive: {
+      backgroundColor: theme.colors.surface,
+    },
+
+    favoriteActionCopy: {
+      flex: 1,
+    },
+
+    favoriteActionTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.body,
+    },
+
+    favoriteActionText: {
+      marginTop: 2,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.caption,
+      lineHeight: theme.typography.lineHeight.caption,
+    },
+
+    actionDisabled: {
+      opacity: 0.62,
+    },
+
+    favoriteErrorBox: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+      padding: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.mode === "dark" ? "#321B20" : "#FEF2F2",
+      borderWidth: 1,
+      borderColor: theme.mode === "dark" ? "#593039" : "#FECACA",
+    },
+
+    favoriteErrorCopy: {
+      flex: 1,
+    },
+
+    favoriteErrorText: {
+      color: theme.colors.danger,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    favoriteRetryButton: {
+      alignSelf: "flex-start",
+      marginTop: theme.spacing.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+    },
+
+    favoriteRetryText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.caption,
     },
 
     primaryAction: {
