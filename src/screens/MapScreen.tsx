@@ -1,18 +1,27 @@
+import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
 import {
   AlertCircle,
   ArrowRight,
   Dumbbell,
+  Heart,
   MapPin,
   Navigation,
   Search,
 } from "lucide-react-native";
-import React, { useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   FlatList,
   Keyboard,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,11 +29,14 @@ import {
 } from "react-native";
 import MapView, { Marker, type Region } from "react-native-maps";
 
+import { AuthContext } from "../context/AuthContext";
 import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
+  getFavoriteGyms,
   searchGymsByLocation,
   searchNearbyGyms,
+  type FavoriteGym,
   type GymSearchResult,
 } from "../services/gyms";
 import { useAppTheme } from "../theme/ThemeProvider";
@@ -87,6 +99,24 @@ function getSearchErrorMessage(error: unknown): string {
   return "Não foi possível conectar ao backend do FitMap. Verifique a conexão e tente novamente.";
 }
 
+function getFavoritesErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message === "The backend could not be reached.") {
+      return "Não foi possível conectar ao servidor para carregar seus favoritos.";
+    }
+
+    if (error.message === "The request timed out.") {
+      return "A sincronização dos favoritos demorou mais do que o esperado.";
+    }
+
+    if (error.message === "Sua sessão expirou. Entre novamente.") {
+      return error.message;
+    }
+  }
+
+  return "Não foi possível sincronizar suas academias favoritas.";
+}
+
 function formatDistance(distanceKm: number): string {
   if (distanceKm < 1) {
     return `${Math.round(distanceKm * 1000)} m de distância`;
@@ -96,11 +126,21 @@ function formatDistance(distanceKm: number): string {
 }
 
 export default function MapScreen({ navigation }: Props) {
+  const auth = useContext(AuthContext);
+
+  if (!auth) {
+    throw new Error("MapScreen must be rendered inside AuthProvider.");
+  }
+
+  const { runAuthenticatedRequest } = auth;
+
   const { theme } = useAppTheme();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const mapRef = useRef<MapView | null>(null);
+
+  const favoritesRequestIdRef = useRef(0);
 
   const [query, setQuery] = useState("");
   const [gyms, setGyms] = useState<GymSearchResult[]>([]);
@@ -112,11 +152,60 @@ export default function MapScreen({ navigation }: Props) {
   const [userCoordinates, setUserCoordinates] =
     useState<UserCoordinates | null>(null);
 
+  const [favoriteGyms, setFavoriteGyms] = useState<FavoriteGym[]>([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(true);
+  const [favoritesErrorMessage, setFavoritesErrorMessage] = useState<
+    string | null
+  >(null);
+
   const loading = loadingAction !== null;
 
   const mappableGyms = useMemo(
     () => gyms.filter((gym) => gym.coordinates !== null),
     [gyms],
+  );
+
+  const favoriteExternalIds = useMemo(
+    () => new Set(favoriteGyms.map((favorite) => favorite.externalId)),
+    [favoriteGyms],
+  );
+
+  const loadFavorites = useCallback(async (): Promise<void> => {
+    const requestId = favoritesRequestIdRef.current + 1;
+
+    favoritesRequestIdRef.current = requestId;
+
+    try {
+      setFavoritesLoading(true);
+      setFavoritesErrorMessage(null);
+
+      const favorites = await runAuthenticatedRequest((accessToken) =>
+        getFavoriteGyms(accessToken),
+      );
+
+      if (favoritesRequestIdRef.current === requestId) {
+        setFavoriteGyms(favorites);
+      }
+    } catch (error: unknown) {
+      if (favoritesRequestIdRef.current === requestId) {
+        setFavoriteGyms([]);
+        setFavoritesErrorMessage(getFavoritesErrorMessage(error));
+      }
+    } finally {
+      if (favoritesRequestIdRef.current === requestId) {
+        setFavoritesLoading(false);
+      }
+    }
+  }, [runAuthenticatedRequest]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadFavorites();
+
+      return () => {
+        favoritesRequestIdRef.current += 1;
+      };
+    }, [loadFavorites]),
   );
 
   function focusSearchResults(
@@ -269,6 +358,13 @@ export default function MapScreen({ navigation }: Props) {
     });
   }
 
+  function handleOpenFavoriteGym(favorite: FavoriteGym): void {
+    navigation.navigate("DetalhesAcademia", {
+      gymId: favorite.externalId,
+      distanceKm: null,
+    });
+  }
+
   function getResultsTitle(): string {
     if (loadingAction === "location") {
       return "Buscando academias próximas...";
@@ -302,6 +398,148 @@ export default function MapScreen({ navigation }: Props) {
           Descubra academias por região ou encontre opções próximas da sua
           localização.
         </Text>
+      </View>
+
+      <View style={styles.favoritesSection}>
+        <View style={styles.favoritesHeader}>
+          <View style={styles.favoritesHeaderCopy}>
+            <Text style={styles.favoritesEyebrow}>FAVORITOS</Text>
+
+            <Text style={styles.favoritesTitle}>Suas academias salvas</Text>
+          </View>
+
+          {!favoritesLoading && !favoritesErrorMessage ? (
+            <View style={styles.favoritesCount}>
+              <Heart
+                size={13}
+                strokeWidth={2.3}
+                color={theme.colors.primary}
+                fill={favoriteGyms.length > 0 ? theme.colors.primary : "none"}
+              />
+
+              <Text style={styles.favoritesCountText}>
+                {favoriteGyms.length}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {favoritesLoading ? (
+          <View style={styles.favoriteStateCard}>
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+
+            <View style={styles.favoriteStateCopy}>
+              <Text style={styles.favoriteStateTitle}>
+                Sincronizando favoritos
+              </Text>
+
+              <Text style={styles.favoriteStateText}>
+                Carregando suas academias salvas.
+              </Text>
+            </View>
+          </View>
+        ) : favoritesErrorMessage ? (
+          <View style={styles.favoriteErrorCard}>
+            <AlertCircle
+              size={19}
+              strokeWidth={2.2}
+              color={theme.colors.danger}
+            />
+
+            <View style={styles.favoriteStateCopy}>
+              <Text style={styles.favoriteErrorTitle}>
+                Favoritos indisponíveis
+              </Text>
+
+              <Text style={styles.favoriteStateText}>
+                {favoritesErrorMessage}
+              </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Tentar carregar favoritos novamente"
+                onPress={() => {
+                  void loadFavorites();
+                }}
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.retryButtonPressed,
+                ]}
+              >
+                <Text style={styles.retryButtonText}>Tentar novamente</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : favoriteGyms.length === 0 ? (
+          <View style={styles.favoriteStateCard}>
+            <View style={styles.favoriteEmptyIcon}>
+              <Heart size={19} strokeWidth={2.2} color={theme.colors.primary} />
+            </View>
+
+            <View style={styles.favoriteStateCopy}>
+              <Text style={styles.favoriteStateTitle}>
+                Nenhuma academia favorita
+              </Text>
+
+              <Text style={styles.favoriteStateText}>
+                Abra os detalhes de uma academia e salve as opções que deseja
+                encontrar novamente.
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.favoritesScrollContent}
+          >
+            {favoriteGyms.map((favorite) => (
+              <Pressable
+                key={favorite.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Abrir academia favorita ${favorite.name}`}
+                onPress={() => handleOpenFavoriteGym(favorite)}
+                style={({ pressed }) => [
+                  styles.favoriteCard,
+                  pressed && styles.favoriteCardPressed,
+                ]}
+              >
+                <View style={styles.favoriteCardHeader}>
+                  <View style={styles.favoriteCardIcon}>
+                    <Heart
+                      size={17}
+                      strokeWidth={2.2}
+                      color={theme.colors.primary}
+                      fill={theme.colors.primary}
+                    />
+                  </View>
+
+                  <View style={styles.favoriteCardCopy}>
+                    <Text style={styles.favoriteCardName} numberOfLines={2}>
+                      {favorite.name}
+                    </Text>
+
+                    <Text style={styles.favoriteCardAddress} numberOfLines={2}>
+                      {favorite.address ?? "Endereço não informado"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.favoriteCardFooter}>
+                  <Text style={styles.favoriteCardFooterText}>
+                    Ver detalhes
+                  </Text>
+
+                  <ArrowRight
+                    size={15}
+                    strokeWidth={2.3}
+                    color={theme.colors.primary}
+                  />
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       <View style={styles.searchArea}>
@@ -550,6 +788,7 @@ export default function MapScreen({ navigation }: Props) {
       contentContainerStyle={styles.listContent}
       renderItem={({ item }) => {
         const isSelected = selectedGymId === item.id;
+        const isFavorite = favoriteExternalIds.has(item.id);
 
         const distanceKm =
           userCoordinates && item.coordinates
@@ -592,9 +831,28 @@ export default function MapScreen({ navigation }: Props) {
                   {item.name}
                 </Text>
 
-                {isSelected ? (
-                  <View style={styles.selectedBadge}>
-                    <Text style={styles.selectedBadgeText}>Selecionada</Text>
+                {isSelected || isFavorite ? (
+                  <View style={styles.gymBadgesRow}>
+                    {isSelected ? (
+                      <View style={styles.selectedBadge}>
+                        <Text style={styles.selectedBadgeText}>
+                          Selecionada
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {isFavorite ? (
+                      <View style={styles.favoriteBadge}>
+                        <Heart
+                          size={11}
+                          strokeWidth={2.3}
+                          color={theme.colors.primary}
+                          fill={theme.colors.primary}
+                        />
+
+                        <Text style={styles.favoriteBadgeText}>Favorita</Text>
+                      </View>
+                    ) : null}
                   </View>
                 ) : null}
               </View>
@@ -775,6 +1033,207 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       maxWidth: 330,
     },
 
+    favoritesSection: {
+      marginBottom: theme.spacing["2xl"],
+    },
+
+    favoritesHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      marginBottom: theme.spacing.md,
+    },
+
+    favoritesHeaderCopy: {
+      flex: 1,
+    },
+
+    favoritesEyebrow: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 10,
+      letterSpacing: 1.7,
+      marginBottom: 3,
+    },
+
+    favoritesTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.extrabold,
+      fontSize: theme.typography.size.sectionTitle,
+      lineHeight: theme.typography.lineHeight.sectionTitle,
+    },
+
+    favoritesCount: {
+      minWidth: 44,
+      height: 38,
+      paddingHorizontal: 11,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      borderRadius: theme.radii.full,
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    favoritesCountText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+
+    favoriteStateCard: {
+      minHeight: 82,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      padding: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+
+    favoriteErrorCard: {
+      minHeight: 82,
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.md,
+      padding: theme.spacing.lg,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.mode === "dark" ? "#321B20" : "#FEF2F2",
+      borderWidth: 1,
+      borderColor: theme.mode === "dark" ? "#593039" : "#FECACA",
+    },
+
+    favoriteEmptyIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    favoriteStateCopy: {
+      flex: 1,
+    },
+
+    favoriteStateTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      marginBottom: 3,
+    },
+
+    favoriteErrorTitle: {
+      color: theme.colors.danger,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      marginBottom: 3,
+    },
+
+    favoriteStateText: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.caption,
+      lineHeight: theme.typography.lineHeight.caption,
+    },
+
+    retryButton: {
+      alignSelf: "flex-start",
+      marginTop: theme.spacing.sm,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+
+    retryButtonPressed: {
+      opacity: 0.72,
+    },
+
+    retryButtonText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.caption,
+    },
+
+    favoritesScrollContent: {
+      paddingRight: theme.spacing.sm,
+    },
+
+    favoriteCard: {
+      width: 240,
+      padding: theme.spacing.md,
+      marginRight: theme.spacing.md,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+
+    favoriteCardPressed: {
+      opacity: 0.8,
+      transform: [
+        {
+          scale: 0.99,
+        },
+      ],
+    },
+
+    favoriteCardHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: theme.spacing.sm,
+    },
+
+    favoriteCardIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 13,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    favoriteCardCopy: {
+      flex: 1,
+    },
+
+    favoriteCardName: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    favoriteCardAddress: {
+      marginTop: 4,
+      color: theme.colors.textMuted,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.caption,
+      lineHeight: theme.typography.lineHeight.caption,
+    },
+
+    favoriteCardFooter: {
+      marginTop: theme.spacing.md,
+      paddingTop: theme.spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.divider,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      gap: 5,
+    },
+
+    favoriteCardFooterText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.caption,
+    },
+
     searchArea: {
       marginBottom: theme.spacing.xl,
     },
@@ -941,7 +1400,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       justifyContent: "center",
       backgroundColor: "rgba(92, 200, 255, 0.22)",
       borderWidth: 1,
-      borderColor: "rgba(92, 200, 255, 0.50)",
+      borderColor: "rgba(92, 200,255,0.50)",
     },
 
     userMarkerInner: {
@@ -1156,8 +1615,14 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       lineHeight: theme.typography.lineHeight.cardTitle,
     },
 
-    selectedBadge: {
+    gymBadgesRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 6,
       marginTop: 6,
+    },
+
+    selectedBadge: {
       paddingHorizontal: 8,
       paddingVertical: 4,
       borderRadius: theme.radii.full,
@@ -1165,6 +1630,22 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     selectedBadgeText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 10,
+    },
+
+    favoriteBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: theme.radii.full,
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    favoriteBadgeText: {
       color: theme.colors.primary,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: 10,

@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine, pool
 
+import fitmap.gyms.models
 import fitmap.identity.models
 import fitmap.progress.models
 import fitmap.training.models  # noqa: F401
