@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 
 from fitmap.api.auth import router as auth_router
+from fitmap.api.body_metrics import router as body_metrics_router
+from fitmap.api.fitness_goals import router as fitness_goals_router
 from fitmap.api.gyms import router as gyms_router
 from fitmap.api.profile import router as profile_router
 from fitmap.api.progress import router as progress_router
@@ -18,6 +20,8 @@ api_router.include_router(auth_router)
 api_router.include_router(gyms_router)
 api_router.include_router(profile_router)
 api_router.include_router(progress_router)
+api_router.include_router(body_metrics_router)
+api_router.include_router(fitness_goals_router)
 api_router.include_router(training_router)
 api_router.include_router(training_history_router)
 api_router.include_router(training_sessions_router)
