@@ -25,6 +25,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import BodyMetricsSection from "../components/BodyMetricsSection";
 import { AuthContext } from "../context/AuthContext";
 import { ApiClientError } from "../services/apiClient";
 import {
@@ -467,6 +468,8 @@ export default function ProgressScreen() {
             </Text>
           </View>
         ) : null}
+
+        <BodyMetricsSection />
 
         <View style={styles.photoSection}>
           <View style={styles.sectionHeader}>
