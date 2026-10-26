@@ -3,6 +3,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from fitmap.gyms.models import FavoriteGym, Gym, GymExternalReference
@@ -34,11 +35,11 @@ class FavoriteGymView:
     favorited_at: datetime
 
 
-def resolve_gym_identity(
+def _get_existing_gym(
     *,
     db_session: Session,
     provider_gym: GymSearchResult,
-) -> Gym:
+) -> Gym | None:
     external_reference = db_session.scalar(
         select(GymExternalReference).where(
             GymExternalReference.provider_name == provider_gym.provider_name,
@@ -46,39 +47,78 @@ def resolve_gym_identity(
         )
     )
 
-    if external_reference is not None:
-        gym = db_session.get(
-            Gym,
-            external_reference.gym_id,
+    if external_reference is None:
+        return None
+
+    gym = db_session.get(
+        Gym,
+        external_reference.gym_id,
+    )
+
+    if gym is None:
+        raise RuntimeError(
+            "Gym external reference points to a missing gym.",
         )
 
-        if gym is None:
-            raise RuntimeError(
-                "Gym external reference points to a missing gym.",
-            )
+    return gym
 
-        return gym
+
+def resolve_gym_identity(
+    *,
+    db_session: Session,
+    provider_gym: GymSearchResult,
+) -> Gym:
+    existing_gym = _get_existing_gym(
+        db_session=db_session,
+        provider_gym=provider_gym,
+    )
+
+    if existing_gym is not None:
+        return existing_gym
 
     coordinates = provider_gym.coordinates
 
-    gym = Gym(
-        name=provider_gym.name,
-        address=provider_gym.address,
-        latitude=(coordinates.latitude if coordinates is not None else None),
-        longitude=(coordinates.longitude if coordinates is not None else None),
-    )
+    try:
+        with db_session.begin_nested():
+            gym = Gym(
+                name=provider_gym.name,
+                address=provider_gym.address,
+                latitude=(coordinates.latitude if coordinates is not None else None),
+                longitude=(coordinates.longitude if coordinates is not None else None),
+            )
 
-    db_session.add(gym)
-    db_session.flush()
+            db_session.add(gym)
+            db_session.flush()
 
-    external_reference = GymExternalReference(
-        gym_id=gym.id,
-        provider_name=provider_gym.provider_name,
-        external_id=provider_gym.external_id,
-    )
+            external_reference = GymExternalReference(
+                gym_id=gym.id,
+                provider_name=provider_gym.provider_name,
+                external_id=provider_gym.external_id,
+            )
 
-    db_session.add(external_reference)
-    db_session.flush()
+            db_session.add(external_reference)
+            db_session.flush()
+
+    except IntegrityError as exc:
+        diagnostic = getattr(exc.orig, "diag", None)
+        constraint_name = getattr(
+            diagnostic,
+            "constraint_name",
+            None,
+        )
+
+        if constraint_name != "uq_gym_external_references_provider_external_id":
+            raise
+
+        existing_gym = _get_existing_gym(
+            db_session=db_session,
+            provider_gym=provider_gym,
+        )
+
+        if existing_gym is None:
+            raise
+
+        return existing_gym
 
     return gym
 

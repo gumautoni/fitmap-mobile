@@ -20,6 +20,7 @@ from fitmap.gyms.favorites import (
     get_favorite_gym_view,
     list_favorite_gyms,
     remove_favorite_gym,
+    resolve_gym_identity,
 )
 from fitmap.gyms.providers import (
     Coordinates,
@@ -28,7 +29,7 @@ from fitmap.gyms.providers import (
     GymProviderError,
     GymSearchResult,
 )
-from fitmap.gyms.schemas import FavoriteGymResponse
+from fitmap.gyms.schemas import FavoriteGymResponse, GymIdentityResponse
 
 router = APIRouter(
     prefix="/gyms",
@@ -293,3 +294,45 @@ async def create_favorite_gym(
     db_session.commit()
 
     return _favorite_response(favorite_view)
+
+
+@router.post(
+    "/{external_id}/identity",
+    response_model=GymIdentityResponse,
+)
+async def get_or_create_gym_identity(
+    external_id: GymExternalIdPath,
+    identity: CurrentIdentityDependency,
+    db_session: DatabaseSessionDependency,
+    provider: GymProviderDependency,
+) -> GymIdentityResponse:
+    try:
+        details = await provider.get_details(
+            external_id=external_id,
+        )
+    except GymProviderError as exc:
+        raise ApiError(
+            status_code=502,
+            code="gym_provider_unavailable",
+            message="Gym provider is unavailable.",
+        ) from exc
+
+    if details is None:
+        raise ApiError(
+            status_code=404,
+            code="gym_not_found",
+            message="Gym details were not found.",
+        )
+
+    gym = resolve_gym_identity(
+        db_session=db_session,
+        provider_gym=details,
+    )
+
+    db_session.commit()
+
+    return GymIdentityResponse(
+        gym_id=gym.id,
+        provider_name=details.provider_name,
+        external_id=details.external_id,
+    )

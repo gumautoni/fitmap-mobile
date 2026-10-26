@@ -15,3 +15,9 @@ class FavoriteGymResponse(BaseModel):
     coordinates: Coordinates | None = None
     address: str | None = None
     favorited_at: datetime
+
+
+class GymIdentityResponse(BaseModel):
+    gym_id: UUID
+    provider_name: str
+    external_id: str
