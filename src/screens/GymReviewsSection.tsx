@@ -18,7 +18,9 @@ import {
   createGymReview,
   getGymReviews,
   getMyGymReview,
+  removeGymReview,
   resolveGymIdentity,
+  updateGymReview,
   type CreateGymReviewInput,
   type GymReview,
   type GymReviewList,
@@ -78,6 +80,44 @@ function getCreationErrorMessage(error: unknown): string {
 
   return "Não foi possível publicar sua avaliação. Verifique a conexão.";
 }
+function getUpdateErrorMessage(error: unknown): string {
+  if (error instanceof ApiClientError) {
+    if (error.code === "request_validation_error") {
+      return "Confira a nota e o comentário antes de salvar.";
+    }
+
+    return "Não foi possível atualizar sua avaliação. Tente novamente.";
+  }
+
+  if (error instanceof Error) {
+    if (error.message === "Sua sessão expirou. Entre novamente.") {
+      return error.message;
+    }
+
+    if (error.message === "The request timed out.") {
+      return "A atualização demorou mais do que o esperado. Confira sua avaliação antes de tentar novamente.";
+    }
+  }
+
+  return "Não foi possível atualizar sua avaliação. Verifique a conexão.";
+}
+function getDeletionErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message === "Sua sessão expirou. Entre novamente.") {
+      return error.message;
+    }
+
+    if (error.message === "The request timed out.") {
+      return "A exclusão demorou mais do que o esperado. Confira sua avaliação antes de tentar novamente.";
+    }
+  }
+
+  if (error instanceof ApiClientError) {
+    return "Não foi possível excluir sua avaliação. Tente novamente.";
+  }
+
+  return "Não foi possível excluir sua avaliação. Verifique a conexão.";
+}
 function RatingStars({ rating, color }: { rating: number; color: string }) {
   return (
     <View style={{ flexDirection: "row", gap: 3 }}>
@@ -108,6 +148,12 @@ export default function GymReviewsSection({
   const [resolvedGymId, setResolvedGymId] = useState<string | null>(null);
   const [myReview, setMyReview] = useState<GymReview | null>(null);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deletingReview, setDeletingReview] = useState(false);
+  const [reviewDeleteError, setReviewDeleteError] = useState<string | null>(
+    null,
+  );
   const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(
     null,
   );
@@ -121,6 +167,9 @@ export default function GymReviewsSection({
       setReviewData(null);
       setResolvedGymId(null);
       setMyReview(null);
+      setIsEditing(false);
+      setConfirmingDelete(false);
+      setReviewDeleteError(null);
       setReviewSubmitError(null);
 
       try {
@@ -188,6 +237,74 @@ export default function GymReviewsSection({
       setReviewSubmitError(getCreationErrorMessage(error));
     } finally {
       setReviewSubmitting(false);
+    }
+  }
+  async function submitEditedReview(
+    input: CreateGymReviewInput,
+  ): Promise<void> {
+    if (!myReview || !isEditing || reviewSubmitting || loading) {
+      return;
+    }
+
+    setReviewSubmitting(true);
+    setReviewSubmitError(null);
+
+    try {
+      await runAuthenticatedRequest((accessToken) =>
+        updateGymReview(accessToken, myReview.id, input),
+      );
+
+      setIsEditing(false);
+      setReloadVersion((version) => version + 1);
+    } catch (error: unknown) {
+      if (
+        error instanceof ApiClientError &&
+        error.code === "gym_review_not_found"
+      ) {
+        setIsEditing(false);
+        setReloadVersion((version) => version + 1);
+        return;
+      }
+
+      setReviewSubmitError(getUpdateErrorMessage(error));
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
+  async function deleteOwnReview(): Promise<void> {
+    if (
+      !myReview ||
+      !confirmingDelete ||
+      deletingReview ||
+      reviewSubmitting ||
+      loading
+    ) {
+      return;
+    }
+
+    setDeletingReview(true);
+    setReviewDeleteError(null);
+
+    try {
+      await runAuthenticatedRequest((accessToken) =>
+        removeGymReview(accessToken, myReview.id),
+      );
+
+      setConfirmingDelete(false);
+      setReloadVersion((version) => version + 1);
+    } catch (error: unknown) {
+      if (
+        error instanceof ApiClientError &&
+        error.code === "gym_review_not_found"
+      ) {
+        setConfirmingDelete(false);
+        setReloadVersion((version) => version + 1);
+        return;
+      }
+
+      setReviewDeleteError(getDeletionErrorMessage(error));
+    } finally {
+      setDeletingReview(false);
     }
   }
   const summary = reviewData?.summary;
@@ -271,11 +388,125 @@ export default function GymReviewsSection({
           {resolvedGymId ? (
             <View style={styles.formContainer}>
               {myReview ? (
-                <View style={styles.ownReviewNotice}>
-                  <Text style={styles.ownReviewText}>
-                    Você já avaliou esta academia no FitMap.
-                  </Text>
-                </View>
+                isEditing ? (
+                  <GymReviewForm
+                    key={myReview.id}
+                    initialRating={myReview.rating}
+                    initialComment={myReview.comment}
+                    submitting={reviewSubmitting}
+                    submitLabel="Salvar alterações"
+                    errorMessage={reviewSubmitError}
+                    onSubmit={(input) => {
+                      void submitEditedReview(input);
+                    }}
+                    onCancel={() => {
+                      setIsEditing(false);
+                      setReviewSubmitError(null);
+                    }}
+                  />
+                ) : (
+                  <View style={styles.ownReviewNotice}>
+                    <Text style={styles.ownReviewText}>
+                      Você já avaliou esta academia no FitMap.
+                    </Text>
+
+                    {reviewDeleteError ? (
+                      <Text style={styles.deleteErrorText}>
+                        {reviewDeleteError}
+                      </Text>
+                    ) : null}
+
+                    {confirmingDelete ? (
+                      <View style={styles.deleteConfirmation}>
+                        <Text style={styles.deleteConfirmationText}>
+                          Excluir sua avaliação? Esta ação não pode ser
+                          desfeita.
+                        </Text>
+
+                        <View style={styles.deleteActions}>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Cancelar exclusão de avaliação"
+                            disabled={deletingReview}
+                            onPress={() => {
+                              setConfirmingDelete(false);
+                              setReviewDeleteError(null);
+                            }}
+                            style={({ pressed }) => [
+                              styles.deleteCancelButton,
+                              pressed && styles.retryButtonPressed,
+                            ]}
+                          >
+                            <Text style={styles.deleteCancelText}>
+                              Cancelar
+                            </Text>
+                          </Pressable>
+
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Confirmar exclusão de avaliação"
+                            accessibilityState={{ disabled: deletingReview }}
+                            disabled={deletingReview}
+                            onPress={() => {
+                              void deleteOwnReview();
+                            }}
+                            style={({ pressed }) => [
+                              styles.deleteConfirmButton,
+                              deletingReview && styles.deleteButtonDisabled,
+                              pressed &&
+                                !deletingReview &&
+                                styles.retryButtonPressed,
+                            ]}
+                          >
+                            <Text style={styles.deleteConfirmText}>
+                              {deletingReview
+                                ? "Excluindo avaliação..."
+                                : "Excluir definitivamente"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.ownReviewActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Editar minha avaliação"
+                          disabled={reviewSubmitting || deletingReview}
+                          onPress={() => {
+                            setReviewSubmitError(null);
+                            setIsEditing(true);
+                          }}
+                          style={({ pressed }) => [
+                            styles.editReviewButton,
+                            pressed && styles.retryButtonPressed,
+                          ]}
+                        >
+                          <Text style={styles.editReviewButtonText}>
+                            Editar avaliação
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Excluir minha avaliação"
+                          disabled={reviewSubmitting || deletingReview}
+                          onPress={() => {
+                            setReviewDeleteError(null);
+                            setConfirmingDelete(true);
+                          }}
+                          style={({ pressed }) => [
+                            styles.deleteReviewButton,
+                            pressed && styles.retryButtonPressed,
+                          ]}
+                        >
+                          <Text style={styles.deleteReviewButtonText}>
+                            Excluir avaliação
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                )
               ) : (
                 <GymReviewForm
                   submitting={reviewSubmitting}
@@ -447,6 +678,100 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.small,
       lineHeight: theme.typography.lineHeight.small,
+    },
+    editReviewButton: {
+      alignSelf: "flex-start",
+      minHeight: 42,
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.lg,
+      marginTop: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    editReviewButtonText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+    ownReviewActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.md,
+    },
+    deleteReviewButton: {
+      minHeight: 42,
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.danger,
+      backgroundColor: theme.colors.surface,
+    },
+    deleteReviewButtonText: {
+      color: theme.colors.danger,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+    deleteConfirmation: {
+      marginTop: theme.spacing.md,
+      padding: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    deleteConfirmationText: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+    deleteActions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.md,
+    },
+    deleteCancelButton: {
+      minHeight: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    deleteCancelText: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+    deleteConfirmButton: {
+      minHeight: 44,
+      flexGrow: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.danger,
+    },
+    deleteConfirmText: {
+      color: theme.colors.textOnPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+    deleteErrorText: {
+      marginTop: theme.spacing.md,
+      color: theme.colors.danger,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+    deleteButtonDisabled: {
+      opacity: 0.65,
     },
     reviewsList: {
       gap: theme.spacing.md,
