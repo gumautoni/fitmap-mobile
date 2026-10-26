@@ -19,14 +19,17 @@ import {
   getGymReviews,
   getMyGymReview,
   removeGymReview,
+  reportGymReview,
   resolveGymIdentity,
   updateGymReview,
   type CreateGymReviewInput,
+  type CreateGymReviewReportInput,
   type GymReview,
   type GymReviewList,
 } from "../services/gymReviews";
 import { useAppTheme } from "../theme/ThemeProvider";
 import GymReviewForm from "./GymReviewForm";
+import GymReviewReportForm from "./GymReviewReportForm";
 
 interface Props {
   externalGymId: string;
@@ -118,6 +121,30 @@ function getDeletionErrorMessage(error: unknown): string {
 
   return "Não foi possível excluir sua avaliação. Verifique a conexão.";
 }
+function getReportErrorMessage(error: unknown): string {
+  if (
+    error instanceof ApiClientError &&
+    error.code === "request_validation_error"
+  ) {
+    return "Confira o motivo e os detalhes da denúncia.";
+  }
+
+  if (error instanceof Error) {
+    if (error.message === "Sua sessão expirou. Entre novamente.") {
+      return error.message;
+    }
+
+    if (error.message === "The request timed out.") {
+      return "O envio demorou mais do que o esperado. Confira antes de tentar novamente.";
+    }
+  }
+
+  if (error instanceof ApiClientError) {
+    return "Não foi possível enviar a denúncia. Tente novamente.";
+  }
+
+  return "Não foi possível enviar a denúncia. Verifique a conexão.";
+}
 function RatingStars({ rating, color }: { rating: number; color: string }) {
   return (
     <View style={{ flexDirection: "row", gap: 3 }}>
@@ -157,6 +184,15 @@ export default function GymReviewsSection({
   const [reviewSubmitError, setReviewSubmitError] = useState<string | null>(
     null,
   );
+  const [reportingReviewId, setReportingReviewId] = useState<string | null>(
+    null,
+  );
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportedIdsByGym, setReportedIdsByGym] = useState<
+    Record<string, string[]>
+  >({});
+  const reportedReviewIds = reportedIdsByGym[externalGymId] ?? [];
 
   useEffect(() => {
     let active = true;
@@ -171,6 +207,8 @@ export default function GymReviewsSection({
       setConfirmingDelete(false);
       setReviewDeleteError(null);
       setReviewSubmitError(null);
+      setReportingReviewId(null);
+      setReportError(null);
 
       try {
         const result = await runAuthenticatedRequest(async (accessToken) => {
@@ -305,6 +343,57 @@ export default function GymReviewsSection({
       setReviewDeleteError(getDeletionErrorMessage(error));
     } finally {
       setDeletingReview(false);
+    }
+  }
+  async function submitReviewReport(
+    reviewId: string,
+    input: CreateGymReviewReportInput,
+  ): Promise<void> {
+    if (
+      loading ||
+      !reviewData ||
+      !resolvedGymId ||
+      reportingReviewId !== reviewId ||
+      reportSubmitting ||
+      reportedReviewIds.includes(reviewId) ||
+      myReview?.id === reviewId ||
+      !reviewData.reviews.some((review) => review.id === reviewId)
+    ) {
+      return;
+    }
+
+    setReportSubmitting(true);
+    setReportError(null);
+
+    try {
+      await runAuthenticatedRequest((accessToken) =>
+        reportGymReview(accessToken, reviewId, input),
+      );
+
+      setReportedIdsByGym((current) => {
+        const previousIds = current[externalGymId] ?? [];
+
+        return previousIds.includes(reviewId)
+          ? current
+          : {
+              ...current,
+              [externalGymId]: [...previousIds, reviewId],
+            };
+      });
+      setReportingReviewId(null);
+    } catch (error: unknown) {
+      if (
+        error instanceof ApiClientError &&
+        error.code === "gym_review_not_found"
+      ) {
+        setReportingReviewId(null);
+        setReloadVersion((version) => version + 1);
+        return;
+      }
+
+      setReportError(getReportErrorMessage(error));
+    } finally {
+      setReportSubmitting(false);
     }
   }
   const summary = reviewData?.summary;
@@ -552,6 +641,46 @@ export default function GymReviewsSection({
                       Avaliação sem comentário.
                     </Text>
                   )}
+
+                  {myReview?.id !== review.id ? (
+                    reportedReviewIds.includes(review.id) ? (
+                      <Text style={styles.reportSuccessText}>
+                        Denúncia enviada para análise.
+                      </Text>
+                    ) : reportingReviewId === review.id ? (
+                      <View style={styles.reportFormContainer}>
+                        <GymReviewReportForm
+                          submitting={reportSubmitting}
+                          errorMessage={reportError}
+                          onSubmit={(input) => {
+                            void submitReviewReport(review.id, input);
+                          }}
+                          onCancel={() => {
+                            setReportingReviewId(null);
+                            setReportError(null);
+                          }}
+                        />
+                      </View>
+                    ) : (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Denunciar avaliação"
+                        disabled={
+                          reportingReviewId !== null || reportSubmitting
+                        }
+                        onPress={() => {
+                          setReportError(null);
+                          setReportingReviewId(review.id);
+                        }}
+                        style={({ pressed }) => [
+                          styles.reportButton,
+                          pressed && styles.retryButtonPressed,
+                        ]}
+                      >
+                        <Text style={styles.reportButtonText}>Denunciar</Text>
+                      </Pressable>
+                    )
+                  ) : null}
                 </View>
               ))}
             </View>
@@ -800,6 +929,31 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontFamily: theme.typography.fontFamily.regular,
       fontSize: theme.typography.size.small,
       lineHeight: theme.typography.lineHeight.small,
+    },
+    reportButton: {
+      alignSelf: "flex-start",
+      minHeight: 40,
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.md,
+      marginTop: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+    reportButtonText: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+    reportFormContainer: {
+      marginTop: theme.spacing.md,
+    },
+    reportSuccessText: {
+      marginTop: theme.spacing.md,
+      color: theme.colors.success,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
     },
     noComment: {
       color: theme.colors.textMuted,
