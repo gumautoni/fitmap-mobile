@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "./types";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
+import WelcomeScreen from "../screens/WelcomeScreen";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -12,6 +13,7 @@ export default function AuthNavigator() {
 
   return (
     <Stack.Navigator
+      initialRouteName="BoasVindas"
       screenOptions={{
         headerStyle: {
           backgroundColor: theme.colors.surface,
@@ -28,6 +30,14 @@ export default function AuthNavigator() {
         animation: "slide_from_right",
       }}
     >
+      <Stack.Screen
+        name="BoasVindas"
+        component={WelcomeScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+
       <Stack.Screen
         name="Login"
         component={LoginScreen}

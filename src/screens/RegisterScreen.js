@@ -31,7 +31,6 @@ export default function RegisterScreen({ navigation }) {
     Keyboard.dismiss();
 
     const formattedName = name.trim().replace(/\s+/g, " ");
-
     const formattedEmail = email.trim().toLowerCase();
 
     if (!formattedName || !formattedEmail || !password || !confirmPassword) {
@@ -153,7 +152,7 @@ export default function RegisterScreen({ navigation }) {
 
           <CustomButton
             title="Voltar para login"
-            onPress={() => navigation.goBack()}
+            onPress={() => navigation.replace("Login")}
             variant="secondary"
           />
         </View>
