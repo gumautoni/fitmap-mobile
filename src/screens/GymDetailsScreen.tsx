@@ -30,6 +30,7 @@ import {
 } from "react-native";
 
 import { AuthContext } from "../context/AuthContext";
+import GymReviewsSection from "./GymReviewsSection";
 import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
@@ -762,6 +763,10 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
         ) : null}
       </View>
 
+      <GymReviewsSection
+        externalGymId={gym.id}
+        runAuthenticatedRequest={runAuthenticatedRequest}
+      />
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionEyebrow}>INFORMAÇÕES</Text>
 
