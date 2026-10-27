@@ -219,6 +219,30 @@ describe("GymReviewsSection reporting", () => {
     expect(screen.queryByLabelText("Enviar denúncia")).toBeNull();
   });
 
+  it("recognizes an already reported review and blocks retry", async () => {
+    mockedReport.mockRejectedValueOnce(
+      new ApiClientError(
+        "Review has already been reported by this user.",
+        409,
+        "gym_review_already_reported",
+      ),
+    );
+
+    await renderSection();
+    await openReportForm();
+    await selectSpam();
+
+    await fireEvent.press(screen.getByLabelText("Enviar denúncia"));
+
+    expect(
+      await screen.findByText("Esta avaliação já foi denunciada por você."),
+    ).toBeTruthy();
+
+    expect(screen.queryByLabelText("Denunciar avaliação")).toBeNull();
+    expect(screen.queryByLabelText("Enviar denúncia")).toBeNull();
+    expect(mockedReport).toHaveBeenCalledTimes(1);
+  });
+
   it("allows retry after a service failure", async () => {
     mockedReport.mockRejectedValueOnce(
       new ApiClientError("Service unavailable.", 503, "service_unavailable"),

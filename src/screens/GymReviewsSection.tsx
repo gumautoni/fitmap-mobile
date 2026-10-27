@@ -192,6 +192,9 @@ export default function GymReviewsSection({
   const [reportedIdsByGym, setReportedIdsByGym] = useState<
     Record<string, string[]>
   >({});
+  const [alreadyReportedIdsByGym, setAlreadyReportedIdsByGym] = useState<
+    Record<string, string[]>
+  >({});
   const reportedReviewIds = reportedIdsByGym[externalGymId] ?? [];
 
   useEffect(() => {
@@ -388,6 +391,37 @@ export default function GymReviewsSection({
       ) {
         setReportingReviewId(null);
         setReloadVersion((version) => version + 1);
+        return;
+      }
+
+      if (
+        error instanceof ApiClientError &&
+        error.status === 409 &&
+        error.code === "gym_review_already_reported"
+      ) {
+        setReportedIdsByGym((current) => {
+          const previousIds = current[externalGymId] ?? [];
+
+          return previousIds.includes(reviewId)
+            ? current
+            : {
+                ...current,
+                [externalGymId]: [...previousIds, reviewId],
+              };
+        });
+
+        setAlreadyReportedIdsByGym((current) => {
+          const previousIds = current[externalGymId] ?? [];
+
+          return previousIds.includes(reviewId)
+            ? current
+            : {
+                ...current,
+                [externalGymId]: [...previousIds, reviewId],
+              };
+        });
+
+        setReportingReviewId(null);
         return;
       }
 
@@ -645,7 +679,11 @@ export default function GymReviewsSection({
                   {myReview?.id !== review.id ? (
                     reportedReviewIds.includes(review.id) ? (
                       <Text style={styles.reportSuccessText}>
-                        Denúncia enviada para análise.
+                        {alreadyReportedIdsByGym[externalGymId]?.includes(
+                          review.id,
+                        )
+                          ? "Esta avaliação já foi denunciada por você."
+                          : "Denúncia enviada para análise."}
                       </Text>
                     ) : reportingReviewId === review.id ? (
                       <View style={styles.reportFormContainer}>
