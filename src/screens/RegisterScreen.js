@@ -1,227 +1,206 @@
-import React, { useContext, useState } from "react";
-import {
-  Alert,
-  Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { LockKeyhole, Mail, UserRound } from "lucide-react-native";
+import React, { useContext, useRef, useState } from "react";
+import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 
-import CustomButton from "../components/CustomButton";
-import CustomInput from "../components/CustomInput";
+import AuthButton from "../components/auth/AuthButton";
+import AuthField from "../components/auth/AuthField";
+import AuthScreenShell from "../components/auth/AuthScreenShell";
 import { AuthContext } from "../context/AuthContext";
+import {
+  MAX_PASSWORD_LENGTH,
+  MIN_PASSWORD_LENGTH,
+  normalizeEmail,
+  normalizeName,
+  validateRegistrationForm,
+} from "../utils/authFormValidation";
 
 export default function RegisterScreen({ navigation }) {
   const auth = useContext(AuthContext);
-
+  const submittingRef = useRef(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function isValidEmail(value) {
-    return /\S+@\S+\.\S+/.test(value);
+  function updateField(field, value, setter) {
+    setter(value);
+    setErrors((previous) => ({ ...previous, [field]: undefined }));
+    setFormError("");
   }
 
   async function handleRegister() {
+    if (submittingRef.current) return;
     Keyboard.dismiss();
 
-    const formattedName = name.trim().replace(/\s+/g, " ");
-    const formattedEmail = email.trim().toLowerCase();
+    const formattedName = normalizeName(name);
+    const formattedEmail = normalizeEmail(email);
+    const nextErrors = validateRegistrationForm(
+      formattedName,
+      formattedEmail,
+      password,
+      confirmPassword,
+    );
+    setErrors(nextErrors);
+    setFormError("");
 
-    if (!formattedName || !formattedEmail || !password || !confirmPassword) {
-      Alert.alert("Atenção", "Preencha todos os campos para criar sua conta.");
-      return;
-    }
-
-    if (formattedName.length < 3) {
-      Alert.alert("Atenção", "Digite um nome com pelo menos 3 caracteres.");
-      return;
-    }
-
-    if (!isValidEmail(formattedEmail)) {
-      Alert.alert("Atenção", "Digite um e-mail válido.");
-      return;
-    }
-
-    if (password.length < 15) {
-      Alert.alert("Atenção", "A senha precisa ter pelo menos 15 caracteres.");
-      return;
-    }
-
-    if (password.length > 128) {
-      Alert.alert("Atenção", "A senha pode ter no máximo 128 caracteres.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert("Atenção", "As senhas digitadas não são iguais.");
-      return;
-    }
-
+    if (Object.keys(nextErrors).length > 0) return;
     if (!auth) {
-      Alert.alert("Erro ao cadastrar", "A autenticação não está disponível.");
+      setFormError("O cadastro não está disponível neste momento.");
       return;
     }
 
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
       await auth.register(formattedName, formattedEmail, password);
     } catch (error) {
-      Alert.alert(
-        "Erro ao cadastrar",
+      setFormError(
         error instanceof Error
           ? error.message
-          : "Não foi possível criar sua conta.",
+          : "Não foi possível criar sua conta. Tente novamente.",
       );
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }
 
+  function goBack() {
+    Keyboard.dismiss();
+    navigation.navigate("BoasVindas");
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <AuthScreenShell
+      eyebrow="SAÚDE  •  TREINO  •  EVOLUÇÃO"
+      title="Comece sua evolução."
+      subtitle="Crie sua conta e dê o primeiro passo com o FitMap."
+      onBack={goBack}
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.card}>
-          <View style={styles.logoArea}>
-            <Image
-              source={require("../../assets/images/logo-fitmap.png")}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
+      <AuthField
+        label="Nome completo"
+        placeholder="Seu nome completo"
+        icon={UserRound}
+        value={name}
+        onChangeText={(value) => updateField("name", value, setName)}
+        autoCapitalize="words"
+        textContentType="name"
+        autoComplete="name"
+        error={errors.name}
+        returnKeyType="next"
+      />
 
-            <Text style={styles.logoSubtitle}>Crie sua conta para começar</Text>
-          </View>
+      <AuthField
+        label="E-mail"
+        placeholder="seu@email.com"
+        icon={Mail}
+        value={email}
+        onChangeText={(value) => updateField("email", value, setEmail)}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        textContentType="username"
+        autoComplete="email"
+        error={errors.email}
+        returnKeyType="next"
+      />
 
-          <Text style={styles.title}>Criar conta</Text>
+      <AuthField
+        label="Senha"
+        placeholder="Crie uma senha segura"
+        icon={LockKeyhole}
+        value={password}
+        onChangeText={(value) => updateField("password", value, setPassword)}
+        secure
+        autoCapitalize="none"
+        textContentType="newPassword"
+        autoComplete="new-password"
+        error={errors.password}
+        helper={`No momento, entre ${MIN_PASSWORD_LENGTH} e ${MAX_PASSWORD_LENGTH} caracteres.`}
+        returnKeyType="next"
+      />
 
-          <Text style={styles.subtitle}>
-            Cadastre-se para salvar seus exercícios, registrar fotos e encontrar
-            academias com facilidade.
-          </Text>
+      <AuthField
+        label="Confirmar senha"
+        placeholder="Repita sua senha"
+        icon={LockKeyhole}
+        value={confirmPassword}
+        onChangeText={(value) =>
+          updateField("confirmPassword", value, setConfirmPassword)
+        }
+        secure
+        autoCapitalize="none"
+        textContentType="newPassword"
+        autoComplete="new-password"
+        error={errors.confirmPassword}
+        returnKeyType="done"
+        onSubmitEditing={handleRegister}
+      />
 
-          <Text style={styles.label}>Nome completo</Text>
-
-          <CustomInput
-            placeholder="Digite seu nome"
-            value={name}
-            onChangeText={setName}
-          />
-
-          <Text style={styles.label}>E-mail</Text>
-
-          <CustomInput
-            placeholder="Digite seu e-mail"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-
-          <Text style={styles.label}>Senha</Text>
-
-          <CustomInput
-            placeholder="Mínimo de 15 caracteres"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <Text style={styles.label}>Confirmar senha</Text>
-
-          <CustomInput
-            placeholder="Digite a senha novamente"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-          />
-
-          <CustomButton title="Cadastrar" onPress={handleRegister} />
-
-          <View style={styles.divider} />
-
-          <Text style={styles.loginText}>Já possui conta?</Text>
-
-          <CustomButton
-            title="Voltar para login"
-            onPress={() => navigation.replace("Login")}
-            variant="secondary"
-          />
+      {formError ? (
+        <View style={styles.errorBox} accessibilityRole="alert">
+          <Text style={styles.errorText}>{formError}</Text>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      ) : null}
+
+      <View style={styles.actionSpacing}>
+        <AuthButton
+          title="Criar minha conta"
+          onPress={handleRegister}
+          loading={submitting}
+        />
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Já tem uma conta?</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ir para Login"
+          onPress={() => navigation.navigate("Login")}
+          style={styles.footerLink}
+        >
+          <Text style={styles.footerLinkText}>Entrar</Text>
+        </Pressable>
+      </View>
+    </AuthScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f3f4f6",
-  },
-  content: {
-    flexGrow: 1,
+  actionSpacing: { marginTop: 5 },
+  footer: {
+    flexDirection: "row",
     justifyContent: "center",
-    padding: 20,
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 24,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  logoArea: {
     alignItems: "center",
-    marginBottom: 20,
+    flexWrap: "wrap",
+    marginTop: 18,
+    gap: 5,
   },
-  logoImage: {
-    width: 210,
-    height: 150,
-    marginBottom: 4,
+  footerText: {
+    fontFamily: "Manrope_500Medium",
+    fontSize: 12,
+    color: "#657895",
   },
-  logoSubtitle: {
-    fontSize: 13,
-    color: "#4b5563",
-    fontWeight: "700",
-    textAlign: "center",
+  footerLink: { paddingVertical: 4 },
+  footerLinkText: {
+    fontFamily: "Manrope_700Bold",
+    fontSize: 12,
+    color: "#3F51E8",
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#111827",
-    marginBottom: 8,
+  errorBox: {
+    backgroundColor: "#FFF4F3",
+    borderColor: "#F8D6D3",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 13,
   },
-  subtitle: {
-    fontSize: 15,
-    color: "#4b5563",
-    marginBottom: 20,
-    lineHeight: 22,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#e5e7eb",
-    marginVertical: 16,
-  },
-  loginText: {
-    textAlign: "center",
-    color: "#4b5563",
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 10,
+  errorText: {
+    fontFamily: "Manrope_500Medium",
+    color: "#B42318",
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

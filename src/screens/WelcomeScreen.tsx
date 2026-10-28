@@ -41,8 +41,13 @@ export default function WelcomeScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.mainContent}>
-          {/* Identidade tipográfica provisória até finalizar a logo aprovada. */}
           <View style={styles.wordmark} accessibilityLabel="FitMap">
+            <Image
+              source={require("../../assets/images/fitmap-logo-symbol.png")}
+              style={styles.wordmarkSymbol}
+              resizeMode="contain"
+              accessible={false}
+            />
             <Text style={styles.wordmarkFit}>Fit</Text>
             <Text style={styles.wordmarkMap}>Map</Text>
           </View>
@@ -175,6 +180,11 @@ function createStyles(theme: AppTheme) {
       flexDirection: "row",
       alignItems: "center",
       marginBottom: 8,
+    },
+    wordmarkSymbol: {
+      width: 56,
+      height: 56,
+      marginRight: 2,
     },
     wordmarkFit: {
       color: "#13243C",

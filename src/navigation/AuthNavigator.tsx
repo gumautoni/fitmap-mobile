@@ -15,6 +15,7 @@ export default function AuthNavigator() {
     <Stack.Navigator
       initialRouteName="BoasVindas"
       screenOptions={{
+        headerShown: false,
         headerStyle: {
           backgroundColor: theme.colors.surface,
         },
@@ -30,29 +31,9 @@ export default function AuthNavigator() {
         animation: "slide_from_right",
       }}
     >
-      <Stack.Screen
-        name="BoasVindas"
-        component={WelcomeScreen}
-        options={{
-          headerShown: false,
-        }}
-      />
-
-      <Stack.Screen
-        name="Login"
-        component={LoginScreen}
-        options={{
-          headerShown: false,
-        }}
-      />
-
-      <Stack.Screen
-        name="Cadastro"
-        component={RegisterScreen}
-        options={{
-          title: "Criar conta",
-        }}
-      />
+      <Stack.Screen name="BoasVindas" component={WelcomeScreen} />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Cadastro" component={RegisterScreen} />
     </Stack.Navigator>
   );
 }
