@@ -1,25 +1,17 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight, Dumbbell, MapPin, TrendingUp } from "lucide-react-native";
 import { useMemo } from "react";
 import {
+  Image,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Svg, {
-  Circle,
-  Defs,
-  Ellipse,
-  G,
-  LinearGradient,
-  Path,
-  Polygon,
-  Rect,
-  Stop,
-} from "react-native-svg";
 
 import type { AuthStackScreenProps } from "../navigation/types";
 import { useAppTheme } from "../theme/ThemeProvider";
@@ -27,231 +19,88 @@ import type { AppTheme } from "../theme/themes";
 
 type Props = AuthStackScreenProps<"BoasVindas">;
 
-function MapIllustration({ height }: { height: number }) {
-  return (
-    <View
-      accessible
-      accessibilityLabel="Ilustração estilizada de um mapa com academias e equipamentos de treino"
-    >
-      <Svg width="100%" height={height} viewBox="0 0 360 290">
-        <Defs>
-          <LinearGradient id="mapSurface" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#F5FAFF" />
-            <Stop offset="100%" stopColor="#CFE2FF" />
-          </LinearGradient>
-
-          <LinearGradient id="building" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#FFFFFF" />
-            <Stop offset="100%" stopColor="#A7C6F9" />
-          </LinearGradient>
-
-          <LinearGradient id="gymRoof" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#83B4FF" />
-            <Stop offset="100%" stopColor="#3F51E8" />
-          </LinearGradient>
-
-          <LinearGradient id="equipment" x1="0%" y1="0%" x2="100%" y2="100%">
-            <Stop offset="0%" stopColor="#9BC3FF" />
-            <Stop offset="100%" stopColor="#5369E9" />
-          </LinearGradient>
-        </Defs>
-
-        <Circle cx="306" cy="48" r="40" fill="#C9E0FF" opacity={0.36} />
-        <Circle cx="52" cy="218" r="26" fill="#C2D8FF" opacity={0.4} />
-
-        <Ellipse
-          cx="182"
-          cy="260"
-          rx="148"
-          ry="22"
-          fill="#7294DD"
-          opacity={0.14}
-        />
-
-        {/* Base do mapa em perspectiva */}
-        <Polygon points="25,164 182,92 338,164 182,236" fill="#B7D0F7" />
-        <Polygon points="25,164 182,236 182,248 25,176" fill="#89B2EF" />
-        <Polygon points="182,236 338,164 338,176 182,248" fill="#749CDC" />
-        <Polygon
-          points="25,153 182,81 338,153 182,225"
-          fill="url(#mapSurface)"
-          stroke="#D2E3FF"
-          strokeWidth="2"
-        />
-
-        {/* Ruas */}
-        <Path
-          d="M65 171 L221 99"
-          stroke="#FFFFFF"
-          strokeWidth="15"
-          strokeLinecap="round"
-          opacity={0.9}
-        />
-        <Path
-          d="M119 108 L272 181"
-          stroke="#FFFFFF"
-          strokeWidth="14"
-          strokeLinecap="round"
-          opacity={0.85}
-        />
-        <Path
-          d="M75 151 L194 207"
-          stroke="#B9D5FB"
-          strokeWidth="2"
-          strokeDasharray="5 6"
-        />
-
-        {/* Prédio à esquerda */}
-        <Polygon points="77,145 105,132 133,145 105,158" fill="#E9F3FF" />
-        <Polygon points="77,145 105,158 105,190 77,177" fill="#9FC3F5" />
-        <Polygon
-          points="105,158 133,145 133,177 105,190"
-          fill="url(#building)"
-        />
-
-        <Path
-          d="M114 164 L124 159 M114 175 L124 170"
-          stroke="#79A4E7"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
-
-        {/* Academia central */}
-        <Polygon
-          points="151,129 196,108 240,129 195,150"
-          fill="url(#gymRoof)"
-        />
-        <Polygon points="151,129 195,150 195,193 151,172" fill="#718EEB" />
-        <Polygon points="195,150 240,129 240,172 195,193" fill="#A5C4FF" />
-
-        <Polygon
-          points="163,151 184,161 184,179 163,169"
-          fill="#E6F1FF"
-          opacity={0.95}
-        />
-        <Polygon points="205,159 228,148 228,170 205,181" fill="#DDEAFF" />
-
-        <Path
-          d="M173 124 L194 114 L216 124"
-          stroke="#DCE9FF"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Prédio secundário */}
-        <Polygon points="253,152 274,143 294,152 273,162" fill="#F0F6FF" />
-        <Polygon points="253,152 273,162 273,187 253,177" fill="#A7C5F6" />
-        <Polygon points="273,162 294,152 294,177 273,187" fill="#D0E2FF" />
-
-        {/* Rota ilustrativa */}
-        <Path
-          d="M87 201 C120 219 148 213 172 199 C198 184 225 196 259 183"
-          stroke="#3F51E8"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeDasharray="7 7"
-          fill="none"
-          opacity={0.75}
-        />
-
-        {/* Pino principal */}
-        <Path
-          d="M196 62 C181 62 171 73 171 86 C171 104 196 125 196 125 C196 125 221 104 221 86 C221 73 211 62 196 62 Z"
-          fill="#3F51E8"
-        />
-        <Circle cx="196" cy="86" r="10" fill="#FFFFFF" />
-        <Circle cx="196" cy="86" r="4" fill="#91BCFF" />
-
-        {/* Pino secundário */}
-        <Path
-          d="M291 89 C281 89 274 96 274 106 C274 118 291 133 291 133 C291 133 308 118 308 106 C308 96 301 89 291 89 Z"
-          fill="#7AA7F2"
-        />
-        <Circle cx="291" cy="106" r="6" fill="#FFFFFF" />
-
-        {/* Halter tridimensional estilizado */}
-        <G transform="translate(265 218) rotate(-18)">
-          <Rect x="-38" y="-4" width="76" height="8" rx="4" fill="#4B62D6" />
-          <Rect
-            x="-38"
-            y="-17"
-            width="13"
-            height="34"
-            rx="5"
-            fill="url(#equipment)"
-          />
-          <Rect x="-25" y="-12" width="9" height="24" rx="3" fill="#B7D2FF" />
-          <Rect x="16" y="-12" width="9" height="24" rx="3" fill="#B7D2FF" />
-          <Rect
-            x="25"
-            y="-17"
-            width="13"
-            height="34"
-            rx="5"
-            fill="url(#equipment)"
-          />
-        </G>
-      </Svg>
-    </View>
-  );
-}
+const BRAND_BLUE = "#3F51E8";
+const BACKGROUND = "#F7F9FF";
 
 export default function WelcomeScreen({ navigation }: Props) {
-  const { theme, isDark } = useAppTheme();
+  const { theme } = useAppTheme();
   const { height } = useWindowDimensions();
-
-  const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark]);
-
-  const illustrationHeight = Math.min(310, Math.max(218, height * 0.34));
+  const styles = useMemo(() => createStyles(theme), [theme]);
+  const artworkHeight = Math.min(360, Math.max(260, height * 0.4));
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <StatusBar barStyle="dark-content" />
+
       <View pointerEvents="none" style={styles.decorationTop} />
       <View pointerEvents="none" style={styles.decorationBottom} />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        bounces={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.mainContent}>
-          {/* Wordmark provisório até integrar a nova logo oficial */}
-          <View style={styles.wordmark}>
+          {/* Identidade tipográfica provisória até finalizar a logo aprovada. */}
+          <View style={styles.wordmark} accessibilityLabel="FitMap">
             <Text style={styles.wordmarkFit}>Fit</Text>
             <Text style={styles.wordmarkMap}>Map</Text>
           </View>
 
-          <Text style={styles.eyebrow}>SUA JORNADA COMEÇA AQUI</Text>
+          <Text style={styles.eyebrow}>SAÚDE • TREINO • EVOLUÇÃO</Text>
 
           <Text style={styles.title}>
-            Encontre academias.{"\n"}
-            Evolua do seu jeito.
+            Encontre academias{"\n"}
+            <Text style={styles.titleAccent}>perto de você</Text>
           </Text>
 
           <Text style={styles.subtitle}>
-            Descubra onde treinar, organize seus exercícios e acompanhe seu
-            progresso em um só lugar.
+            Organize seus treinos, acompanhe sua evolução e viva uma vida mais
+            saudável.
           </Text>
 
-          <View style={styles.illustration}>
-            <MapIllustration height={illustrationHeight} />
-          </View>
+          <View style={[styles.hero, { height: artworkHeight }]}>
+            <View style={styles.imageFrame}>
+              <Image
+                source={require("../../assets/images/welcome-map-3d.png")}
+                style={styles.heroImage}
+                resizeMode="cover"
+                accessible={false}
+              />
 
-          <View style={styles.features}>
-            <View style={styles.feature}>
-              <MapPin size={16} color={theme.colors.primary} />
-              <Text style={styles.featureText}>Academias</Text>
+              <LinearGradient
+                pointerEvents="none"
+                colors={[BACKGROUND, "rgba(247,249,255,0)"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.imageFade}
+              />
             </View>
 
-            <View style={styles.feature}>
-              <Dumbbell size={16} color={theme.colors.primary} />
-              <Text style={styles.featureText}>Treinos</Text>
-            </View>
+            <View style={styles.features}>
+              <View style={styles.feature}>
+                <View style={styles.featureIcon}>
+                  <MapPin size={21} color={BRAND_BLUE} strokeWidth={2.2} />
+                </View>
+                <Text style={styles.featureTitle}>Descubra</Text>
+                <Text style={styles.featureText}>academias na sua região</Text>
+              </View>
 
-            <View style={styles.feature}>
-              <TrendingUp size={16} color={theme.colors.primary} />
-              <Text style={styles.featureText}>Progresso</Text>
+              <View style={styles.feature}>
+                <View style={styles.featureIcon}>
+                  <Dumbbell size={21} color={BRAND_BLUE} strokeWidth={2.2} />
+                </View>
+                <Text style={styles.featureTitle}>Organize</Text>
+                <Text style={styles.featureText}>seus treinos e rotinas</Text>
+              </View>
+
+              <View style={styles.feature}>
+                <View style={styles.featureIcon}>
+                  <TrendingUp size={21} color={BRAND_BLUE} strokeWidth={2.2} />
+                </View>
+                <Text style={styles.featureTitle}>Acompanhe</Text>
+                <Text style={styles.featureText}>sua evolução</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -267,7 +116,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             ]}
           >
             <Text style={styles.primaryButtonText}>Criar conta</Text>
-            <ArrowRight size={19} color="#FFFFFF" strokeWidth={2.3} />
+            <ArrowRight color="#FFFFFF" size={20} strokeWidth={2.3} />
           </Pressable>
 
           <Pressable
@@ -279,9 +128,8 @@ export default function WelcomeScreen({ navigation }: Props) {
               pressed && styles.pressedButton,
             ]}
           >
-            <Text style={styles.secondaryButtonText}>
-              Já tenho conta — Entrar
-            </Text>
+            <Text style={styles.secondaryButtonText}>Entrar</Text>
+            <ArrowRight color={BRAND_BLUE} size={20} strokeWidth={2.3} />
           </Pressable>
         </View>
       </ScrollView>
@@ -289,118 +137,151 @@ export default function WelcomeScreen({ navigation }: Props) {
   );
 }
 
-function createStyles(theme: AppTheme, isDark: boolean) {
-  const background = isDark ? "#0E1118" : "#F7F9FF";
-  const decoration = isDark ? "#24305B" : "#E2EDFF";
-
+function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: background,
+      backgroundColor: BACKGROUND,
     },
     decorationTop: {
       position: "absolute",
-      width: 220,
-      height: 220,
-      borderRadius: 110,
-      backgroundColor: decoration,
-      top: -115,
-      right: -115,
-      opacity: 0.8,
+      top: -120,
+      right: -130,
+      width: 290,
+      height: 290,
+      borderRadius: 145,
+      backgroundColor: "#ECF3FF",
     },
     decorationBottom: {
       position: "absolute",
-      width: 150,
-      height: 150,
-      borderRadius: 75,
-      backgroundColor: decoration,
-      bottom: 150,
-      left: -110,
-      opacity: 0.7,
+      bottom: 90,
+      left: -115,
+      width: 190,
+      height: 190,
+      borderRadius: 95,
+      backgroundColor: "#EFF5FF",
     },
     scrollContent: {
       flexGrow: 1,
       justifyContent: "space-between",
-      paddingHorizontal: 24,
-      paddingTop: 18,
-      paddingBottom: 24,
+      paddingTop: 14,
+      paddingBottom: 18,
+      paddingHorizontal: 22,
     },
     mainContent: {
-      alignItems: "center",
+      width: "100%",
     },
     wordmark: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 19,
+      marginBottom: 8,
     },
     wordmarkFit: {
-      color: theme.colors.textPrimary,
+      color: "#13243C",
       fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 27,
+      fontSize: 28,
     },
     wordmarkMap: {
-      color: theme.colors.primary,
+      color: BRAND_BLUE,
       fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 27,
+      fontSize: 28,
     },
     eyebrow: {
-      color: theme.colors.primary,
+      color: "#63789B",
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: 10,
-      letterSpacing: 2,
-      textAlign: "center",
-      marginBottom: 13,
+      letterSpacing: 1.8,
+      marginBottom: 24,
     },
     title: {
-      color: theme.colors.textPrimary,
+      color: "#13243C",
       fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 27,
-      lineHeight: 36,
-      textAlign: "center",
+      fontSize: 31,
+      lineHeight: 39,
       marginBottom: 12,
     },
-    subtitle: {
-      maxWidth: 325,
-      color: theme.colors.textSecondary,
-      fontFamily: theme.typography.fontFamily.medium,
-      fontSize: 13,
-      lineHeight: 21,
-      textAlign: "center",
+    titleAccent: {
+      color: BRAND_BLUE,
     },
-    illustration: {
+    subtitle: {
+      maxWidth: 305,
+      color: "#65758F",
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: 14,
+      lineHeight: 22,
+    },
+    hero: {
+      position: "relative",
       width: "100%",
-      marginTop: 10,
-      marginBottom: 2,
+      marginTop: 12,
+      marginBottom: 18,
+      justifyContent: "center",
+    },
+    imageFrame: {
+      position: "absolute",
+      right: -8,
+      top: 0,
+      height: "100%",
+      width: "75%",
+      overflow: "hidden",
+      borderRadius: 22,
+      backgroundColor: "#E3EEFF",
+    },
+    heroImage: {
+      width: "100%",
+      height: "100%",
+    },
+    imageFade: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      bottom: 0,
+      width: "70%",
     },
     features: {
-      width: "100%",
-      flexDirection: "row",
-      justifyContent: "space-between",
-      marginBottom: 20,
+      zIndex: 1,
+      width: "51%",
+      justifyContent: "space-around",
+      height: "100%",
+      paddingVertical: 15,
     },
     feature: {
-      flexDirection: "row",
-      alignItems: "center",
+      gap: 4,
+      maxWidth: 135,
+    },
+    featureIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
       justifyContent: "center",
-      gap: 5,
-      flexShrink: 1,
+      alignItems: "center",
+      backgroundColor: "#E8F0FF",
+      marginBottom: 3,
+    },
+    featureTitle: {
+      color: "#162847",
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 13,
     },
     featureText: {
-      color: theme.colors.textSecondary,
-      fontFamily: theme.typography.fontFamily.semibold,
+      color: "#6F7F96",
+      fontFamily: theme.typography.fontFamily.medium,
       fontSize: 11,
+      lineHeight: 16,
     },
     actions: {
+      width: "100%",
       gap: 12,
+      paddingTop: 8,
     },
     primaryButton: {
-      minHeight: 56,
+      minHeight: 58,
       borderRadius: 17,
-      backgroundColor: theme.colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
+      backgroundColor: BRAND_BLUE,
       flexDirection: "row",
-      gap: 12,
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
     },
     primaryButtonText: {
       color: "#FFFFFF",
@@ -408,21 +289,23 @@ function createStyles(theme: AppTheme, isDark: boolean) {
       fontSize: 15,
     },
     secondaryButton: {
-      minHeight: 54,
+      minHeight: 58,
       borderRadius: 17,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      borderWidth: 1.5,
+      borderColor: "#B4C4E1",
+      backgroundColor: "#FFFFFF",
+      flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 20,
     },
     secondaryButtonText: {
-      color: theme.colors.primary,
+      color: "#172844",
       fontFamily: theme.typography.fontFamily.bold,
-      fontSize: 14,
+      fontSize: 15,
     },
     pressedButton: {
-      opacity: 0.82,
+      opacity: 0.8,
       transform: [{ scale: 0.99 }],
     },
   });
