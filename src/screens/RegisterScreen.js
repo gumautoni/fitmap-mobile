@@ -1,4 +1,10 @@
-import { LockKeyhole, Mail, UserRound } from "lucide-react-native";
+import {
+  CheckCircle2,
+  Circle,
+  LockKeyhole,
+  Mail,
+  UserRound,
+} from "lucide-react-native";
 import React, { useContext, useRef, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -9,10 +15,54 @@ import { AuthContext } from "../context/AuthContext";
 import {
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
+  getPasswordRequirements,
   normalizeEmail,
   normalizeName,
   validateRegistrationForm,
 } from "../utils/authFormValidation";
+
+const PASSWORD_RULES = [
+  {
+    key: "length",
+    label: `${MIN_PASSWORD_LENGTH} a ${MAX_PASSWORD_LENGTH} caracteres`,
+  },
+  { key: "uppercase", label: "Uma letra maiúscula" },
+  { key: "lowercase", label: "Uma letra minúscula" },
+  { key: "number", label: "Um número" },
+  { key: "special", label: "Um símbolo (!, @, #...)" },
+];
+
+function PasswordRequirements({ password }) {
+  if (!password) return null;
+  const requirements = getPasswordRequirements(password);
+
+  return (
+    <View style={styles.requirements} accessibilityLiveRegion="polite">
+      <Text style={styles.requirementsTitle}>Sua senha precisa conter:</Text>
+      {PASSWORD_RULES.map(({ key, label }) => {
+        const passed = requirements[key];
+        return (
+          <View key={key} style={styles.requirementRow}>
+            {passed ? (
+              <CheckCircle2 size={14} color="#267256" strokeWidth={2} />
+            ) : (
+              <Circle size={14} color="#8C9BB1" strokeWidth={1.7} />
+            )}
+            <Text
+              style={[
+                styles.requirementText,
+                passed && styles.requirementPassed,
+              ]}
+              accessibilityLabel={`${label}: ${passed ? "atendido" : "pendente"}`}
+            >
+              {label}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function RegisterScreen({ navigation }) {
   const auth = useContext(AuthContext);
@@ -118,9 +168,10 @@ export default function RegisterScreen({ navigation }) {
         textContentType="newPassword"
         autoComplete="new-password"
         error={errors.password}
-        helper={`No momento, entre ${MIN_PASSWORD_LENGTH} e ${MAX_PASSWORD_LENGTH} caracteres.`}
+        helper="Use letras maiúsculas, minúsculas, números e símbolos."
         returnKeyType="next"
       />
+      <PasswordRequirements password={password} />
 
       <AuthField
         label="Confirmar senha"
@@ -169,6 +220,27 @@ export default function RegisterScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  requirements: { marginTop: -5, marginBottom: 15, paddingLeft: 2 },
+  requirementsTitle: {
+    fontFamily: "Manrope_700Bold",
+    fontSize: 11,
+    color: "#596C8A",
+    marginBottom: 7,
+  },
+  requirementRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 4,
+  },
+  requirementText: {
+    fontFamily: "Manrope_500Medium",
+    fontSize: 11,
+    lineHeight: 16,
+    color: "#7787A0",
+    flexShrink: 1,
+  },
+  requirementPassed: { color: "#267256" },
   actionSpacing: { marginTop: 5 },
   footer: {
     flexDirection: "row",

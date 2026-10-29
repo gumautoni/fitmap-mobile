@@ -1,3 +1,4 @@
+import string
 from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
@@ -40,7 +41,7 @@ class RegisterRequest(BaseModel):
     )
     email: EmailStr
     password: str = Field(
-        min_length=15,
+        min_length=8,
         max_length=128,
     )
 
@@ -48,6 +49,20 @@ class RegisterRequest(BaseModel):
     @classmethod
     def normalize_name_field(cls, value: str) -> str:
         return normalize_name(value)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_policy(cls, value: str) -> str:
+        # A mesma composição é exigida no cadastro mobile; não afeta o Login.
+        if not any("A" <= char <= "Z" for char in value):
+            raise ValueError("Password must contain an uppercase letter (A-Z).")
+        if not any("a" <= char <= "z" for char in value):
+            raise ValueError("Password must contain a lowercase letter (a-z).")
+        if not any("0" <= char <= "9" for char in value):
+            raise ValueError("Password must contain a digit (0-9).")
+        if not any(char in string.punctuation for char in value):
+            raise ValueError("Password must contain an ASCII special character.")
+        return value
 
 
 class LoginRequest(BaseModel):

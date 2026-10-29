@@ -4,9 +4,14 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, delete, func, select
+from sqlalchemy.orm import Session
 
+from fitmap.identity.accounts import create_user
 from fitmap.identity.models import AuthSession, User
 from fitmap.identity.security import verify_password
+
+VALID_PASSWORD = "Aa1!bcde"
+LEGACY_PASSWORD = "123456789012345"
 
 
 @pytest.fixture
@@ -39,7 +44,7 @@ def test_register_creates_user_and_returns_tokens(
     created_emails: list[str],
 ) -> None:
     email = f"user-{uuid4()}@example.com"
-    password = "123456789012345"
+    password = VALID_PASSWORD
     created_emails.append(email)
 
     response = client.post(
@@ -103,7 +108,7 @@ def test_register_rejects_duplicate_email(
         json={
             "name": "First User",
             "email": email,
-            "password": "123456789012345",
+            "password": VALID_PASSWORD,
         },
     )
 
@@ -112,7 +117,7 @@ def test_register_rejects_duplicate_email(
         json={
             "name": "Duplicate User",
             "email": email.upper(),
-            "password": "abcdefghijklmno",
+            "password": "New2@password",
         },
     )
 
@@ -132,7 +137,7 @@ def test_login_returns_new_authentication_session(
     created_emails: list[str],
 ) -> None:
     email = f"user-{uuid4()}@example.com"
-    password = "123456789012345"
+    password = VALID_PASSWORD
     created_emails.append(email)
 
     register_response = client.post(
@@ -184,6 +189,33 @@ def test_login_returns_new_authentication_session(
     assert session_count == 2
 
 
+def test_login_accepts_existing_legacy_password(
+    client: TestClient,
+    database_engine: Engine,
+    created_emails: list[str],
+) -> None:
+    email = f"legacy-{uuid4()}@example.com"
+    created_emails.append(email)
+
+    # Simula uma conta persistida antes da mudança de política, sem novo cadastro.
+    with database_engine.begin() as connection, Session(bind=connection) as session:
+        create_user(
+            db_session=session,
+            name="Legacy User",
+            email=email,
+            password=LEGACY_PASSWORD,
+        )
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": LEGACY_PASSWORD},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == email
+    assert response.json()["tokens"]["access_token"]
+
+
 def test_login_rejects_invalid_password_with_generic_error(
     client: TestClient,
     created_emails: list[str],
@@ -196,7 +228,7 @@ def test_login_rejects_invalid_password_with_generic_error(
         json={
             "name": "FitMap User",
             "email": email,
-            "password": "123456789012345",
+            "password": VALID_PASSWORD,
         },
     )
 
@@ -226,7 +258,7 @@ def test_login_rejects_unknown_email_with_same_generic_error(
         "/api/v1/auth/login",
         json={
             "email": f"missing-{uuid4()}@example.com",
-            "password": "123456789012345",
+            "password": LEGACY_PASSWORD,
         },
     )
 
@@ -270,3 +302,41 @@ def test_register_rejects_invalid_payload_without_creating_account(
         )
 
     assert user_id is None
+
+
+@pytest.mark.parametrize(
+    "invalid_password",
+    [
+        "Aa1!abc",  # mínimo 8
+        "Aa1!" + "x" * 125,  # máximo 128
+        "aa1!bcde",  # maiúscula
+        "AA1!BCDE",  # minúscula
+        "Aa!!bcde",  # número
+        "Aa11bcde",  # símbolo
+        LEGACY_PASSWORD,  # senha antiga não pode ser usada em cadastro novo
+    ],
+)
+def test_register_rejects_each_invalid_password_without_creating_user(
+    client: TestClient,
+    database_engine: Engine,
+    invalid_password: str,
+) -> None:
+    email = f"invalid-{uuid4()}@example.com"
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "FitMap User",
+            "email": email,
+            "password": invalid_password,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "error": {
+            "code": "request_validation_error",
+            "message": "Request validation failed.",
+        }
+    }
+    with database_engine.connect() as connection:
+        assert connection.scalar(select(User.id).where(User.email == email)) is None

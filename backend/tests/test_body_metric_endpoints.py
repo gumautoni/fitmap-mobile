@@ -53,7 +53,7 @@ def register_user(
         json={
             "name": "Body Metrics API User",
             "email": email,
-            "password": "123456789012345",
+            "password": "Aa1!bcde",
         },
     )
 
