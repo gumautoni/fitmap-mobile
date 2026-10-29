@@ -25,7 +25,7 @@ const COLORS = {
 
 /**
  * Estrutura compartilhada para manter Login e Cadastro visualmente consistentes.
- * A decoração vetorial escala com toda a tela, sem imagens posicionadas isoladamente.
+ * A fita aprovada aparece como imagem de fundo, e o formulario fica acima dela.
  */
 export default function AuthScreenShell({
   title,
@@ -38,61 +38,65 @@ export default function AuthScreenShell({
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" />
 
-      <AuthBackground />
-
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+      {/* 22-C3.5: o formulario e filho do fundo, nunca fica atras dele. */}
+      <AuthBackground>
+        <KeyboardAvoidingView
+          style={styles.keyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={styles.content}>
-            <Pressable
-              onPress={onBack}
-              accessibilityRole="button"
-              accessibilityLabel="Voltar para boas-vindas"
-              hitSlop={10}
-              style={({ pressed }) => [
-                styles.backButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <ArrowLeft size={20} color={COLORS.navy} strokeWidth={2.2} />
-              <Text style={styles.backText}>Voltar</Text>
-            </Pressable>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            <View style={styles.content}>
+              <Pressable
+                onPress={onBack}
+                accessibilityRole="button"
+                accessibilityLabel="Voltar para boas-vindas"
+                hitSlop={10}
+                style={({ pressed }) => [
+                  styles.backButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <ArrowLeft size={20} color={COLORS.navy} strokeWidth={2.2} />
+                <Text style={styles.backText}>Voltar</Text>
+              </Pressable>
 
-            <View style={styles.brand}>
-              <View style={styles.logoShadow}>
-                <Image
-                  source={require("../../../assets/images/fitmap-logo-symbol.png")}
-                  resizeMode="contain"
-                  style={styles.logo}
-                  accessibilityLabel="Símbolo do FitMap"
-                />
+              <View style={styles.brand}>
+                <View style={styles.logoShadow}>
+                  <Image
+                    source={require("../../../assets/images/fitmap-logo-symbol.png")}
+                    resizeMode="contain"
+                    style={styles.logo}
+                    accessibilityLabel="Símbolo do FitMap"
+                  />
+                </View>
+                <View style={styles.wordmark} accessibilityLabel="FitMap">
+                  <Text style={styles.wordmarkFit}>Fit</Text>
+                  <Text style={styles.wordmarkMap}>Map</Text>
+                </View>
               </View>
-              <View style={styles.wordmark} accessibilityLabel="FitMap">
-                <Text style={styles.wordmarkFit}>Fit</Text>
-                <Text style={styles.wordmarkMap}>Map</Text>
-              </View>
+
+              <Text style={styles.eyebrow}>{eyebrow}</Text>
+              <Text style={styles.title}>{title}</Text>
+              <Text style={styles.subtitle}>{subtitle}</Text>
+
+              <View style={styles.formCard}>{children}</View>
             </View>
-
-            <Text style={styles.eyebrow}>{eyebrow}</Text>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.subtitle}>{subtitle}</Text>
-
-            <View style={styles.formCard}>{children}</View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </AuthBackground>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.background },
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
   keyboardView: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
