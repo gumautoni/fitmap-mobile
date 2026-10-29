@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # Not required until recovery is enabled. Never reuse JWT credentials.
     auth_recovery_code_secret: SecretStr | None = None
 
+    # Required only for email verification; independent of JWT and recovery keys.
+    auth_email_verification_secret: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

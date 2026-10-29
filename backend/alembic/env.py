@@ -7,6 +7,7 @@ import fitmap.gyms.models
 import fitmap.gyms.review_models
 import fitmap.identity.models
 import fitmap.identity.recovery_models
+import fitmap.identity.verification_models
 import fitmap.progress.goal_models
 import fitmap.progress.models
 import fitmap.training.models  # noqa: F401
