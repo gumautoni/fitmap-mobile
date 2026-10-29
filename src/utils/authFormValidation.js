@@ -1,8 +1,8 @@
-// Regra temporária alinhada ao backend atual.
-// O mínimo de 8 caracteres com composição obrigatória será aplicado
-// quando o backend e seus testes forem atualizados no Ciclo 22-D.
-export const MIN_PASSWORD_LENGTH = 15;
+export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 128;
+
+// Mesmos símbolos ASCII aceitos no RegisterRequest do backend (string.punctuation).
+const SPECIAL_CHARACTERS = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
 export function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -14,6 +14,21 @@ export function normalizeName(name) {
 
 export function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+export function getPasswordRequirements(password) {
+  const characters = Array.from(password);
+  return {
+    length:
+      characters.length >= MIN_PASSWORD_LENGTH &&
+      characters.length <= MAX_PASSWORD_LENGTH,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: characters.some((character) =>
+      SPECIAL_CHARACTERS.includes(character),
+    ),
+  };
 }
 
 export function validateLoginForm(email, password) {
@@ -46,13 +61,25 @@ export function validateRegistrationForm(
   } else if (!isValidEmail(email)) {
     errors.email = "Informe um e-mail válido.";
   }
+
+  const characterCount = Array.from(password).length;
+  const requirements = getPasswordRequirements(password);
   if (!password) {
     errors.password = "Crie uma senha.";
-  } else if (password.length < MIN_PASSWORD_LENGTH) {
+  } else if (characterCount < MIN_PASSWORD_LENGTH) {
     errors.password = `A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres.`;
-  } else if (password.length > MAX_PASSWORD_LENGTH) {
+  } else if (characterCount > MAX_PASSWORD_LENGTH) {
     errors.password = `A senha pode ter no máximo ${MAX_PASSWORD_LENGTH} caracteres.`;
+  } else if (!requirements.uppercase) {
+    errors.password = "Inclua pelo menos uma letra maiúscula.";
+  } else if (!requirements.lowercase) {
+    errors.password = "Inclua pelo menos uma letra minúscula.";
+  } else if (!requirements.number) {
+    errors.password = "Inclua pelo menos um número.";
+  } else if (!requirements.special) {
+    errors.password = "Inclua pelo menos um símbolo, como !, @ ou #.";
   }
+
   if (!confirmPassword) {
     errors.confirmPassword = "Confirme sua senha.";
   } else if (confirmPassword !== password) {

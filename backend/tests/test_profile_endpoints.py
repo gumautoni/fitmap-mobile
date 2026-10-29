@@ -79,7 +79,7 @@ def register_user(
         json={
             "name": name,
             "email": email,
-            "password": "123456789012345",
+            "password": "Aa1!bcde",
         },
     )
 

@@ -71,7 +71,7 @@ def _register_user(
         json={
             "name": "FitMap User",
             "email": email,
-            "password": "123456789012345",
+            "password": "Aa1!bcde",
         },
     )
 
