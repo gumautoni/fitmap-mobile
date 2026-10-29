@@ -37,6 +37,7 @@ export type AppStackParamList = {
 };
 
 export type AuthStackParamList = {
+  BoasVindas: undefined;
   Login: undefined;
   Cadastro: undefined;
 };
