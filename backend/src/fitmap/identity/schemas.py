@@ -1,9 +1,10 @@
 import string
 from datetime import datetime
 from enum import StrEnum
+from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
 def normalize_name(value: str) -> str:
@@ -13,6 +14,19 @@ def normalize_name(value: str) -> str:
         raise ValueError("Name must not be blank.")
 
     return normalized
+
+
+def validate_registration_password(value: str) -> str:
+    """Shared server-side composition policy for new and recovered passwords."""
+    if not any("A" <= char <= "Z" for char in value):
+        raise ValueError("Password must contain an uppercase letter (A-Z).")
+    if not any("a" <= char <= "z" for char in value):
+        raise ValueError("Password must contain a lowercase letter (a-z).")
+    if not any("0" <= char <= "9" for char in value):
+        raise ValueError("Password must contain a digit (0-9).")
+    if not any(char in string.punctuation for char in value):
+        raise ValueError("Password must contain an ASCII special character.")
+    return value
 
 
 class FitnessGoal(StrEnum):
@@ -53,16 +67,7 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password_policy(cls, value: str) -> str:
-        # A mesma composição é exigida no cadastro mobile; não afeta o Login.
-        if not any("A" <= char <= "Z" for char in value):
-            raise ValueError("Password must contain an uppercase letter (A-Z).")
-        if not any("a" <= char <= "z" for char in value):
-            raise ValueError("Password must contain a lowercase letter (a-z).")
-        if not any("0" <= char <= "9" for char in value):
-            raise ValueError("Password must contain a digit (0-9).")
-        if not any(char in string.punctuation for char in value):
-            raise ValueError("Password must contain an ASCII special character.")
-        return value
+        return validate_registration_password(value)
 
 
 class LoginRequest(BaseModel):
@@ -71,6 +76,28 @@ class LoginRequest(BaseModel):
         min_length=1,
         max_length=128,
     )
+
+
+class PasswordRecoveryRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordRecoveryResetRequest(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
+    password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_policy(cls, value: str) -> str:
+        return validate_registration_password(value)
+
+    @model_validator(mode="after")
+    def validate_confirmation(self) -> Self:
+        if self.password != self.confirm_password:
+            raise ValueError("Password confirmation does not match.")
+        return self
 
 
 class UserResponse(BaseModel):

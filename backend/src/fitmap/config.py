@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     auth_access_token_minutes: int = 15
     auth_refresh_token_days: int = 30
 
+    # Not required until recovery is enabled. Never reuse JWT credentials.
+    auth_recovery_code_secret: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
