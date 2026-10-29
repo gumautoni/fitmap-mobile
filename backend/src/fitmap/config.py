@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     email_from_address: str | None = None
     email_timeout_seconds: float = 5.0
 
+    # Required only when enqueuing/decoding encrypted outbox payloads.
+    # Generate a Fernet key independently and keep it server-side.
+    email_outbox_encryption_key: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,7 +1,9 @@
 """Provider-independent outbound email contract.
 
-Email contents can contain short-lived secrets (such as recovery codes). Never log
-or persist a serialized message. A real transport will be implemented separately.
+Email contents may contain short-lived secrets (such as recovery codes).
+Never log or persist a plaintext serialized message. Only the explicitly
+encrypted, expiring transactional outbox may durably store email content.
+A real transport must be invoked only after the enclosing transaction commits.
 """
 
 from dataclasses import dataclass
@@ -10,7 +12,7 @@ from typing import Protocol
 
 @dataclass(frozen=True, slots=True, repr=False)
 class OutboundEmail:
-    """A single transactional email, intended for immediate provider delivery."""
+    """A single transactional email, intended for provider delivery."""
 
     recipient: str
     subject: str
@@ -18,6 +20,6 @@ class OutboundEmail:
 
 
 class EmailTransport(Protocol):
-    """Port implemented by a future real provider or an isolated test double."""
+    """Port implemented by a real provider or an isolated test double."""
 
     def send(self, message: OutboundEmail) -> None: ...
