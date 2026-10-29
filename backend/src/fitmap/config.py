@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # Required only for email verification; independent of JWT and recovery keys.
     auth_email_verification_secret: SecretStr | None = None
 
+    # Transport remains disabled until outbox, sender verification and HTTP controls exist.
+    email_provider: Literal["disabled", "resend"] = "disabled"
+    resend_api_key: SecretStr | None = None
+    email_from_address: str | None = None
+    email_timeout_seconds: float = 5.0
+
 
 @lru_cache
 def get_settings() -> Settings:
