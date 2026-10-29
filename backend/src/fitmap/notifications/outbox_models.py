@@ -23,6 +23,7 @@ class EmailOutboxMessage(Base):
     __tablename__ = "email_outbox_messages"
     __table_args__ = (
         Index("ix_email_outbox_messages_status_expires_at", "status", "expires_at"),
+        Index("ix_email_outbox_messages_due", "status", "next_attempt_at", "expires_at"),
         CheckConstraint(
             "purpose IN ('email_verification', 'password_recovery')",
             name="ck_email_outbox_purpose",
@@ -42,10 +43,8 @@ class EmailOutboxMessage(Base):
         index=True,
     )
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)
-    # Contains authenticated encryption ciphertext, never plaintext JSON or codes.
     encrypted_payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     key_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    # Stable for the lifetime of this message. Delivery worker MUST reuse it.
     idempotency_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -55,3 +54,7 @@ class EmailOutboxMessage(Base):
     )
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # For cross-process leases; never hold a database transaction open over HTTPS.
+    lease_token: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    leased_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

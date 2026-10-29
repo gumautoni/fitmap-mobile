@@ -1,11 +1,10 @@
-"""Opt-in Resend HTTPS transport for transactional emails.
+"""Opt-in Resend HTTPS transport; delivery orchestration lives in the outbox dispatcher.
 
-No routes, recovery/verification orchestration, scheduler, or outbox are enabled
-by this module. The caller must guarantee durable, idempotent delivery ordering
-before using it for security codes. Never log API requests or email bodies.
+Never log API requests, headers, recipients or messages containing short-lived codes.
 """
 
 import json
+import re
 from typing import cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -16,6 +15,7 @@ from fitmap.config import Settings
 from fitmap.notifications.email import OutboundEmail
 
 _RESEND_EMAIL_ENDPOINT = "https://api.resend.com/emails"
+_IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,256}$")
 
 
 class EmailConfigurationError(RuntimeError):
@@ -31,11 +31,7 @@ class EmailDeliveryError(RuntimeError):
 
 
 class ResendEmailTransport:
-    """HTTPS email transport. A request is sent once; retries belong to an outbox.
-
-    The constructor does not make network requests. It is intentionally not
-    instantiated anywhere in the application's current runtime.
-    """
+    """HTTPS transport, no automatic retries and no network access during initialization."""
 
     def __init__(self, *, api_key: SecretStr, sender: str, timeout_seconds: float = 5.0) -> None:
         secret = api_key.get_secret_value()
@@ -54,12 +50,11 @@ class ResendEmailTransport:
         self._sender = sender
         self._timeout_seconds = timeout_seconds
 
-    def send(self, message: OutboundEmail) -> None:
-        """Deliver a message, or raise a sanitized failure with retry classification.
+    def send(self, message: OutboundEmail, *, idempotency_key: str | None = None) -> None:
+        """One submission only. The worker must reuse the same idempotency key on retries.
 
-        A successful Resend API response is acceptance, not inbox delivery.
-        No automatic retries are made, because an outbox must supply stable
-        idempotency keys and track delivery state before retries are safe.
+        2xx with a nonempty identifier means accepted by Resend, not inbox delivered.
+        Existing direct send callers remain compatible with an omitted idempotency key.
         """
         if (
             not message.recipient
@@ -68,6 +63,8 @@ class ResendEmailTransport:
             or any(char in message.recipient + message.subject for char in "\r\n")
         ):
             raise ValueError("Invalid transactional email message.")
+        if idempotency_key is not None and not _IDEMPOTENCY_KEY_RE.fullmatch(idempotency_key):
+            raise ValueError("Invalid email idempotency key.")
 
         payload = json.dumps(
             {
@@ -78,14 +75,17 @@ class ResendEmailTransport:
             },
             ensure_ascii=False,
         ).encode()
+        headers = {
+            "Authorization": f"Bearer {self._api_key.get_secret_value()}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        if idempotency_key is not None:
+            headers["Idempotency-Key"] = idempotency_key
         request = Request(
             _RESEND_EMAIL_ENDPOINT,
             data=payload,
-            headers={
-                "Authorization": f"Bearer {self._api_key.get_secret_value()}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
+            headers=headers,
             method="POST",
         )
         try:
@@ -93,13 +93,14 @@ class ResendEmailTransport:
                 status_code = response.status
                 result_bytes = response.read()
         except HTTPError as exc:
-            raise EmailDeliveryError(retryable=exc.code == 429 or exc.code >= 500) from None
+            # 409 may indicate a concurrent request with the same key. Retrying the
+            # unchanged payload/key within the short PIN lifetime is safe.
+            raise EmailDeliveryError(retryable=exc.code in (409, 429) or exc.code >= 500) from None
         except (URLError, TimeoutError, OSError):
-            # Outcome is uncertain on transport errors; never blind-retry a PIN.
             raise EmailDeliveryError(retryable=True) from None
 
         if not 200 <= status_code < 300:
-            raise EmailDeliveryError(retryable=status_code == 429 or status_code >= 500)
+            raise EmailDeliveryError(retryable=status_code in (409, 429) or status_code >= 500)
 
         try:
             result = json.loads(result_bytes)
@@ -116,7 +117,7 @@ class ResendEmailTransport:
 
 
 def create_resend_transport(settings: Settings) -> ResendEmailTransport:
-    """Fail closed until a server explicitly opts in to Resend configuration."""
+    """Fail closed until the server explicitly opts in to Resend configuration."""
     if settings.email_provider != "resend":
         raise EmailConfigurationError("Transactional email provider is disabled.")
     if settings.resend_api_key is None or settings.email_from_address is None:
