@@ -10,7 +10,7 @@ export type AppStackParamList = {
     workoutId: string;
   };
   ExecutarTreino: {
-    workoutId: string;
+    workoutId?: string;
   };
   HistoricoTreinos: undefined;
   DetalhesHistoricoTreino: {

@@ -223,10 +223,18 @@ export default function WorkoutSessionScreen({
       );
 
       if (activeSession) {
-        setResumedDifferentWorkout(activeSession.sourceWorkoutId !== workoutId);
+        setResumedDifferentWorkout(
+          Boolean(workoutId) && activeSession.sourceWorkoutId !== workoutId,
+        );
         applyWorkoutSession(activeSession);
 
         return;
+      }
+
+      if (!workoutId) {
+        throw new Error(
+          "Nao existe uma sessao ativa para continuar. Abra seus treinos e escolha um novo treino.",
+        );
       }
 
       const startedSession = await runAuthenticatedRequest((accessToken) =>
