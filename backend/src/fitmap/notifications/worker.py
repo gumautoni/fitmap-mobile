@@ -52,6 +52,74 @@ class BatchResult:
     idle: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DeliveryPreflight:
+    configuration_valid: bool
+    checks: dict[str, bool]
+    manual_verification_required: tuple[str, ...]
+
+
+def build_delivery_preflight(settings: Settings) -> DeliveryPreflight:
+    """Validate local configuration only; no DB, transport construction or network.
+
+    This is NOT proof of domain verification, delivery, or authorization to send.
+    """
+    api_key = settings.resend_api_key
+    provider_key = api_key.get_secret_value() if api_key is not None else ""
+    sender = settings.email_from_address
+    limiter = settings.auth_rate_limit_secret
+    limiter_value = limiter.get_secret_value() if limiter is not None else ""
+    checks = {
+        "approved_environment": settings.environment in ("staging", "production"),
+        "worker_enabled": settings.email_worker_enabled,
+        "resend_selected": settings.email_provider == "resend",
+        "provider_key_format": (
+            len(provider_key) >= 10 and not any(character.isspace() for character in provider_key)
+        ),
+        "sender_address_format": (
+            sender is not None
+            and bool(sender)
+            and "@" in sender
+            and len(sender) <= 320
+            and not any(character in sender for character in "\r\n")
+        ),
+        "provider_timeout_range": 1 <= settings.email_timeout_seconds <= 15,
+        "http_rate_limit_secret": (
+            len(limiter_value.encode("utf-8")) >= 32
+            and limiter_value
+            not in {
+                settings.auth_jwt_secret.get_secret_value(),
+                settings.auth_recovery_code_secret.get_secret_value()
+                if settings.auth_recovery_code_secret is not None
+                else "",
+                settings.auth_email_verification_secret.get_secret_value()
+                if settings.auth_email_verification_secret is not None
+                else "",
+                settings.email_outbox_encryption_key.get_secret_value()
+                if settings.email_outbox_encryption_key is not None
+                else "",
+            }
+        ),
+    }
+    try:
+        validate_live_worker_settings(settings)
+        checks["worker_security_secrets"] = True
+    except WorkerConfigurationError:
+        checks["worker_security_secrets"] = False
+    return DeliveryPreflight(
+        configuration_valid=all(checks.values()),
+        checks=checks,
+        manual_verification_required=(
+            "resend_sending_domain_verified",
+            "spf_dkim_dmarc_dns_reviewed",
+            "provider_key_scope_and_rotation_reviewed",
+            "isolated_job_and_alerts_configured",
+            "delivery_to_controlled_inbox_confirmed",
+            "public_api_timing_and_proxy_reviewed",
+        ),
+    )
+
+
 def inspect_outbox(*, session_factory: Callable[[], Session]) -> OutboxCounts:
     """Read counts only. Never decrypt, claim, delete or publish messages."""
     counts = {key: 0 for key in ("pending", "processing", "accepted", "failed", "expired")}
@@ -172,10 +240,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="For live execution, supply the exact text SEND_REAL_EMAILS.",
     )
     parser.add_argument("--max-messages", type=int, default=1)
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Audit configuration offline without database or delivery.",
+    )
     args = parser.parse_args(argv)
 
     if not 1 <= args.max_messages <= MAX_BATCH_SIZE:
         parser.error("--max-messages must be between 1 and 25")
+    if args.preflight and (args.execute or args.confirm_send is not None):
+        print("Preflight cannot be combined with sending.", file=sys.stderr)
+        return 2
     if args.execute and args.confirm_send != SEND_CONFIRMATION:
         print("Live delivery blocked: explicit confirmation required.", file=sys.stderr)
         return 2
@@ -185,6 +261,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         settings = get_settings()
+        if args.preflight:
+            report = build_delivery_preflight(settings)
+            print(json.dumps(asdict(report), sort_keys=True))
+            return 0 if report.configuration_valid else 1
         if args.execute:
             validate_live_worker_settings(settings)
             transport = create_resend_transport(settings)

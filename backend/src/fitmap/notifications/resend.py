@@ -30,6 +30,28 @@ class EmailDeliveryError(RuntimeError):
         self.retryable = retryable
 
 
+def _retryable_http_failure(error: HTTPError) -> bool:
+    """Do not retry known 409 payload mismatches; preserve safe unknown behavior.
+
+    The provider response is untrusted: inspect a bounded body, never log it.
+    """
+    if error.code != 409:
+        return error.code == 429 or error.code >= 500
+    try:
+        payload: object = json.loads(error.read(4096))
+        if isinstance(payload, dict):
+            fields = cast(dict[str, object], payload)
+            for field in ("name", "error", "code"):
+                kind = fields.get(field)
+                if kind == "invalid_idempotent_request":
+                    return False
+                if kind == "concurrent_idempotent_requests":
+                    return True
+    except (ValueError, TypeError, AttributeError, OSError):
+        pass
+    return True
+
+
 class ResendEmailTransport:
     """HTTPS transport, no automatic retries and no network access during initialization."""
 
@@ -95,7 +117,7 @@ class ResendEmailTransport:
         except HTTPError as exc:
             # 409 may indicate a concurrent request with the same key. Retrying the
             # unchanged payload/key within the short PIN lifetime is safe.
-            raise EmailDeliveryError(retryable=exc.code in (409, 429) or exc.code >= 500) from None
+            raise EmailDeliveryError(retryable=_retryable_http_failure(exc)) from None
         except (URLError, TimeoutError, OSError):
             raise EmailDeliveryError(retryable=True) from None
 
