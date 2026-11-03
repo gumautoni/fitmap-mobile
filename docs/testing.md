@@ -573,7 +573,27 @@ O resultado anterior de erro generalizado por indisponibilidade do PostgreSQL de
 
 Esses números representam um checkpoint verificado e podem mudar com a evolução do projeto.
 
-A Issue #16 ainda depende de revisão da Pull Request e aprovação do respectivo CI para ser considerada integrada à branch `main`.
+A Issue #16 foi posteriormente integrada à branch `main`. Os números acima são históricos e não representam o checkpoint atual.
+
+### 8.1. Auditoria da branch principal — 03/11/2026
+
+Antes da limpeza do legado (commit `748dd83`), foram confirmados:
+
+| Verificação | Resultado |
+|---|---|
+| Backend | 593 testes aprovados |
+| Mobile | 199 testes aprovados, 20 suítes |
+| Ruff lint e format | Aprovados |
+| Pyright strict | 0 erros e 0 avisos |
+| TypeScript, ESLint e Prettier | Aprovados |
+| Alembic | `3a467e3941e2 (head)` |
+| Git | `main` limpa, sincronizada |
+
+Um warning de depreciação do Starlette/AnyIO permanece sem falha de testes.
+Após remover o componente legado CustomButton, seus testes exclusivos também são
+retirados; um total mobile menor é esperado e deve ser registrado após a nova suíte.
+
+A validação automatizada não substitui a avaliação integrada no dispositivo.
 
 ## 9. Convenções
 
@@ -597,8 +617,6 @@ A estratégia de testes deve acompanhar a implementação de novas funcionalidad
 
 Entre os próximos itens do backlog estão:
 
-- métricas corporais e objetivos fitness mensuráveis;
-- avaliações e comentários de academias;
 - novas regras de validação e autorização;
 - ampliação de cenários funcionais conforme necessário.
 

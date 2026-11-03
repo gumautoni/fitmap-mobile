@@ -24,12 +24,6 @@ export type AppStackParamList = {
     workoutId: string;
     workoutExerciseId: string;
   };
-  Tarefas: undefined;
-  NovaTarefa: undefined;
-  Camera: {
-    taskId: string;
-    taskTitle: string;
-  };
   DetalhesAcademia: {
     gymId: string;
     distanceKm?: number | null;

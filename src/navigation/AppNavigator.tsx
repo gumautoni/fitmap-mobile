@@ -1,8 +1,6 @@
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Pressable, Text } from "react-native";
 
-import AddTaskScreen from "../screens/AddTaskScreen";
-import CameraScreen from "../screens/CameraScreen";
 import CreateWorkoutScreen from "../screens/CreateWorkoutScreen";
 import ExerciseCatalogScreen from "../screens/ExerciseCatalogScreen";
 import GymDetailsScreen from "../screens/GymDetailsScreen";
@@ -10,7 +8,6 @@ import HomeScreen from "../screens/HomeScreen";
 import MapScreen from "../screens/MapScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import ProgressScreen from "../screens/ProgressScreen";
-import TasksScreen from "../screens/TasksScreen";
 import WorkoutDetailsScreen from "../screens/WorkoutDetailsScreen";
 import WorkoutExerciseConfigScreen from "../screens/WorkoutExerciseConfigScreen";
 import WorkoutHistoryDetailsScreen from "../screens/WorkoutHistoryDetailsScreen";
@@ -184,30 +181,6 @@ export default function AppNavigator() {
         component={WorkoutExerciseConfigScreen}
         options={{
           title: "Configurar exercício",
-        }}
-      />
-
-      <Stack.Screen
-        name="Tarefas"
-        component={TasksScreen}
-        options={{
-          title: "Exercícios",
-        }}
-      />
-
-      <Stack.Screen
-        name="NovaTarefa"
-        component={AddTaskScreen}
-        options={{
-          title: "Novo exercício",
-        }}
-      />
-
-      <Stack.Screen
-        name="Camera"
-        component={CameraScreen}
-        options={{
-          title: "Registrar exercício",
         }}
       />
 

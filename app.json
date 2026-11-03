@@ -24,22 +24,12 @@
           "locationWhenInUsePermission": "Permita que o FitMap acesse sua localização para encontrar academias próximas."
         }
       ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Permita que o FitMap use a câmera para registrar exercícios concluídos."
-        }
-      ],
       "expo-secure-store",
       "expo-font"
     ],
     "android": {
       "package": "com.bryan.fitmap",
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "CAMERA"
-      ],
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/logo-fitmap.png",
         "backgroundColor": "#111827"
@@ -49,7 +39,6 @@
       "bundleIdentifier": "com.bryan.fitmap",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Permita que o FitMap use a câmera para registrar exercícios concluídos.",
         "NSLocationWhenInUseUsageDescription": "Permita que o FitMap acesse sua localização para encontrar academias próximas."
       }
     }
