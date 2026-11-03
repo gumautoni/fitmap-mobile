@@ -1,4 +1,4 @@
-"""Recovery foundation contract/integration tests; HTTP endpoints are not enabled yet."""
+"""Recovery foundation tests; HTTP functionality remains gated by configuration."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -350,9 +350,9 @@ def test_reusing_jwt_secret_is_rejected(test_settings: Settings) -> None:
         hash_recovery_code(challenge_id=uuid4(), code="012345", settings=reused)
 
 
-def test_recovery_http_routes_are_not_exposed_yet(client: TestClient) -> None:
+def test_recovery_routes_are_documented_in_openapi(client: TestClient) -> None:
     response = client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
-    assert "/api/v1/auth/password-recovery/request" not in paths
-    assert "/api/v1/auth/password-recovery/reset" not in paths
+    assert "/api/v1/auth/password-recovery/request" in paths
+    assert "/api/v1/auth/password-recovery/reset" in paths

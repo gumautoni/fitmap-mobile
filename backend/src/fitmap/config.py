@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     email_outbox_encryption_key: SecretStr | None = None
     auth_rate_limit_secret: SecretStr | None = None
     auth_email_verification_enabled: bool = False
+    auth_password_recovery_enabled: bool = False
 
 
 @lru_cache
