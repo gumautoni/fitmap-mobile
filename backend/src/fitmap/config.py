@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # Required only when enqueuing/decoding encrypted outbox payloads.
     # Generate a Fernet key independently and keep it server-side.
     email_outbox_encryption_key: SecretStr | None = None
+    auth_rate_limit_secret: SecretStr | None = None
 
 
 @lru_cache

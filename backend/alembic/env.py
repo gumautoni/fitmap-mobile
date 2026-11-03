@@ -11,6 +11,7 @@ import fitmap.identity.verification_models
 import fitmap.notifications.outbox_models
 import fitmap.progress.goal_models
 import fitmap.progress.models
+import fitmap.security.rate_limit_models
 import fitmap.training.models  # noqa: F401
 from fitmap.config import get_settings
 from fitmap.persistence.base import Base
