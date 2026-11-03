@@ -78,7 +78,7 @@ The backend derives profile ownership from the authenticated identity rather tha
 
 Fitness-related preferences are intentionally limited to fields supported by the current implementation.
 
-Historical body measurements and body-composition tracking are not yet implemented.
+Body-metric records, weight history and measurable fitness goals have backend and mobile components; device-level validation remains pending for the TCC presentation.
 
 Profile-image storage is not currently available. The application uses account initials as the user avatar.
 
@@ -163,7 +163,7 @@ Important business rules include:
 
 The mobile integration includes authenticated API requests, session-token refresh behavior, favorite-state synchronization between screens and appropriate loading and error states.
 
-**Development status:** Favorite gyms have been implemented and validated on the `feat/favorite-gyms` branch. Pull Request review, CI validation and merge into `main` remain pending.
+**Development status:** Favorite gyms are integrated into `main` and covered by automated backend and mobile tests.
 
 ### Workout planning, execution and history
 
@@ -263,21 +263,6 @@ A photo can optionally reference a workout session, but a workout session is not
 The relationship is designed so that removing an associated workout session does not automatically delete the progress photo.
 
 Progress photos are private to the authenticated user.
-
-### Legacy prototype functionality
-
-The original mobile prototype retains a separate device-local exercise-recording flow.
-
-This legacy functionality includes:
-
-- local exercise entries;
-- local completion status;
-- exercise descriptions;
-- locally associated photos.
-
-These records are separate from the authenticated backend-integrated Training and Progress modules.
-
-Legacy prototype functionality is being evaluated and migrated incrementally rather than through an uncontrolled application rewrite.
 
 ## Architecture
 
@@ -523,8 +508,8 @@ Photo content is returned through the backend rather than exposing a public stor
 
 ### Mobile
 
-- React Native 0.86
-- Expo 57
+- React Native 0.88
+- Expo 58
 - React 19
 - TypeScript
 - React Navigation
@@ -532,7 +517,6 @@ Photo content is returned through the backend rather than exposing a public stor
 - Expo Location
 - Expo Image Picker
 - Expo Image Manipulator
-- Expo Camera
 - Expo SecureStore
 - AsyncStorage
 - Jest
@@ -912,25 +896,19 @@ The isolated test database is prepared through pytest fixtures and Alembic migra
 
 Tests must not be redirected to a database containing valuable application data.
 
-### Validation checkpoint
+### Validation checkpoint — TCC baseline (2026-11-03)
 
-The favorite gyms implementation has completed local functional and automated validation on its development branch.
+On `main` at commit `748dd83`, the validated baseline before the TCC cleanup was:
 
-The verified local results include:
+- backend: **593 passing pytest tests** using the isolated PostgreSQL test database;
+- mobile: **199 passing Jest tests across 20 suites**;
+- Ruff, Pyright (strict), TypeScript, ESLint and Prettier: approved;
+- Alembic: `3a467e3941e2 (head)`;
+- Git working tree: clean.
 
-- mobile: 53 passing Jest tests;
-- backend: 313 passing pytest tests;
-- TypeScript: no errors;
-- ESLint: no errors;
-- Prettier: formatting approved;
-- Ruff: lint and formatting approved;
-- Pyright: no errors or warnings;
-- dependency lockfile: consistent;
-- Alembic: no pending schema operations.
-
-These numbers describe a local validation checkpoint and may change as new tests and features are introduced.
-
-See [Testing strategy](docs/testing.md) for additional information.
+These are automated-test results, **not proof of end-to-end delivery on a physical device**.
+The cleanup that removes tests exclusive to the legacy UI requires a new validation
+checkpoint; see [Testing strategy](docs/testing.md).
 
 ## Continuous Integration
 
@@ -1093,7 +1071,7 @@ FitMap is under active development.
 
 ### Implemented foundation
 
-The current development branch includes:
+The current `main` branch includes:
 
 **Mobile**
 
@@ -1143,27 +1121,11 @@ The current development branch includes:
 - immutable image publishing foundations;
 - technical architecture documentation.
 
-The favorite gyms feature is implemented and locally validated but remains pending Pull Request merge into `main`.
-
-### Transitional prototype functionality
-
-Legacy device-local functionality remains separate from the backend-integrated Training and Progress domains.
-
-Relevant areas include:
-
-- local exercise records;
-- local exercise completion;
-- exercise-linked local photos.
-
-These features are being managed through incremental migration rather than a complete application rewrite.
-
 ### Planned work
 
 Future product development includes:
 
-- body-metric records and historical measurements;
-- expanded measurable fitness goals;
-- FitMap-managed gym ratings and reviews;
+- e-mail ownership verification and password recovery (deferred beyond the TCC);
 - password recovery;
 - authenticated password changes;
 - account deletion;

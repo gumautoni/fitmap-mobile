@@ -205,17 +205,13 @@ Contém configurações do aplicativo que dependem do ambiente de execução.
 
 Contém a configuração da navegação e os tipos das rotas do aplicativo.
 
-### `src/types/`
-
-Contém tipos e contratos TypeScript compartilhados entre diferentes partes do aplicativo.
-
 ### `src/utils/`
 
 Contém funções utilitárias reutilizáveis.
 
 ### `src/context/`
 
-Contém contextos existentes da aplicação durante o processo de migração incremental.
+Contém o contexto da sessão autenticada, que integra o aplicativo ao backend.
 
 ## Comunicação com o backend
 
@@ -227,15 +223,21 @@ Essa organização facilita:
 
 * tratamento de erros;
 * configuração da URL da API;
-* autenticação futura;
+* autenticação e renovação de tokens;
 * manutenção;
 * testes;
 * alterações na comunicação com o backend.
 
 ## Autenticação
 
-O sistema atual de autenticação local faz parte do protótipo existente.
+O FitMap utiliza autenticação gerenciada pelo backend FastAPI e persistida em PostgreSQL.
+O fluxo atual inclui cadastro, login, renovação e rotação de refresh tokens, restauração
+controlada da sessão e logout. O aplicativo utiliza Expo SecureStore para o refresh token.
 
-A autenticação e o gerenciamento seguro da sessão serão substituídos posteriormente durante a implementação específica da autenticação do backend.
+A rotina de limpeza de registros antigos de autenticação em AsyncStorage permanece
+necessária para migração segura de instalações anteriores; ela **não** representa
+uma autenticação local ativa nem o antigo módulo de exercícios do protótipo.
 
-Essa mudança não faz parte desta etapa de fundação TypeScript.
+A verificação de e-mail e a recuperação de senha não estão implementadas na branch
+`main` que será utilizada na apresentação do TCC. Permanecem como melhorias futuras,
+sem depender da conclusão da infraestrutura Resend para a demonstração.
