@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import EmailStr, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     auth_email_verification_enabled: bool = False
     auth_password_recovery_enabled: bool = False
     email_worker_enabled: bool = False
+    email_trial_enabled: bool = False
+    email_trial_recipient: EmailStr | None = None
 
 
 @lru_cache
