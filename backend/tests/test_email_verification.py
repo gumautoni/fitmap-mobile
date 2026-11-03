@@ -373,9 +373,9 @@ def test_verified_email_is_not_trusted_by_default(
     assert user.email_verified_at is None
 
 
-def test_verification_routes_not_published(client: TestClient) -> None:
+def test_verification_routes_published_in_openapi(client: TestClient) -> None:
     response = client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
-    assert "/api/v1/auth/email-verification/request" not in paths
-    assert "/api/v1/auth/email-verification/confirm" not in paths
+    assert "/api/v1/auth/email-verification/request" in paths
+    assert "/api/v1/auth/email-verification/confirm" in paths

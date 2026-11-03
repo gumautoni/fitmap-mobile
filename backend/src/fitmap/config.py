@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     # Generate a Fernet key independently and keep it server-side.
     email_outbox_encryption_key: SecretStr | None = None
     auth_rate_limit_secret: SecretStr | None = None
+    auth_email_verification_enabled: bool = False
 
 
 @lru_cache
