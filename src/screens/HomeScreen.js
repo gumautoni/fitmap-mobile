@@ -1,14 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-  ArrowRight,
-  Dumbbell,
-  MapPin,
-  Navigation,
-  Search,
-  TrendingUp,
-  Zap,
-} from "lucide-react-native";
+import { ArrowRight, Dumbbell, TrendingUp, Zap } from "lucide-react-native";
 import React, {
   useCallback,
   useContext,
@@ -28,7 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import FitMapPerformanceMark from "../components/FitMapPerformanceMark";
+import FitMapLocationGymPin3D from "../components/FitMapLocationGymPin3D";
 import WorkoutActivityCalendar from "../components/WorkoutActivityCalendar";
 import { AuthContext } from "../context/AuthContext";
 import { getWorkouts } from "../services/training";
@@ -303,7 +295,11 @@ export default function HomeScreen({ navigation }) {
           ]}
         >
           <LinearGradient
-            colors={[theme.colors.heroStart, theme.colors.heroEnd]}
+            colors={
+              theme.mode === "light"
+                ? ["#1C2654", "#4546A9"]
+                : ["#161B37", "#382970"]
+            }
             start={{
               x: 0,
               y: 0,
@@ -340,7 +336,8 @@ export default function HomeScreen({ navigation }) {
               <Text style={styles.heroTitle}>Encontre onde treinar</Text>
 
               <Text style={styles.heroDescription}>
-                Descubra academias próximas ou pesquise uma região para começar.
+                Busque por cidade ou bairro, ou use sua localização para
+                explorar academias no mapa.
               </Text>
 
               <View style={styles.heroAction}>
@@ -358,8 +355,8 @@ export default function HomeScreen({ navigation }) {
               <Animated.View style={[styles.performancePulse, pulseStyle]} />
 
               <Animated.View style={floatingTransform}>
-                <FitMapPerformanceMark
-                  size={142}
+                <FitMapLocationGymPin3D
+                  size={194}
                   primary={theme.colors.primary}
                   primaryDark={theme.colors.primaryPressed}
                   accent={theme.colors.techAccent}
@@ -535,103 +532,6 @@ export default function HomeScreen({ navigation }) {
             </View>
           </View>
         </Pressable>
-
-        <View style={styles.sectionHeader}>
-          <View>
-            <Text style={styles.sectionEyebrow}>DESCUBRA</Text>
-
-            <Text style={styles.sectionTitle}>Escolha onde treinar</Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => navigation.navigate("Mapa")}
-            style={({ pressed }) => [
-              styles.textAction,
-              pressed && styles.textActionPressed,
-            ]}
-          >
-            <Text style={styles.textActionLabel}>Ver mapa</Text>
-
-            <ArrowRight
-              size={16}
-              strokeWidth={2.3}
-              color={theme.colors.primary}
-            />
-          </Pressable>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => navigation.navigate("Mapa")}
-          style={({ pressed }) => [
-            styles.discoveryCard,
-            pressed && styles.cardPressed,
-          ]}
-        >
-          <View style={styles.discoveryAccent} />
-
-          <View style={styles.discoveryMain}>
-            <View style={styles.discoveryIcon}>
-              <Dumbbell
-                size={25}
-                strokeWidth={2.2}
-                color={theme.colors.primary}
-              />
-            </View>
-
-            <View style={styles.discoveryCopy}>
-              <Text style={styles.discoveryTitle}>
-                Seu próximo espaço de treino
-              </Text>
-
-              <Text style={styles.discoveryText}>
-                Busque por cidade, bairro ou região ou encontre opções usando
-                sua localização.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.discoveryFooter}>
-            <View style={styles.capability}>
-              <Search
-                size={14}
-                strokeWidth={2.2}
-                color={theme.colors.primary}
-              />
-
-              <Text style={styles.capabilityText}>Busca</Text>
-            </View>
-
-            <View style={styles.capability}>
-              <Navigation
-                size={14}
-                strokeWidth={2.2}
-                color={theme.colors.primary}
-              />
-
-              <Text style={styles.capabilityText}>Localização</Text>
-            </View>
-
-            <View style={styles.capability}>
-              <MapPin
-                size={14}
-                strokeWidth={2.2}
-                color={theme.colors.primary}
-              />
-
-              <Text style={styles.capabilityText}>Mapa</Text>
-            </View>
-
-            <View style={styles.openButton}>
-              <ArrowRight
-                size={18}
-                strokeWidth={2.4}
-                color={theme.colors.textOnPrimary}
-              />
-            </View>
-          </View>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -755,7 +655,7 @@ function createStyles(theme) {
     },
 
     hero: {
-      minHeight: 286,
+      minHeight: 306,
       borderRadius: theme.radii.xl,
       padding: theme.spacing["2xl"],
       overflow: "hidden",
@@ -905,10 +805,10 @@ function createStyles(theme) {
 
     performanceVisual: {
       position: "absolute",
-      width: 150,
-      height: 170,
-      right: -5,
-      top: 42,
+      width: 200,
+      height: 215,
+      right: -18,
+      top: 46,
       alignItems: "center",
       justifyContent: "center",
       zIndex: 2,
