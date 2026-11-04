@@ -495,7 +495,7 @@ export default function WorkoutSessionScreen({
         {
           text: "OK",
           onPress: () => {
-            navigation.navigate("Treinos");
+            navigation.popTo("MainTabs", { screen: "Treinos" });
           },
         },
       ]);
@@ -547,7 +547,7 @@ export default function WorkoutSessionScreen({
         cancelWorkoutSession(accessToken, workoutSession.id),
       );
 
-      navigation.navigate("Treinos");
+      navigation.popTo("MainTabs", { screen: "Treinos" });
     } catch (cancelError) {
       const message = getErrorMessage(cancelError);
 

@@ -1,5 +1,16 @@
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { Pressable, Text } from "react-native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import {
+  createNativeStackNavigator,
+  type NativeStackNavigationProp,
+} from "@react-navigation/native-stack";
+import {
+  ChartNoAxesColumnIncreasing,
+  Dumbbell,
+  House,
+  MapPin,
+} from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import CreateWorkoutScreen from "../screens/CreateWorkoutScreen";
 import ExerciseCatalogScreen from "../screens/ExerciseCatalogScreen";
@@ -15,15 +26,163 @@ import WorkoutHistoryScreen from "../screens/WorkoutHistoryScreen";
 import WorkoutSessionScreen from "../screens/WorkoutSessionScreen";
 import WorkoutsScreen from "../screens/WorkoutsScreen";
 import { useAppTheme } from "../theme/ThemeProvider";
-import type { AppStackParamList } from "./types";
+import type { AppStackParamList, MainTabParamList } from "./types";
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
+
+function MainTabsNavigator() {
+  const { theme } = useAppTheme();
+  const insets = useSafeAreaInsets();
+
+  const light = theme.mode === "light";
+  const accent = light ? "#2563EB" : theme.colors.primary;
+  const surface = light ? "#FCFAF7" : theme.colors.surface;
+
+  return (
+    <Tab.Navigator
+      initialRouteName="Home"
+      backBehavior="history"
+      screenOptions={({ route }) => ({
+        headerStyle: {
+          backgroundColor: surface,
+        },
+        headerTintColor: theme.colors.textPrimary,
+        headerTitleStyle: {
+          fontFamily: theme.typography.fontFamily.bold,
+          fontSize: 18,
+        },
+        headerShadowVisible: false,
+
+        tabBarActiveTintColor: accent,
+        tabBarInactiveTintColor: theme.colors.textSecondary,
+        tabBarHideOnKeyboard: true,
+
+        tabBarLabelStyle: {
+          fontFamily: theme.typography.fontFamily.bold,
+          fontSize: 10,
+          marginTop: 2,
+        },
+
+        tabBarStyle: {
+          height: 60 + insets.bottom,
+          paddingTop: 7,
+          paddingBottom: Math.max(insets.bottom, 6),
+          backgroundColor: surface,
+          borderTopColor: light ? "#E2DDD4" : theme.colors.border,
+          borderTopWidth: 1,
+          shadowColor: "#0F172A",
+          shadowOpacity: light ? 0.07 : 0.18,
+          shadowRadius: 12,
+          shadowOffset: {
+            width: 0,
+            height: -3,
+          },
+          elevation: 8,
+        },
+
+        tabBarIcon: ({ color, focused }) => {
+          const Icon =
+            route.name === "Home"
+              ? House
+              : route.name === "Mapa"
+                ? MapPin
+                : route.name === "Treinos"
+                  ? Dumbbell
+                  : ChartNoAxesColumnIncreasing;
+
+          return (
+            <View
+              style={{
+                width: 48,
+                height: 29,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 11,
+                backgroundColor: focused
+                  ? light
+                    ? "#E8EFFC"
+                    : theme.colors.primarySoft
+                  : "transparent",
+              }}
+            >
+              <Icon size={21} color={color} strokeWidth={focused ? 2.3 : 1.8} />
+            </View>
+          );
+        },
+      })}
+    >
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          title: "Início",
+          headerShown: false,
+        }}
+      />
+
+      <Tab.Screen
+        name="Mapa"
+        component={MapScreen}
+        options={{
+          title: "Mapa de academias",
+          tabBarLabel: "Mapa",
+        }}
+      />
+
+      <Tab.Screen
+        name="Treinos"
+        component={WorkoutsScreen}
+        options={({ navigation }) => ({
+          title: "Meus treinos",
+          tabBarLabel: "Treinos",
+          headerRight: () => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Abrir histórico de treinos"
+              onPress={() =>
+                navigation
+                  .getParent<NativeStackNavigationProp<AppStackParamList>>()
+                  ?.navigate("HistoricoTreinos")
+              }
+              style={({ pressed }) => ({
+                paddingHorizontal: 8,
+                paddingVertical: 6,
+                opacity: pressed ? 0.65 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: accent,
+                  fontFamily: theme.typography.fontFamily.bold,
+                  fontSize: theme.typography.size.small,
+                }}
+              >
+                Histórico
+              </Text>
+            </Pressable>
+          ),
+        })}
+      />
+
+      <Tab.Screen
+        name="Progresso"
+        component={ProgressScreen}
+        options={{
+          title: "Meu progresso",
+          tabBarLabel: "Progresso",
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
 
 export default function AppNavigator() {
   const { theme } = useAppTheme();
 
   return (
     <Stack.Navigator
+      initialRouteName="MainTabs"
       screenOptions={{
         headerStyle: {
           backgroundColor: theme.colors.surface,
@@ -41,65 +200,21 @@ export default function AppNavigator() {
       }}
     >
       <Stack.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{
-          headerShown: false,
-        }}
+        name="MainTabs"
+        component={MainTabsNavigator}
+        options={{ headerShown: false }}
       />
 
       <Stack.Screen
         name="Perfil"
         component={ProfileScreen}
-        options={{
-          title: "Meu perfil",
-        }}
-      />
-
-      <Stack.Screen
-        name="Mapa"
-        component={MapScreen}
-        options={{
-          title: "Mapa de academias",
-        }}
-      />
-
-      <Stack.Screen
-        name="Treinos"
-        component={WorkoutsScreen}
-        options={({ navigation }) => ({
-          title: "Meus treinos",
-          headerRight: () => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Abrir histórico de treinos"
-              onPress={() => navigation.navigate("HistoricoTreinos")}
-              style={({ pressed }) => ({
-                paddingHorizontal: 8,
-                paddingVertical: 6,
-                opacity: pressed ? 0.65 : 1,
-              })}
-            >
-              <Text
-                style={{
-                  color: theme.colors.primary,
-                  fontFamily: theme.typography.fontFamily.bold,
-                  fontSize: theme.typography.size.small,
-                }}
-              >
-                Histórico
-              </Text>
-            </Pressable>
-          ),
-        })}
+        options={{ title: "Meu perfil" }}
       />
 
       <Stack.Screen
         name="NovoTreino"
         component={CreateWorkoutScreen}
-        options={{
-          title: "Novo treino",
-        }}
+        options={{ title: "Novo treino" }}
       />
 
       <Stack.Screen
@@ -139,57 +254,37 @@ export default function AppNavigator() {
       <Stack.Screen
         name="ExecutarTreino"
         component={WorkoutSessionScreen}
-        options={{
-          title: "Treino em andamento",
-        }}
+        options={{ title: "Treino em andamento" }}
       />
 
       <Stack.Screen
         name="HistoricoTreinos"
         component={WorkoutHistoryScreen}
-        options={{
-          title: "Histórico",
-        }}
+        options={{ title: "Histórico" }}
       />
 
       <Stack.Screen
         name="DetalhesHistoricoTreino"
         component={WorkoutHistoryDetailsScreen}
-        options={{
-          title: "Treino concluído",
-        }}
-      />
-
-      <Stack.Screen
-        name="Progresso"
-        component={ProgressScreen}
-        options={{
-          title: "Meu progresso",
-        }}
+        options={{ title: "Treino concluído" }}
       />
 
       <Stack.Screen
         name="CatalogoExercicios"
         component={ExerciseCatalogScreen}
-        options={{
-          title: "Adicionar exercício",
-        }}
+        options={{ title: "Adicionar exercício" }}
       />
 
       <Stack.Screen
         name="ConfigurarExercicioTreino"
         component={WorkoutExerciseConfigScreen}
-        options={{
-          title: "Configurar exercício",
-        }}
+        options={{ title: "Configurar exercício" }}
       />
 
       <Stack.Screen
         name="DetalhesAcademia"
         component={GymDetailsScreen}
-        options={{
-          title: "Detalhes da academia",
-        }}
+        options={{ title: "Detalhes da academia" }}
       />
     </Stack.Navigator>
   );
