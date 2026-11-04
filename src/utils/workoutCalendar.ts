@@ -66,3 +66,26 @@ export function groupCompletedSessions(
 
   return grouped;
 }
+
+export function getMonthActivitySummary(
+  grouped: Record<string, WorkoutHistoryItem[]>,
+  month: Date,
+): { activeDays: number; completedSessions: number } {
+  const year = month.getFullYear();
+  const monthNumber = String(month.getMonth() + 1).padStart(2, "0");
+  const prefix = `${year}-${monthNumber}-`;
+
+  let activeDays = 0;
+  let completedSessions = 0;
+
+  for (const [dateKey, sessions] of Object.entries(grouped)) {
+    if (!dateKey.startsWith(prefix) || sessions.length === 0) {
+      continue;
+    }
+
+    activeDays += 1;
+    completedSessions += sessions.length;
+  }
+
+  return { activeDays, completedSessions };
+}

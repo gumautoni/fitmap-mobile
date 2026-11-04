@@ -1,6 +1,8 @@
 import { useFocusEffect } from "@react-navigation/native";
 import {
   CalendarDays,
+  BookOpen,
+  Dumbbell,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -8,14 +10,19 @@ import {
   ChevronUp,
   RefreshCw,
 } from "lucide-react-native";
-import { useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
+  Easing,
+  LayoutAnimation,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
 import { AuthContext } from "../context/AuthContext";
 import {
@@ -24,6 +31,7 @@ import {
 } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
 import {
+  getMonthActivitySummary,
   getMonthDates,
   getWeekDates,
   groupCompletedSessions,
@@ -69,6 +77,10 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
+  const activityColor = theme.mode === "light" ? "#0F766E" : "#57D6B8";
+  const todayColor = theme.mode === "light" ? "#2563EB" : theme.colors.primary;
+  const trackColor = theme.mode === "light" ? "#D7DFD9" : "#404B59";
+
   const [today, setToday] = useState(() => new Date());
 
   const [visibleMonth, setVisibleMonth] = useState(() =>
@@ -76,6 +88,11 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
   );
 
   const [expanded, setExpanded] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  const [selectionScale] = useState(() => new Animated.Value(1.065));
+
+  const [diaryReveal] = useState(() => new Animated.Value(1));
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
@@ -84,6 +101,34 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [retryCounter, setRetryCounter] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (active) {
+          setReduceMotion(enabled);
+        }
+      })
+      .catch(() => {
+        // Mantem o comportamento padrao caso a consulta falhe.
+      });
+
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      (enabled) => {
+        if (active) {
+          setReduceMotion(enabled);
+        }
+      },
+    );
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -125,21 +170,89 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
   const monthDates = useMemo(() => getMonthDates(visibleMonth), [visibleMonth]);
 
+  const monthActivity = useMemo(
+    () => getMonthActivitySummary(grouped, visibleMonth),
+    [grouped, visibleMonth],
+  );
+
   const todayKey = localDateKey(today);
 
   const selectedKey = selectedDay ? localDateKey(selectedDay) : null;
+
+  const diaryAnimationStyle = useMemo(
+    () => ({
+      opacity: diaryReveal,
+      transform: [
+        {
+          translateY: diaryReveal.interpolate({
+            inputRange: [0, 1],
+            outputRange: [7, 0],
+          }),
+        },
+      ],
+    }),
+    [diaryReveal],
+  );
+
+  useEffect(() => {
+    if (!expanded || reduceMotion) {
+      selectionScale.stopAnimation();
+      diaryReveal.stopAnimation();
+
+      selectionScale.setValue(1.065);
+      diaryReveal.setValue(1);
+      return;
+    }
+
+    selectionScale.setValue(0.94);
+    diaryReveal.setValue(0);
+
+    const animation = Animated.parallel([
+      Animated.spring(selectionScale, {
+        toValue: 1.065,
+        speed: 17,
+        bounciness: 3,
+        useNativeDriver: true,
+      }),
+      Animated.timing(diaryReveal, {
+        toValue: 1,
+        duration: 190,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+
+    animation.start();
+
+    return () => {
+      animation.stop();
+    };
+  }, [selectedKey, expanded, reduceMotion, selectionScale, diaryReveal]);
 
   const selectedSessions = selectedKey ? (grouped[selectedKey] ?? []) : [];
 
   const canGoForward = visibleMonth.getTime() < monthStart(today).getTime();
 
+  function animateCalendarLayout(): void {
+    if (!reduceMotion) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+  }
+
+  function toggleExpanded(): void {
+    animateCalendarLayout();
+    setExpanded((value) => !value);
+  }
+
   function selectDay(date: Date): void {
+    animateCalendarLayout();
     setSelectedDay(date);
     setVisibleMonth(monthStart(date));
     setExpanded(true);
   }
 
   function changeMonth(direction: number): void {
+    animateCalendarLayout();
     setVisibleMonth(
       (current) =>
         new Date(current.getFullYear(), current.getMonth() + direction, 1),
@@ -147,6 +260,8 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
     setSelectedDay(null);
   }
+
+  const selectionColor = theme.mode === "light" ? "#64748B" : "#94A3B8";
 
   function renderDay(date: Date, monthly: boolean) {
     const key = localDateKey(date);
@@ -183,29 +298,68 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
           </Text>
         ) : null}
 
-        <View
+        <Animated.View
           style={[
-            styles.dayCircle,
-            completed && styles.completedCircle,
-            isToday && styles.todayCircle,
-            selected && styles.selectedCircle,
+            styles.activityRing,
+            selected && styles.activityRingSelected,
+            selected &&
+              !reduceMotion && {
+                transform: [{ scale: selectionScale }],
+              },
             isFuture && styles.futureCircle,
           ]}
         >
-          <Text
+          <Svg
+            width={34}
+            height={34}
+            viewBox="0 0 34 34"
+            pointerEvents="none"
+            style={styles.activityRingArt}
+          >
+            <Circle
+              cx={17}
+              cy={17}
+              r={13.3}
+              fill="none"
+              stroke={completed ? activityColor : trackColor}
+              strokeWidth={completed ? 3.1 : 1.6}
+            />
+            {(isToday || selected) && (
+              <Circle
+                cx={17}
+                cy={17}
+                r={16}
+                fill="none"
+                stroke={isToday ? todayColor : selectionColor}
+                strokeWidth={1.6}
+              />
+            )}
+          </Svg>
+
+          <View
             style={[
-              styles.dayNumber,
-              completed && styles.completedNumber,
-              isFuture && styles.futureNumber,
+              styles.activityCore,
+              completed && styles.activityCoreCompleted,
+              selected && !completed && !isToday && styles.activityCoreSelected,
             ]}
           >
-            {date.getDate()}
-          </Text>
+            <Text
+              style={[
+                styles.activityDayNumber,
+                completed && styles.activityDayNumberCompleted,
+                isFuture && styles.activityDayNumberFuture,
+              ]}
+            >
+              {date.getDate()}
+            </Text>
+          </View>
 
           {completed ? (
-            <Check size={9} strokeWidth={3} color="#FFFFFF" />
+            <View style={styles.activityCheck}>
+              <Check size={8} strokeWidth={3.4} color="#FFFFFF" />
+            </View>
           ) : null}
-        </View>
+        </Animated.View>
       </Pressable>
     );
   }
@@ -220,7 +374,7 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
             : "Expandir calendário de treinos"
         }
         accessibilityState={{ expanded }}
-        onPress={() => setExpanded((value) => !value)}
+        onPress={toggleExpanded}
         style={({ pressed }) => [styles.header, pressed && styles.pressed]}
       >
         <View style={styles.headerText}>
@@ -246,9 +400,11 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
         </View>
       </Pressable>
 
-      <View style={styles.weekRow}>
-        {weekDates.map((day) => renderDay(day, false))}
-      </View>
+      {!expanded ? (
+        <View style={styles.weekRow}>
+          {weekDates.map((day) => renderDay(day, false))}
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={styles.feedback}>
@@ -310,6 +466,46 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
             </Pressable>
           </View>
 
+          {!loading && !error ? (
+            <View
+              style={styles.monthStats}
+              accessible
+              accessibilityLabel={`Resumo de ${formatMonth(visibleMonth)}: ${monthActivity.activeDays} dias ativos e ${monthActivity.completedSessions} treinos concluídos`}
+            >
+              <View style={styles.monthStat}>
+                <CalendarDays
+                  size={16}
+                  color={theme.mode === "light" ? "#0F766E" : "#57D6B8"}
+                />
+                <Text style={styles.monthStatValue}>
+                  {monthActivity.activeDays}
+                </Text>
+                <Text style={styles.monthStatLabel}>
+                  {monthActivity.activeDays === 1 ? "dia ativo" : "dias ativos"}
+                </Text>
+              </View>
+
+              <View style={styles.monthStatDivider} />
+
+              <View style={styles.monthStat}>
+                <Dumbbell
+                  size={16}
+                  color={
+                    theme.mode === "light" ? "#2563EB" : theme.colors.primary
+                  }
+                />
+                <Text style={styles.monthStatValue}>
+                  {monthActivity.completedSessions}
+                </Text>
+                <Text style={styles.monthStatLabel}>
+                  {monthActivity.completedSessions === 1
+                    ? "treino concluído"
+                    : "treinos concluídos"}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.monthGrid}>
             {WEEKDAYS.map((label, index) => (
               <View key={index} style={styles.monthWeekday}>
@@ -337,16 +533,44 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
               <Text style={styles.legendText}>Hoje</Text>
             </View>
 
+            <View style={styles.legendItem}>
+              <View style={styles.legendSelected} />
+              <Text style={styles.legendText}>Selecionado</Text>
+            </View>
+
             <Text style={styles.legendText}>Sem marcação = sem registro</Text>
           </View>
 
           {!loading && !error ? (
-            <View style={styles.details}>
+            <Animated.View style={[styles.details, diaryAnimationStyle]}>
               {selectedDay ? (
                 <>
-                  <Text style={styles.detailsTitle}>
-                    {formatDay(selectedDay)}
-                  </Text>
+                  <View style={styles.diaryHeader}>
+                    <View style={styles.diaryHeaderCopy}>
+                      <View style={styles.diaryEyebrowRow}>
+                        <BookOpen
+                          size={14}
+                          color={theme.colors.textSecondary}
+                        />
+                        <Text style={styles.diaryEyebrow}>
+                          DIÁRIO DE TREINOS
+                        </Text>
+                      </View>
+
+                      <Text style={styles.detailsTitle}>
+                        {formatDay(selectedDay)}
+                      </Text>
+                    </View>
+
+                    {selectedSessions.length > 0 ? (
+                      <View style={styles.diaryBadge}>
+                        <Text style={styles.diaryBadgeText}>
+                          {selectedSessions.length}{" "}
+                          {selectedSessions.length === 1 ? "treino" : "treinos"}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
 
                   {selectedSessions.length > 0 ? (
                     selectedSessions.map((item) => (
@@ -360,6 +584,16 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
                           pressed && styles.pressed,
                         ]}
                       >
+                        <View style={styles.sessionIcon}>
+                          <Dumbbell
+                            size={20}
+                            strokeWidth={2.1}
+                            color={
+                              theme.mode === "light" ? "#0F766E" : "#57D6B8"
+                            }
+                          />
+                        </View>
+
                         <View style={styles.sessionCopy}>
                           <Text style={styles.sessionTitle}>
                             {item.workoutName}
@@ -375,6 +609,10 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
                               },
                             )}
                           </Text>
+
+                          <Text style={styles.sessionAction}>
+                            Ver exercícios, séries e cargas
+                          </Text>
                         </View>
 
                         <ChevronRight
@@ -384,17 +622,34 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
                       </Pressable>
                     ))
                   ) : (
-                    <Text style={styles.emptyText}>
-                      Nenhum treino concluído registrado neste dia.
-                    </Text>
+                    <View style={styles.diaryEmpty}>
+                      <CalendarDays
+                        size={21}
+                        color={theme.colors.textSecondary}
+                      />
+
+                      <View style={styles.diaryEmptyCopy}>
+                        <Text style={styles.diaryEmptyTitle}>
+                          Dia sem registros
+                        </Text>
+
+                        <Text style={styles.emptyText}>
+                          Nenhum treino concluído foi registrado nesta data.
+                        </Text>
+                      </View>
+                    </View>
                   )}
                 </>
               ) : (
-                <Text style={styles.emptyText}>
-                  Toque em uma data para consultar os treinos concluídos.
-                </Text>
+                <View style={styles.diaryHint}>
+                  <BookOpen size={19} color={theme.colors.textSecondary} />
+
+                  <Text style={styles.emptyText}>
+                    Selecione um dia para consultar seu diário de treinos.
+                  </Text>
+                </View>
               )}
-            </View>
+            </Animated.View>
           ) : null}
         </View>
       ) : null}
@@ -493,47 +748,76 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontSize: 11,
     },
 
-    dayCircle: {
+    activityRing: {
       width: 34,
       height: 34,
-      borderRadius: 17,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    activityRingArt: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+    },
+
+    activityRingSelected: {
+      transform: [{ scale: 1.065 }],
+      shadowColor: "#64748B",
+      shadowOpacity: light ? 0.14 : 0.22,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 2,
+    },
+
+    activityCore: {
+      width: 23,
+      height: 23,
+      borderRadius: 12,
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: light ? "#F2EFE9" : theme.colors.surfaceSecondary,
-      borderWidth: 1.5,
-      borderColor: "transparent",
     },
 
-    completedCircle: {
-      backgroundColor: teal,
+    activityCoreCompleted: {
+      backgroundColor: light ? "#E5F2ED" : "#18382F",
     },
 
-    todayCircle: {
-      borderColor: accent,
+    activityCoreSelected: {
+      backgroundColor: light ? "#E8EBEF" : "#293344",
     },
 
-    selectedCircle: {
-      borderColor: accent,
-      borderWidth: 2,
+    activityCheck: {
+      position: "absolute",
+      right: -1,
+      bottom: -1,
+      width: 13,
+      height: 13,
+      borderRadius: 7,
+      borderWidth: 1,
+      borderColor: surface,
+      backgroundColor: "#0F766E",
+      alignItems: "center",
+      justifyContent: "center",
     },
 
     futureCircle: {
-      opacity: 0.45,
+      opacity: 0.78,
     },
 
-    dayNumber: {
+    activityDayNumber: {
       color: theme.colors.textPrimary,
       fontFamily: theme.typography.fontFamily.bold,
-      fontSize: 12,
-      lineHeight: 15,
+      fontSize: 11,
+      lineHeight: 14,
     },
 
-    completedNumber: {
-      color: "#FFFFFF",
+    activityDayNumberCompleted: {
+      color: light ? "#0F766E" : "#8AE6CE",
     },
 
-    futureNumber: {
-      color: theme.colors.textMuted,
+    activityDayNumberFuture: {
+      color: theme.colors.textSecondary,
     },
 
     feedback: {
@@ -589,10 +873,50 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       justifyContent: "center",
     },
 
+    monthStats: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: light ? "#F6F3EE" : theme.colors.surfaceSecondary,
+      borderRadius: 13,
+      paddingHorizontal: 11,
+      paddingVertical: 13,
+      marginBottom: 14,
+    },
+
+    monthStat: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      flexWrap: "wrap",
+      gap: 6,
+    },
+
+    monthStatValue: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.extrabold,
+      fontSize: 17,
+    },
+
+    monthStatLabel: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: 11,
+      textAlign: "center",
+    },
+
+    monthStatDivider: {
+      width: 1,
+      height: 27,
+      backgroundColor: theme.colors.divider,
+      marginHorizontal: 7,
+    },
+
     monthGrid: {
       flexDirection: "row",
       flexWrap: "wrap",
-      rowGap: 4,
+      rowGap: 2,
     },
 
     monthWeekday: {
@@ -605,8 +929,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       width: "14.2857%",
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 4,
-      minHeight: 43,
+      paddingVertical: 2,
+      minHeight: 40,
     },
 
     legend: {
@@ -643,12 +967,102 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: accent,
     },
 
+    legendSelected: {
+      width: 9,
+      height: 9,
+      borderRadius: 5,
+      borderWidth: 2,
+      borderColor: light ? "#64748B" : "#94A3B8",
+    },
+
     details: {
       marginTop: 17,
       borderTopWidth: 1,
       borderColor: theme.colors.divider,
       paddingTop: 14,
       gap: 9,
+    },
+
+    diaryHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 10,
+      marginBottom: 3,
+    },
+
+    diaryHeaderCopy: {
+      flex: 1,
+      gap: 7,
+    },
+
+    diaryEyebrowRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+    },
+
+    diaryEyebrow: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 10,
+      letterSpacing: 1.1,
+    },
+
+    diaryBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 20,
+      backgroundColor: light ? "#E6F2ED" : "#17372F",
+    },
+
+    diaryBadgeText: {
+      color: light ? "#0F766E" : "#87E1C8",
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 11,
+    },
+
+    diaryEmpty: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      padding: 13,
+      borderRadius: 14,
+      backgroundColor: light ? "#F5F2ED" : theme.colors.surfaceSecondary,
+    },
+
+    diaryEmptyCopy: {
+      flex: 1,
+      gap: 3,
+    },
+
+    diaryEmptyTitle: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 13,
+    },
+
+    diaryHint: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingVertical: 8,
+    },
+
+    sessionIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 13,
+      backgroundColor: light ? "#E3F0EA" : "#17372F",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    sessionAction: {
+      color: light ? "#0F766E" : "#87E1C8",
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 11,
+      marginTop: 3,
     },
 
     detailsTitle: {
@@ -667,10 +1081,12 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     sessionRow: {
       flexDirection: "row",
       alignItems: "center",
-      borderRadius: 12,
-      padding: 12,
-      gap: 9,
-      backgroundColor: light ? "#F2EFE9" : theme.colors.surfaceSecondary,
+      borderRadius: 15,
+      padding: 13,
+      gap: 11,
+      borderWidth: 1,
+      borderColor: light ? "#E2DDD4" : theme.colors.border,
+      backgroundColor: light ? "#F6F3EE" : theme.colors.surfaceSecondary,
     },
 
     sessionCopy: {

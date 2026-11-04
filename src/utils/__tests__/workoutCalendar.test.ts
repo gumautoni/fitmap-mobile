@@ -1,5 +1,6 @@
 import type { WorkoutHistoryItem } from "../../services/trainingSessions";
 import {
+  getMonthActivitySummary,
   getMonthDates,
   getWeekDates,
   groupCompletedSessions,
@@ -70,6 +71,32 @@ describe("workout calendar dates", () => {
     ]);
 
     expect(result["2026-11-03"].map((item) => item.id)).toEqual(["one", "two"]);
+  });
+
+  it("counts active days separately from completed sessions", () => {
+    const grouped = groupCompletedSessions([
+      makeSession("one", new Date(2026, 10, 3, 9).toISOString()),
+      makeSession("two", new Date(2026, 10, 3, 20).toISOString()),
+      makeSession("three", new Date(2026, 10, 9, 8).toISOString()),
+      makeSession("october", new Date(2026, 9, 31, 18).toISOString()),
+    ]);
+
+    expect(getMonthActivitySummary(grouped, new Date(2026, 10, 1))).toEqual({
+      activeDays: 2,
+      completedSessions: 3,
+    });
+
+    expect(getMonthActivitySummary(grouped, new Date(2026, 9, 1))).toEqual({
+      activeDays: 1,
+      completedSessions: 1,
+    });
+  });
+
+  it("shows zero activity for months without completed sessions", () => {
+    expect(getMonthActivitySummary({}, new Date(2026, 10, 1))).toEqual({
+      activeDays: 0,
+      completedSessions: 0,
+    });
   });
 
   it("ignores invalid dates", () => {
