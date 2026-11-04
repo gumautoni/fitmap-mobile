@@ -21,7 +21,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AuthContext } from "../context/AuthContext";
-import type { AppStackScreenProps } from "../navigation/types";
+import type { AppTabScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
   getWorkouts,
@@ -30,7 +30,7 @@ import {
 } from "../services/training";
 import { useAppTheme } from "../theme/ThemeProvider";
 
-type WorkoutsScreenProps = AppStackScreenProps<"Treinos">;
+type WorkoutsScreenProps = AppTabScreenProps<"Treinos">;
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {

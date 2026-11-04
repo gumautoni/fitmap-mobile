@@ -1,10 +1,20 @@
+import type {
+  CompositeScreenProps,
+  NavigatorScreenParams,
+} from "@react-navigation/native";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-export type AppStackParamList = {
+export type MainTabParamList = {
   Home: undefined;
-  Perfil: undefined;
   Mapa: undefined;
   Treinos: undefined;
+  Progresso: undefined;
+};
+
+export type AppStackParamList = {
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+  Perfil: undefined;
   NovoTreino: undefined;
   DetalhesTreino: {
     workoutId: string;
@@ -16,7 +26,6 @@ export type AppStackParamList = {
   DetalhesHistoricoTreino: {
     workoutSessionId: string;
   };
-  Progresso: undefined;
   CatalogoExercicios: {
     workoutId: string;
   };
@@ -38,6 +47,12 @@ export type AuthStackParamList = {
 
 export type AppStackScreenProps<RouteName extends keyof AppStackParamList> =
   NativeStackScreenProps<AppStackParamList, RouteName>;
+
+export type AppTabScreenProps<RouteName extends keyof MainTabParamList> =
+  CompositeScreenProps<
+    BottomTabScreenProps<MainTabParamList, RouteName>,
+    NativeStackScreenProps<AppStackParamList, "MainTabs">
+  >;
 
 export type AuthStackScreenProps<RouteName extends keyof AuthStackParamList> =
   NativeStackScreenProps<AuthStackParamList, RouteName>;

@@ -30,7 +30,7 @@ import {
 import MapView, { Marker, type Region } from "react-native-maps";
 
 import { AuthContext } from "../context/AuthContext";
-import type { AppStackScreenProps } from "../navigation/types";
+import type { AppTabScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
   getFavoriteGyms,
@@ -59,7 +59,7 @@ interface UserCoordinates {
 
 type LoadingAction = "text" | "location" | null;
 
-type Props = AppStackScreenProps<"Mapa">;
+type Props = AppTabScreenProps<"Mapa">;
 
 function getGymRegion(gym: GymSearchResult): Region | null {
   if (!gym.coordinates) {
