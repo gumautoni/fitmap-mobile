@@ -1,3 +1,4 @@
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowRight,
@@ -8,7 +9,13 @@ import {
   TrendingUp,
   Zap,
 } from "lucide-react-native";
-import React, { useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   AccessibilityInfo,
   Animated,
@@ -22,7 +29,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import FitMapPerformanceMark from "../components/FitMapPerformanceMark";
+import WorkoutActivityCalendar from "../components/WorkoutActivityCalendar";
 import { AuthContext } from "../context/AuthContext";
+import { getWorkouts } from "../services/training";
+import { getActiveWorkoutSession } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 function getInitials(name) {
@@ -43,6 +53,7 @@ export default function HomeScreen({ navigation }) {
   const auth = useContext(AuthContext);
 
   const user = auth?.user ?? null;
+  const runAuthenticatedRequest = auth?.runAuthenticatedRequest;
 
   const { theme } = useAppTheme();
 
@@ -53,6 +64,104 @@ export default function HomeScreen({ navigation }) {
 
   const firstName = user?.name?.trim()?.split(" ")[0] || "usuário";
   const initials = getInitials(user?.name);
+
+  const [workoutOverview, setWorkoutOverview] = useState({
+    status: "loading",
+    session: null,
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setWorkoutOverview({ status: "loading", session: null });
+
+      async function loadWorkoutOverview() {
+        if (!runAuthenticatedRequest) {
+          if (active) {
+            setWorkoutOverview({ status: "error", session: null });
+          }
+          return;
+        }
+
+        try {
+          const session = await runAuthenticatedRequest((accessToken) =>
+            getActiveWorkoutSession(accessToken),
+          );
+
+          if (!active) return;
+
+          if (session) {
+            setWorkoutOverview({ status: "active", session });
+            return;
+          }
+
+          const workouts = await runAuthenticatedRequest((accessToken) =>
+            getWorkouts(accessToken),
+          );
+
+          if (active) {
+            setWorkoutOverview({
+              status: workouts.length > 0 ? "available" : "empty",
+              session: null,
+            });
+          }
+        } catch {
+          if (active) {
+            setWorkoutOverview({ status: "error", session: null });
+          }
+        }
+      }
+
+      void loadWorkoutOverview();
+
+      return () => {
+        active = false;
+      };
+    }, [runAuthenticatedRequest]),
+  );
+
+  let trainingTitle = "Meus treinos";
+  let trainingDescription = "Carregando seus treinos...";
+  let trainingAction = "Ver meus treinos";
+
+  switch (workoutOverview.status) {
+    case "active":
+      trainingTitle = "Treino em andamento";
+      trainingDescription = `Continue "${workoutOverview.session.workoutName}" de onde parou.`;
+      trainingAction = "Continuar treino";
+      break;
+    case "available":
+      trainingTitle = "Seu proximo treino";
+      trainingDescription =
+        "Seus treinos estao prontos. Escolha um para comecar.";
+      trainingAction = "Escolher treino";
+      break;
+    case "empty":
+      trainingTitle = "Seu primeiro treino";
+      trainingDescription =
+        "Crie um treino para organizar exercicios e acompanhar sua evolucao.";
+      trainingAction = "Criar primeiro treino";
+      break;
+    case "error":
+      trainingDescription =
+        "Nao foi possivel consultar os treinos agora. Acesse sua lista para tentar novamente.";
+      break;
+    default:
+      break;
+  }
+
+  function openTrainingAction() {
+    if (workoutOverview.status === "active") {
+      navigation.navigate("ExecutarTreino", {
+        workoutId: workoutOverview.session.sourceWorkoutId ?? undefined,
+      });
+      return;
+    }
+
+    navigation.navigate(
+      workoutOverview.status === "empty" ? "NovoTreino" : "Treinos",
+    );
+  }
 
   useEffect(() => {
     let active = true;
@@ -260,11 +369,18 @@ export default function HomeScreen({ navigation }) {
           </LinearGradient>
         </Pressable>
 
+        <WorkoutActivityCalendar
+          onOpenWorkout={(workoutSessionId) =>
+            navigation.navigate("DetalhesHistoricoTreino", {
+              workoutSessionId,
+            })
+          }
+        />
         <View style={styles.sectionHeader}>
           <View>
             <Text style={styles.sectionEyebrow}>ORGANIZE</Text>
 
-            <Text style={styles.sectionTitle}>Planeje seus treinos</Text>
+            <Text style={styles.sectionTitle}>Seu treino</Text>
           </View>
 
           <Pressable
@@ -288,8 +404,8 @@ export default function HomeScreen({ navigation }) {
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Abrir meus treinos"
-          onPress={() => navigation.navigate("Treinos")}
+          accessibilityLabel={trainingAction}
+          onPress={openTrainingAction}
           style={({ pressed }) => [
             styles.trainingCard,
             pressed && styles.cardPressed,
@@ -307,22 +423,20 @@ export default function HomeScreen({ navigation }) {
             </View>
 
             <View style={styles.trainingCopy}>
-              <Text style={styles.trainingTitle}>Meus treinos</Text>
+              <Text style={styles.trainingTitle}>{trainingTitle}</Text>
 
-              <Text style={styles.trainingText}>
-                Crie planejamentos e organize exercícios, séries, repetições,
-                cargas e observações.
-              </Text>
+              <Text style={styles.trainingText}>{trainingDescription}</Text>
             </View>
           </View>
 
           <View style={styles.trainingFooter}>
             <View style={styles.trainingStatus}>
-              <View style={styles.trainingStatusDot} />
+              {(workoutOverview.status === "active" ||
+                workoutOverview.status === "available") && (
+                <View style={styles.trainingStatusDot} />
+              )}
 
-              <Text style={styles.trainingStatusText}>
-                Sincronizado com sua conta
-              </Text>
+              <Text style={styles.trainingStatusText}>{trainingAction}</Text>
             </View>
 
             <View style={styles.openButton}>
@@ -524,15 +638,19 @@ export default function HomeScreen({ navigation }) {
 }
 
 function createStyles(theme) {
+  const isLight = theme.mode === "light";
+  const homeBackground = isLight ? "#F2EFE9" : theme.colors.background;
+  const homeSurface = isLight ? "#FCFAF7" : theme.colors.surface;
+
   return StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: homeBackground,
     },
 
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: homeBackground,
     },
 
     content: {
@@ -850,7 +968,7 @@ function createStyles(theme) {
       position: "relative",
       overflow: "hidden",
       marginBottom: theme.spacing["3xl"],
-      backgroundColor: theme.colors.surface,
+      backgroundColor: homeSurface,
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
@@ -941,7 +1059,7 @@ function createStyles(theme) {
       position: "relative",
       overflow: "hidden",
       marginBottom: theme.spacing["3xl"],
-      backgroundColor: theme.colors.surface,
+      backgroundColor: homeSurface,
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
@@ -1028,7 +1146,7 @@ function createStyles(theme) {
     discoveryCard: {
       position: "relative",
       overflow: "hidden",
-      backgroundColor: theme.colors.surface,
+      backgroundColor: homeSurface,
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
