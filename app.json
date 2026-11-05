@@ -24,6 +24,14 @@
           "locationWhenInUsePermission": "Permita que o FitMap acesse sua localização para encontrar academias próximas."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Permita que o FitMap use sua câmera para registrar fotos de progresso.",
+          "photosPermission": "Permita que o FitMap acesse suas fotos para registrar seu progresso.",
+          "microphonePermission": false
+        }
+      ],
       "expo-secure-store",
       "expo-font"
     ],

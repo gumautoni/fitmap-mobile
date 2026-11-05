@@ -6,7 +6,6 @@ import {
   AlertCircle,
   CalendarDays,
   Dumbbell,
-  ImagePlus,
   Images,
   RefreshCw,
   ShieldCheck,
@@ -27,6 +26,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import BodyMetricsSection from "../components/BodyMetricsSection";
 import FitnessGoalsSection from "../components/FitnessGoalsSection";
+import ProgressPhotoCapture from "../components/ProgressPhotoCapture";
 import { AuthContext } from "../context/AuthContext";
 import { ApiClientError } from "../services/apiClient";
 import {
@@ -235,38 +235,16 @@ export default function ProgressScreen() {
     }, [runAuthenticatedRequest]),
   );
 
-  async function handleAddProgressPhoto(): Promise<void> {
-    if (uploadingPhoto) {
-      return;
-    }
+  async function handleSaveProgressPhoto(
+    asset: ImagePicker.ImagePickerAsset,
+  ): Promise<boolean> {
+    if (uploadingPhoto) return false;
 
     setPhotoError(null);
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-      Alert.alert(
-        "Acesso às fotos",
-        "Permita que o FitMap acesse sua galeria para selecionar uma foto de progresso.",
-      );
-
-      return;
-    }
-
-    const selection = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: false,
-      quality: 1,
-    });
-
-    if (selection.canceled || !selection.assets[0]) {
-      return;
-    }
-
     setUploadingPhoto(true);
 
     try {
-      const normalizedUri = await normalizeProgressPhoto(selection.assets[0]);
+      const normalizedUri = await normalizeProgressPhoto(asset);
 
       const uploadedPhoto = await runAuthenticatedRequest(
         (requestAccessToken) =>
@@ -284,12 +262,15 @@ export default function ProgressScreen() {
         "Foto adicionada",
         "Sua foto de progresso foi salva de forma privada.",
       );
+
+      return true;
     } catch (uploadError) {
       const message = getErrorMessage(uploadError);
 
       setPhotoError(message);
-
       Alert.alert("Não foi possível adicionar a foto", message);
+
+      return false;
     } finally {
       setUploadingPhoto(false);
     }
@@ -514,36 +495,10 @@ export default function ProgressScreen() {
             </View>
           ) : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Adicionar foto de progresso"
-            disabled={uploadingPhoto}
-            onPress={() => {
-              void handleAddProgressPhoto();
-            }}
-            style={({ pressed }) => [
-              styles.addPhotoButton,
-              pressed && styles.buttonPressed,
-              uploadingPhoto && styles.buttonDisabled,
-            ]}
-          >
-            {uploadingPhoto ? (
-              <ActivityIndicator
-                size="small"
-                color={theme.colors.textOnPrimary}
-              />
-            ) : (
-              <ImagePlus
-                size={20}
-                strokeWidth={2.3}
-                color={theme.colors.textOnPrimary}
-              />
-            )}
-
-            <Text style={styles.addPhotoButtonText}>
-              {uploadingPhoto ? "Enviando foto..." : "Adicionar foto"}
-            </Text>
-          </Pressable>
+          <ProgressPhotoCapture
+            uploading={uploadingPhoto}
+            onSave={handleSaveProgressPhoto}
+          />
 
           {photos.length === 0 ? (
             <View style={styles.photoEmptyCard}>
