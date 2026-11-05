@@ -16,8 +16,11 @@ import {
   useState,
 } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -204,6 +207,60 @@ export default function WorkoutSessionScreen({
   const [error, setError] = useState<string | null>(null);
 
   const busy = busyExerciseId !== null || finishing || cancelling;
+
+  const [animatedCompletion] = useState(() => new Animated.Value(0));
+
+  const totalExercises = workoutSession?.exercises.length ?? 0;
+
+  const completedExercises =
+    workoutSession?.exercises.filter((exercise) => exercise.isCompleted)
+      .length ?? 0;
+
+  const completionRatio =
+    totalExercises > 0 ? completedExercises / totalExercises : 0;
+
+  useEffect(() => {
+    let active = true;
+    let transition: Animated.CompositeAnimation | null = null;
+
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduceMotion) => {
+        if (!active) {
+          return;
+        }
+
+        animatedCompletion.stopAnimation();
+
+        if (reduceMotion) {
+          animatedCompletion.setValue(completionRatio);
+          return;
+        }
+
+        transition = Animated.timing(animatedCompletion, {
+          toValue: completionRatio,
+          duration: 340,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        });
+
+        transition.start();
+      })
+      .catch(() => {
+        if (active) {
+          animatedCompletion.setValue(completionRatio);
+        }
+      });
+
+    return () => {
+      active = false;
+      transition?.stop();
+    };
+  }, [animatedCompletion, completionRatio]);
+
+  const completionWidth = animatedCompletion.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
 
   const applyWorkoutSession = useCallback(
     (nextWorkoutSession: WorkoutSession): void => {
@@ -680,17 +737,35 @@ export default function WorkoutSessionScreen({
             <Text style={styles.progressLabel}>PROGRESSO</Text>
 
             <Text style={styles.progressValue}>
-              {
-                workoutSession.exercises.filter(
-                  (exercise) => exercise.isCompleted,
-                ).length
-              }
-              /{workoutSession.exercises.length}
+              {completedExercises}/{totalExercises}
             </Text>
 
             <Text style={styles.progressDescription}>
               exercícios concluídos
             </Text>
+
+            <View
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel="Progresso do treino"
+              accessibilityValue={{
+                min: 0,
+                max: 100,
+                now: Math.round(completionRatio * 100),
+              }}
+              style={styles.progressTrack}
+            >
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { width: completionWidth },
+                  totalExercises > 0 &&
+                    completedExercises === totalExercises && {
+                      backgroundColor: theme.colors.success,
+                    },
+                ]}
+              />
+            </View>
           </View>
 
           <View style={styles.exerciseList}>
@@ -1202,6 +1277,20 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       color: theme.colors.textSecondary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.small,
+    },
+
+    progressTrack: {
+      height: 9,
+      marginTop: theme.spacing.md,
+      borderRadius: theme.radii.full,
+      backgroundColor: theme.colors.primarySoft,
+      overflow: "hidden",
+    },
+
+    progressFill: {
+      height: "100%",
+      borderRadius: theme.radii.full,
+      backgroundColor: theme.colors.primary,
     },
 
     exerciseList: {

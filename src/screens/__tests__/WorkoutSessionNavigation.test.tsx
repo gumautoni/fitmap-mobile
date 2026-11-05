@@ -6,13 +6,14 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import type { ComponentProps, ContextType } from "react";
-import { Alert } from "react-native";
+import { AccessibilityInfo, Alert } from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
   cancelWorkoutSession,
   finishWorkoutSession,
   getActiveWorkoutSession,
+  updateExerciseExecution,
   type WorkoutSession,
 } from "../../services/trainingSessions";
 import WorkoutSessionScreen from "../WorkoutSessionScreen";
@@ -58,6 +59,7 @@ jest.mock("../../services/trainingSessions", () => ({
 }));
 
 const mockedActive = getActiveWorkoutSession as jest.Mock;
+const mockedUpdate = updateExerciseExecution as jest.Mock;
 const mockedFinish = finishWorkoutSession as jest.Mock;
 const mockedCancel = cancelWorkoutSession as jest.Mock;
 
@@ -154,6 +156,16 @@ async function confirmAlert(title: string, buttonText: string) {
 }
 
 describe("WorkoutSessionScreen - navegacao apos encerramento", () => {
+  beforeAll(() => {
+    jest
+      .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+      .mockResolvedValue(true);
+  });
+
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
 
@@ -251,5 +263,178 @@ describe("WorkoutSessionScreen - navegacao apos encerramento", () => {
     });
 
     expect(navigation.popTo).not.toHaveBeenCalled();
+  });
+
+  describe("indicador de progresso", () => {
+    function buildProgressSession(
+      total: number,
+      completed: number,
+    ): WorkoutSession {
+      return {
+        ...session,
+        exercises: Array.from({ length: total }, (_, index) => ({
+          ...session.exercises[0],
+          id: `exercise-${index + 1}`,
+          exerciseId: `catalog-${index + 1}`,
+          exerciseName: `Exercício ${index + 1}`,
+          position: index + 1,
+          isCompleted: index < completed,
+          completedAt: index < completed ? "2026-11-04T10:10:00Z" : null,
+        })),
+      };
+    }
+
+    function expectProgress(
+      completed: number,
+      total: number,
+      percentage: number,
+    ): void {
+      expect(screen.getByText(`${completed}/${total}`)).toBeTruthy();
+
+      expect(
+        screen.getByLabelText("Progresso do treino").props.accessibilityValue,
+      ).toEqual({
+        min: 0,
+        max: 100,
+        now: percentage,
+      });
+    }
+
+    beforeEach(() => {
+      mockedUpdate.mockReset();
+    });
+
+    it.each([
+      [0, 2, 0],
+      [1, 2, 50],
+      [2, 2, 100],
+      [0, 0, 0],
+    ])(
+      "calcula %i de %i exercicios como %i por cento",
+      async (completed, total, percentage) => {
+        mockedActive.mockResolvedValue(buildProgressSession(total, completed));
+
+        await renderSession();
+
+        expectProgress(completed, total, percentage);
+
+        expect(mockedUpdate).not.toHaveBeenCalled();
+      },
+    );
+
+    it("atualiza o progresso apos o backend confirmar a conclusao", async () => {
+      mockedActive.mockResolvedValue(buildProgressSession(2, 0));
+
+      mockedUpdate.mockResolvedValue(buildProgressSession(2, 1));
+
+      await renderSession();
+
+      expectProgress(0, 2, 0);
+
+      await fireEvent.press(
+        screen.getByLabelText("Concluir exercício Exercício 1"),
+      );
+
+      await waitFor(() => {
+        expectProgress(1, 2, 50);
+      });
+
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        "test-access-token",
+        session.id,
+        "exercise-1",
+        { completed: true },
+      );
+    });
+
+    it("reduz o progresso apos reabrir um exercicio", async () => {
+      mockedActive.mockResolvedValue(buildProgressSession(2, 1));
+
+      mockedUpdate.mockResolvedValue(buildProgressSession(2, 0));
+
+      await renderSession();
+
+      expectProgress(1, 2, 50);
+
+      await fireEvent.press(
+        screen.getByLabelText("Reabrir exercício Exercício 1"),
+      );
+
+      await waitFor(() => {
+        expectProgress(0, 2, 0);
+      });
+
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        "test-access-token",
+        session.id,
+        "exercise-1",
+        { completed: false },
+      );
+    });
+
+    it("preserva o progresso quando o backend rejeita a atualizacao", async () => {
+      mockedActive.mockResolvedValue(buildProgressSession(2, 0));
+
+      mockedUpdate.mockRejectedValueOnce(
+        new Error("The backend could not be reached."),
+      );
+
+      await renderSession();
+
+      expectProgress(0, 2, 0);
+
+      await fireEvent.press(
+        screen.getByLabelText("Concluir exercício Exercício 1"),
+      );
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          "Não foi possível atualizar o exercício",
+          "Não foi possível conectar ao servidor.",
+        );
+      });
+
+      expectProgress(0, 2, 0);
+
+      expect(
+        screen.getByLabelText("Concluir exercício Exercício 1"),
+      ).toBeTruthy();
+    });
+
+    it("nao antecipa o progresso enquanto o backend ainda responde", async () => {
+      const updatedSession = buildProgressSession(2, 1);
+
+      let resolveUpdate = (_value: WorkoutSession): void => {
+        throw new Error("Requisicao nao inicializada.");
+      };
+
+      mockedActive.mockResolvedValue(buildProgressSession(2, 0));
+
+      mockedUpdate.mockImplementationOnce(
+        () =>
+          new Promise<WorkoutSession>((resolve) => {
+            resolveUpdate = resolve;
+          }),
+      );
+
+      await renderSession();
+
+      expectProgress(0, 2, 0);
+
+      await fireEvent.press(
+        screen.getByLabelText("Concluir exercício Exercício 1"),
+      );
+
+      expect(mockedUpdate).toHaveBeenCalledTimes(1);
+      expectProgress(0, 2, 0);
+
+      await act(async () => {
+        resolveUpdate(updatedSession);
+      });
+
+      await waitFor(() => {
+        expectProgress(1, 2, 50);
+      });
+    });
   });
 });
