@@ -165,6 +165,18 @@ export default function MapScreen({ navigation }: Props) {
     [gyms],
   );
 
+  const selectedGym = gyms.find((gym) => gym.id === selectedGymId) ?? null;
+
+  const selectedGymDistanceKm =
+    selectedGym?.coordinates && userCoordinates
+      ? calculateDistanceKm(
+          userCoordinates.latitude,
+          userCoordinates.longitude,
+          selectedGym.coordinates.latitude,
+          selectedGym.coordinates.longitude,
+        )
+      : null;
+
   const favoriteExternalIds = useMemo(
     () => new Set(favoriteGyms.map((favorite) => favorite.externalId)),
     [favoriteGyms],
@@ -717,6 +729,49 @@ export default function MapScreen({ navigation }: Props) {
 
           <Text style={styles.mapBadgeText}>Mapa FitMap</Text>
         </View>
+
+        {selectedGym?.coordinates ? (
+          <View style={styles.selectedMapPreview}>
+            <View style={styles.selectedMapPreviewCopy}>
+              <Text style={styles.selectedMapPreviewLabel}>
+                ACADEMIA SELECIONADA
+              </Text>
+
+              <Text style={styles.selectedMapPreviewName} numberOfLines={1}>
+                {selectedGym.name}
+              </Text>
+
+              {selectedGym.address ? (
+                <Text
+                  style={styles.selectedMapPreviewAddress}
+                  numberOfLines={1}
+                >
+                  {selectedGym.address}
+                </Text>
+              ) : null}
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Ver detalhes de ${selectedGym.name} no mapa`}
+              onPress={() =>
+                handleOpenGymDetails(selectedGym, selectedGymDistanceKm)
+              }
+              style={({ pressed }) => [
+                styles.selectedMapPreviewAction,
+                pressed && styles.selectedMapPreviewActionPressed,
+              ]}
+            >
+              <Text style={styles.selectedMapPreviewActionText}>Detalhes</Text>
+
+              <ArrowRight
+                size={15}
+                strokeWidth={2.3}
+                color={theme.colors.textOnPrimary}
+              />
+            </Pressable>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.resultsSummary}>
@@ -1392,6 +1447,81 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontSize: theme.typography.size.caption,
     },
 
+    selectedMapPreview: {
+      position: "absolute",
+      bottom: 12,
+      left: 12,
+      right: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.md,
+      padding: 10,
+      paddingLeft: 14,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      shadowColor: "#0A0D15",
+      shadowOpacity: theme.mode === "dark" ? 0.26 : 0.15,
+      shadowRadius: 14,
+      shadowOffset: {
+        width: 0,
+        height: 4,
+      },
+      elevation: 6,
+    },
+
+    selectedMapPreviewCopy: {
+      flex: 1,
+      minWidth: 0,
+    },
+
+    selectedMapPreviewLabel: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: 9,
+      letterSpacing: 0.9,
+      marginBottom: 3,
+    },
+
+    selectedMapPreviewName: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      marginBottom: 2,
+    },
+
+    selectedMapPreviewAddress: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.caption,
+    },
+
+    selectedMapPreviewAction: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.primary,
+    },
+
+    selectedMapPreviewActionPressed: {
+      opacity: 0.8,
+      transform: [
+        {
+          scale: 0.98,
+        },
+      ],
+    },
+
+    selectedMapPreviewActionText: {
+      color: theme.colors.textOnPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.caption,
+    },
     userMarkerOuter: {
       width: 38,
       height: 38,
