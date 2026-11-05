@@ -250,6 +250,21 @@ export default function HomeScreen({ navigation }) {
     ],
   };
 
+  const activeTrainingPulseStyle = {
+    opacity: pulseValue.interpolate({
+      inputRange: [0, 0.45, 1],
+      outputRange: [0, 0.75, 0],
+    }),
+    transform: [
+      {
+        scale: pulseValue.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.65, 1.35],
+        }),
+      },
+    ],
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ScrollView
@@ -430,7 +445,18 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.trainingStatus}>
               {(workoutOverview.status === "active" ||
                 workoutOverview.status === "available") && (
-                <View style={styles.trainingStatusDot} />
+                <View style={styles.trainingStatusIndicator}>
+                  {workoutOverview.status === "active" && (
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[
+                        styles.trainingStatusHalo,
+                        activeTrainingPulseStyle,
+                      ]}
+                    />
+                  )}
+                  <View style={styles.trainingStatusDot} />
+                </View>
               )}
 
               <Text style={styles.trainingStatusText}>{trainingAction}</Text>
@@ -942,9 +968,25 @@ function createStyles(theme) {
       gap: 7,
     },
 
+    trainingStatusIndicator: {
+      width: 10,
+      height: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    trainingStatusHalo: {
+      position: "absolute",
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: theme.colors.success,
+    },
+
     trainingStatusDot: {
-      width: 7,
-      height: 7,
+      width: 8,
+      height: 8,
       borderRadius: 4,
       backgroundColor: theme.colors.success,
     },
