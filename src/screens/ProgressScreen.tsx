@@ -7,13 +7,15 @@ import {
   CalendarDays,
   Dumbbell,
   Images,
+  Maximize2,
   RefreshCw,
   ShieldCheck,
   TrendingUp,
 } from "lucide-react-native";
-import { useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  AccessibilityInfo,
   Alert,
   Image,
   Pressable,
@@ -27,6 +29,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import BodyMetricsSection from "../components/BodyMetricsSection";
 import FitnessGoalsSection from "../components/FitnessGoalsSection";
 import ProgressPhotoCapture from "../components/ProgressPhotoCapture";
+import ProgressPhotoViewer from "../components/ProgressPhotoViewer";
 import { AuthContext } from "../context/AuthContext";
 import { ApiClientError } from "../services/apiClient";
 import {
@@ -166,10 +169,30 @@ export default function ProgressScreen() {
   );
   const [performance, setPerformance] = useState<ExercisePerformance[]>([]);
   const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
+  const [selectedPhoto, setSelectedPhoto] = useState<ProgressPhoto | null>(
+    null,
+  );
+  const [reduceMotion, setReduceMotion] = useState(true);
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (active) setReduceMotion(enabled);
+      })
+      .catch(() => {
+        // Mantem as animacoes desativadas em caso de falha.
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadProgress = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -524,12 +547,27 @@ export default function ProgressScreen() {
               {photos.map((photo) => (
                 <View key={photo.id} style={styles.photoCard}>
                   {accessToken ? (
-                    <Image
-                      source={getProgressPhotoSource(accessToken, photo.id)}
-                      style={styles.progressPhoto}
-                      resizeMode="cover"
-                      accessibilityLabel={`Foto de progresso registrada em ${formatDate(photo.recordedAt)}`}
-                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Ampliar foto de progresso registrada em ${formatDate(photo.recordedAt)}`}
+                      accessibilityHint="Abre a imagem inteira em tela cheia"
+                      onPress={() => setSelectedPhoto(photo)}
+                      style={({ pressed }) => [
+                        styles.photoThumbnailButton,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Image
+                        source={getProgressPhotoSource(accessToken, photo.id)}
+                        style={styles.progressPhoto}
+                        resizeMode="cover"
+                        accessible={false}
+                      />
+
+                      <View style={styles.photoZoomHint} pointerEvents="none">
+                        <Maximize2 size={17} strokeWidth={2} color="#FFFFFF" />
+                      </View>
+                    </Pressable>
                   ) : (
                     <View style={styles.photoUnavailable}>
                       <Images
@@ -698,6 +736,15 @@ export default function ProgressScreen() {
           )}
         </View>
       </ScrollView>
+
+      {selectedPhoto && accessToken ? (
+        <ProgressPhotoViewer
+          source={getProgressPhotoSource(accessToken, selectedPhoto.id)}
+          dateLabel={formatDate(selectedPhoto.recordedAt)}
+          reduceMotion={reduceMotion}
+          onClose={() => setSelectedPhoto(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1071,6 +1118,23 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       width: "100%",
       aspectRatio: 0.82,
       backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    photoThumbnailButton: {
+      width: "100%",
+      position: "relative",
+    },
+
+    photoZoomHint: {
+      position: "absolute",
+      right: 9,
+      top: 9,
+      width: 34,
+      height: 34,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 12,
+      backgroundColor: "rgba(5, 12, 28, 0.72)",
     },
 
     photoUnavailable: {
