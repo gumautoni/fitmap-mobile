@@ -31,6 +31,11 @@ import {
   type TrainingExercise,
 } from "../services/training";
 import { useAppTheme } from "../theme/ThemeProvider";
+import {
+  findExistingExercise,
+  normalizeExerciseSearch,
+  searchCatalogExercises,
+} from "../utils/exerciseCatalogSearch";
 
 type ExerciseCatalogScreenProps = AppStackScreenProps<"CatalogoExercicios">;
 
@@ -94,6 +99,9 @@ export default function ExerciseCatalogScreen({
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [exercises, setExercises] = useState<TrainingExercise[]>([]);
+  const [workoutExerciseIds, setWorkoutExerciseIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [workoutName, setWorkoutName] = useState("");
   const [search, setSearch] = useState("");
 
@@ -128,11 +136,8 @@ export default function ExerciseCatalogScreen({
 
       setWorkoutName(workout.name);
 
-      setExercises(
-        availableExercises.filter(
-          (exercise) => !existingExerciseIds.has(exercise.id),
-        ),
-      );
+      setExercises(availableExercises);
+      setWorkoutExerciseIds(existingExerciseIds);
     } catch (loadError) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -164,11 +169,8 @@ export default function ExerciseCatalogScreen({
 
           setWorkoutName(workout.name);
 
-          setExercises(
-            availableExercises.filter(
-              (exercise) => !existingExerciseIds.has(exercise.id),
-            ),
-          );
+          setExercises(availableExercises);
+          setWorkoutExerciseIds(existingExerciseIds);
         })
         .catch((loadError: unknown) => {
           if (!active) {
@@ -189,17 +191,28 @@ export default function ExerciseCatalogScreen({
     }, [runAuthenticatedRequest, workoutId]),
   );
 
-  const filteredExercises = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
+  const availableExercises = useMemo(
+    () => exercises.filter((exercise) => !workoutExerciseIds.has(exercise.id)),
+    [exercises, workoutExerciseIds],
+  );
 
-    if (!normalizedSearch) {
-      return exercises;
+  const filteredExercises = useMemo(
+    () => searchCatalogExercises(availableExercises, search),
+    [availableExercises, search],
+  );
+
+  const exactCustomExercise = useMemo(
+    () => findExistingExercise(exercises, customName),
+    [exercises, customName],
+  );
+
+  const customSuggestions = useMemo(() => {
+    if (normalizeExerciseSearch(customName).length < 2) {
+      return [];
     }
 
-    return exercises.filter((exercise) =>
-      exercise.name.toLocaleLowerCase("pt-BR").includes(normalizedSearch),
-    );
-  }, [exercises, search]);
+    return searchCatalogExercises(availableExercises, customName).slice(0, 5);
+  }, [availableExercises, customName]);
 
   function toggleCustomForm(): void {
     if (busy) {
@@ -231,6 +244,18 @@ export default function ExerciseCatalogScreen({
 
     if (normalizedName.length > 120) {
       setError("O nome do exercício deve ter no máximo 120 caracteres.");
+
+      return;
+    }
+
+    if (exactCustomExercise) {
+      if (workoutExerciseIds.has(exactCustomExercise.id)) {
+        setError("Este exercício já foi adicionado ao treino.");
+
+        return;
+      }
+
+      await handleAddExercise(exactCustomExercise);
 
       return;
     }
@@ -415,6 +440,7 @@ export default function ExerciseCatalogScreen({
               <Text style={styles.inputLabel}>Nome do exercício</Text>
 
               <TextInput
+                accessibilityLabel="Nome do exercício personalizado"
                 value={customName}
                 onChangeText={setCustomName}
                 editable={!busy}
@@ -430,8 +456,47 @@ export default function ExerciseCatalogScreen({
                 style={styles.customInput}
               />
 
+              {customSuggestions.length > 0 ? (
+                <View style={styles.suggestionsPanel}>
+                  <Text style={styles.suggestionsHeader}>
+                    Sugestões do catálogo
+                  </Text>
+
+                  {customSuggestions.map((exercise) => (
+                    <Pressable
+                      key={exercise.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Adicionar sugestão ${exercise.name}`}
+                      disabled={busy}
+                      onPress={() => {
+                        void handleAddExercise(exercise);
+                      }}
+                      style={({ pressed }) => [
+                        styles.suggestionRow,
+                        pressed && styles.buttonPressed,
+                        busy && styles.buttonDisabled,
+                      ]}
+                    >
+                      <Text numberOfLines={2} style={styles.suggestionName}>
+                        {exercise.name}
+                      </Text>
+
+                      <Plus
+                        size={18}
+                        strokeWidth={2.2}
+                        color={theme.colors.primary}
+                      />
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
               <Text style={styles.customHint}>
-                Esse exercício ficará disponível somente para sua conta.
+                {exactCustomExercise
+                  ? workoutExerciseIds.has(exactCustomExercise.id)
+                    ? "Este exercício já está neste treino."
+                    : "Este exercício já existe no catálogo."
+                  : "Esse exercício ficará disponível somente para sua conta."}
               </Text>
 
               <Pressable
@@ -459,7 +524,12 @@ export default function ExerciseCatalogScreen({
                       color={theme.colors.textOnPrimary}
                     />
 
-                    <Text style={styles.createButtonText}>Criar exercício</Text>
+                    <Text style={styles.createButtonText}>
+                      {exactCustomExercise &&
+                      !workoutExerciseIds.has(exactCustomExercise.id)
+                        ? "Adicionar existente"
+                        : "Criar exercício"}
+                    </Text>
                   </>
                 )}
               </Pressable>
@@ -532,7 +602,7 @@ export default function ExerciseCatalogScreen({
           </View>
         </View>
 
-        {exercises.length === 0 ? (
+        {availableExercises.length === 0 ? (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIcon}>
               <Dumbbell
@@ -822,6 +892,41 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       color: theme.colors.textPrimary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.body,
+    },
+
+    suggestionsPanel: {
+      marginTop: theme.spacing.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surface,
+      overflow: "hidden",
+    },
+
+    suggestionsHeader: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.caption,
+    },
+
+    suggestionRow: {
+      minHeight: 44,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: theme.colors.divider,
+    },
+
+    suggestionName: {
+      flex: 1,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
     },
 
     customHint: {
