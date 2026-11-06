@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 import httpx2
@@ -10,8 +10,14 @@ from fitmap.api.dependencies import (
     DatabaseSessionDependency,
 )
 from fitmap.api.errors import ApiError
-from fitmap.gyms.config import get_gym_provider_settings
-from fitmap.gyms.factory import create_geoapify_gym_provider
+from fitmap.gyms.config import (
+    get_gym_provider_settings,
+    get_tomtom_provider_settings,
+)
+from fitmap.gyms.factory import (
+    create_geoapify_gym_provider,
+    create_tomtom_gym_provider,
+)
 from fitmap.gyms.favorites import (
     FavoriteGymAlreadyExistsError,
     FavoriteGymNotFoundError,
@@ -30,6 +36,7 @@ from fitmap.gyms.providers import (
     GymSearchResult,
 )
 from fitmap.gyms.schemas import FavoriteGymResponse, GymIdentityResponse
+from fitmap.gyms.tomtom import TomTomGymProvider
 
 router = APIRouter(
     prefix="/gyms",
@@ -51,6 +58,94 @@ GymProviderDependency = Annotated[
     GymProvider,
     Depends(get_gym_provider),
 ]
+
+GymProviderName = Literal["geoapify", "tomtom"]
+
+GymProviderNameQuery = Annotated[
+    GymProviderName,
+    Query(),
+]
+
+
+async def get_tomtom_provider() -> AsyncIterator[TomTomGymProvider | None]:
+    settings = get_tomtom_provider_settings()
+
+    if settings.api_key is None or not settings.api_key.get_secret_value().strip():
+        yield None
+        return
+
+    async with httpx2.AsyncClient() as client:
+        yield create_tomtom_gym_provider(
+            settings=settings,
+            client=client,
+        )
+
+
+TomTomGymProviderDependency = Annotated[
+    TomTomGymProvider | None,
+    Depends(get_tomtom_provider),
+]
+
+
+def _select_provider(
+    *,
+    provider_name: GymProviderName,
+    geoapify_provider: GymProvider,
+    tomtom_provider: TomTomGymProvider | None,
+) -> GymProvider | TomTomGymProvider:
+    if provider_name == "geoapify":
+        return geoapify_provider
+
+    if tomtom_provider is None:
+        raise ApiError(
+            status_code=503,
+            code="gym_provider_unavailable",
+            message="Gym provider is unavailable.",
+        )
+
+    return tomtom_provider
+
+
+async def _fetch_gym_details(
+    *,
+    external_id: str,
+    provider_name: GymProviderName,
+    geoapify_provider: GymProvider,
+    tomtom_provider: TomTomGymProvider | None,
+) -> GymDetails:
+    selected_provider = _select_provider(
+        provider_name=provider_name,
+        geoapify_provider=geoapify_provider,
+        tomtom_provider=tomtom_provider,
+    )
+
+    try:
+        details = await selected_provider.get_details(
+            external_id=external_id,
+        )
+    except GymProviderError as exc:
+        raise ApiError(
+            status_code=502,
+            code="gym_provider_unavailable",
+            message="Gym provider is unavailable.",
+        ) from exc
+
+    if details is None:
+        raise ApiError(
+            status_code=404,
+            code="gym_not_found",
+            message="Gym details were not found.",
+        )
+
+    if details.provider_name != provider_name or details.external_id != external_id:
+        raise ApiError(
+            status_code=502,
+            code="gym_provider_unavailable",
+            message="Gym provider is unavailable.",
+        )
+
+    return details
+
 
 LocationQuery = Annotated[
     str,
@@ -153,10 +248,18 @@ async def search_nearby_gyms(
     latitude: LatitudeQuery,
     longitude: LongitudeQuery,
     provider: GymProviderDependency,
+    tomtom_provider: TomTomGymProviderDependency,
     radius_meters: RadiusMetersQuery = 5_000,
+    provider_name: GymProviderNameQuery = "geoapify",
 ) -> list[GymSearchResult]:
+    selected_provider = _select_provider(
+        provider_name=provider_name,
+        geoapify_provider=provider,
+        tomtom_provider=tomtom_provider,
+    )
+
     try:
-        return await provider.search_nearby(
+        return await selected_provider.search_nearby(
             latitude=latitude,
             longitude=longitude,
             radius_meters=radius_meters,
@@ -221,26 +324,15 @@ def delete_favorite_gym(
 async def get_gym_details(
     external_id: GymExternalIdPath,
     provider: GymProviderDependency,
+    tomtom_provider: TomTomGymProviderDependency,
+    provider_name: GymProviderNameQuery = "geoapify",
 ) -> GymDetails:
-    try:
-        details = await provider.get_details(
-            external_id=external_id,
-        )
-    except GymProviderError as exc:
-        raise ApiError(
-            status_code=502,
-            code="gym_provider_unavailable",
-            message="Gym provider is unavailable.",
-        ) from exc
-
-    if details is None:
-        raise ApiError(
-            status_code=404,
-            code="gym_not_found",
-            message="Gym details were not found.",
-        )
-
-    return details
+    return await _fetch_gym_details(
+        external_id=external_id,
+        provider_name=provider_name,
+        geoapify_provider=provider,
+        tomtom_provider=tomtom_provider,
+    )
 
 
 @router.post(
@@ -253,24 +345,15 @@ async def create_favorite_gym(
     identity: CurrentIdentityDependency,
     db_session: DatabaseSessionDependency,
     provider: GymProviderDependency,
+    tomtom_provider: TomTomGymProviderDependency,
+    provider_name: GymProviderNameQuery = "geoapify",
 ) -> FavoriteGymResponse:
-    try:
-        details = await provider.get_details(
-            external_id=external_id,
-        )
-    except GymProviderError as exc:
-        raise ApiError(
-            status_code=502,
-            code="gym_provider_unavailable",
-            message="Gym provider is unavailable.",
-        ) from exc
-
-    if details is None:
-        raise ApiError(
-            status_code=404,
-            code="gym_not_found",
-            message="Gym details were not found.",
-        )
+    details = await _fetch_gym_details(
+        external_id=external_id,
+        provider_name=provider_name,
+        geoapify_provider=provider,
+        tomtom_provider=tomtom_provider,
+    )
 
     try:
         favorite = add_favorite_gym(
@@ -305,24 +388,15 @@ async def get_or_create_gym_identity(
     identity: CurrentIdentityDependency,
     db_session: DatabaseSessionDependency,
     provider: GymProviderDependency,
+    tomtom_provider: TomTomGymProviderDependency,
+    provider_name: GymProviderNameQuery = "geoapify",
 ) -> GymIdentityResponse:
-    try:
-        details = await provider.get_details(
-            external_id=external_id,
-        )
-    except GymProviderError as exc:
-        raise ApiError(
-            status_code=502,
-            code="gym_provider_unavailable",
-            message="Gym provider is unavailable.",
-        ) from exc
-
-    if details is None:
-        raise ApiError(
-            status_code=404,
-            code="gym_not_found",
-            message="Gym details were not found.",
-        )
+    details = await _fetch_gym_details(
+        external_id=external_id,
+        provider_name=provider_name,
+        geoapify_provider=provider,
+        tomtom_provider=tomtom_provider,
+    )
 
     gym = resolve_gym_identity(
         db_session=db_session,
