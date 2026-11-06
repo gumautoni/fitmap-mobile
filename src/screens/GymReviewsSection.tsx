@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { ApiClientError } from "../services/apiClient";
+import type { GymProviderName } from "../services/gyms";
 import {
   createGymReview,
   getGymReviews,
@@ -33,6 +34,7 @@ import GymReviewReportForm from "./GymReviewReportForm";
 
 interface Props {
   externalGymId: string;
+  providerName?: GymProviderName;
   runAuthenticatedRequest: <T>(
     request: (accessToken: string) => Promise<T>,
   ) => Promise<T>;
@@ -163,6 +165,7 @@ function RatingStars({ rating, color }: { rating: number; color: string }) {
 
 export default function GymReviewsSection({
   externalGymId,
+  providerName = "geoapify",
   runAuthenticatedRequest,
 }: Props) {
   const { theme } = useAppTheme();
@@ -195,7 +198,8 @@ export default function GymReviewsSection({
   const [alreadyReportedIdsByGym, setAlreadyReportedIdsByGym] = useState<
     Record<string, string[]>
   >({});
-  const reportedReviewIds = reportedIdsByGym[externalGymId] ?? [];
+  const reviewIdentityKey = JSON.stringify([providerName, externalGymId]);
+  const reportedReviewIds = reportedIdsByGym[reviewIdentityKey] ?? [];
 
   useEffect(() => {
     let active = true;
@@ -215,7 +219,14 @@ export default function GymReviewsSection({
 
       try {
         const result = await runAuthenticatedRequest(async (accessToken) => {
-          const identity = await resolveGymIdentity(accessToken, externalGymId);
+          const identity =
+            providerName === "tomtom"
+              ? await resolveGymIdentity(
+                  accessToken,
+                  externalGymId,
+                  providerName,
+                )
+              : await resolveGymIdentity(accessToken, externalGymId);
 
           const [reviews, ownReview] = await Promise.all([
             getGymReviews(accessToken, identity.gymId),
@@ -250,7 +261,7 @@ export default function GymReviewsSection({
     return () => {
       active = false;
     };
-  }, [externalGymId, reloadVersion, runAuthenticatedRequest]);
+  }, [externalGymId, providerName, reloadVersion, runAuthenticatedRequest]);
 
   async function submitReview(input: CreateGymReviewInput): Promise<void> {
     if (!resolvedGymId || reviewSubmitting || myReview) {
@@ -374,13 +385,13 @@ export default function GymReviewsSection({
       );
 
       setReportedIdsByGym((current) => {
-        const previousIds = current[externalGymId] ?? [];
+        const previousIds = current[reviewIdentityKey] ?? [];
 
         return previousIds.includes(reviewId)
           ? current
           : {
               ...current,
-              [externalGymId]: [...previousIds, reviewId],
+              [reviewIdentityKey]: [...previousIds, reviewId],
             };
       });
       setReportingReviewId(null);
@@ -400,24 +411,24 @@ export default function GymReviewsSection({
         error.code === "gym_review_already_reported"
       ) {
         setReportedIdsByGym((current) => {
-          const previousIds = current[externalGymId] ?? [];
+          const previousIds = current[reviewIdentityKey] ?? [];
 
           return previousIds.includes(reviewId)
             ? current
             : {
                 ...current,
-                [externalGymId]: [...previousIds, reviewId],
+                [reviewIdentityKey]: [...previousIds, reviewId],
               };
         });
 
         setAlreadyReportedIdsByGym((current) => {
-          const previousIds = current[externalGymId] ?? [];
+          const previousIds = current[reviewIdentityKey] ?? [];
 
           return previousIds.includes(reviewId)
             ? current
             : {
                 ...current,
-                [externalGymId]: [...previousIds, reviewId],
+                [reviewIdentityKey]: [...previousIds, reviewId],
               };
         });
 
@@ -679,7 +690,7 @@ export default function GymReviewsSection({
                   {myReview?.id !== review.id ? (
                     reportedReviewIds.includes(review.id) ? (
                       <Text style={styles.reportSuccessText}>
-                        {alreadyReportedIdsByGym[externalGymId]?.includes(
+                        {alreadyReportedIdsByGym[reviewIdentityKey]?.includes(
                           review.id,
                         )
                           ? "Esta avaliação já foi denunciada por você."

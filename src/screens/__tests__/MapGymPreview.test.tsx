@@ -221,6 +221,7 @@ describe("MapScreen - previa de academia selecionada", () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
       gymId: "gym-atlas",
+      providerName: "geoapify",
       distanceKm: null,
     });
   });
@@ -303,5 +304,74 @@ describe("MapScreen - previa de academia selecionada", () => {
         "Ver detalhes de Academia Sem Coordenadas no mapa",
       ),
     ).toBeNull();
+  });
+
+  it("distingue provedores com o mesmo ID externo", async () => {
+    mockedSearch.mockResolvedValueOnce([
+      {
+        ...gyms[0],
+        id: "shared-id",
+        name: "Academia TomTom",
+        providerName: "tomtom",
+      },
+      {
+        ...gyms[1],
+        id: "shared-id",
+        name: "Academia Geoapify",
+        providerName: "geoapify",
+      },
+    ]);
+
+    await mountMap();
+    await searchForGyms();
+
+    await screen.findByTestId("map-marker-Academia TomTom");
+
+    await fireEvent.press(screen.getByTestId("map-marker-Academia TomTom"));
+
+    await fireEvent.press(
+      screen.getByLabelText("Ver detalhes de Academia TomTom no mapa"),
+    );
+
+    expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
+      gymId: "shared-id",
+      providerName: "tomtom",
+      distanceKm: null,
+    });
+
+    await fireEvent.press(screen.getByTestId("map-marker-Academia Geoapify"));
+
+    expect(
+      screen.getByLabelText("Ver detalhes de Academia Geoapify no mapa"),
+    ).toBeTruthy();
+  });
+
+  it("preserva o provedor ao abrir favorito TomTom", async () => {
+    mockedFavorites.mockResolvedValueOnce([
+      {
+        id: "favorite-tomtom",
+        gymId: "internal-tomtom",
+        providerName: "tomtom",
+        externalId: "tomtom-external",
+        name: "Academia Favorita TomTom",
+        coordinates: null,
+        address: "Barra do Pira?",
+        favoritedAt: "2026-11-06T12:00:00Z",
+      },
+    ]);
+
+    await mountMap();
+
+    await fireEvent.press(
+      await screen.findByLabelText(
+        "Abrir academia favorita Academia Favorita TomTom",
+      ),
+    );
+
+    expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
+      gymId: "tomtom-external",
+      providerName: "tomtom",
+      distanceKm: null,
+    });
   });
 });

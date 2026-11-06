@@ -356,4 +356,22 @@ describe("GymReviewsSection", () => {
 
     expect(screen.queryByText("Excelente academia.")).toBeNull();
   });
+
+  it("resolve avaliacoes de academia TomTom com provedor explicito", async () => {
+    await render(
+      <GymReviewsSection
+        externalGymId="tomtom-external"
+        providerName="tomtom"
+        runAuthenticatedRequest={runAuthenticatedRequest}
+      />,
+    );
+
+    await screen.findByText("Excelente academia.");
+
+    expect(mockedIdentity).toHaveBeenCalledWith(
+      ACCESS_TOKEN,
+      "tomtom-external",
+      "tomtom",
+    );
+  });
 });

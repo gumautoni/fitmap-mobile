@@ -5,6 +5,8 @@ import type {
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import type { GymProviderName } from "../services/gyms";
+
 export type MainTabParamList = {
   Home: undefined;
   Mapa: undefined;
@@ -35,6 +37,7 @@ export type AppStackParamList = {
   };
   DetalhesAcademia: {
     gymId: string;
+    providerName?: GymProviderName;
     distanceKm?: number | null;
   };
 };
