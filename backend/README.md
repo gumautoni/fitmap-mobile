@@ -74,12 +74,17 @@ FITMAP_DB_PASSWORD=<local-password>
 
 Authentication requires a backend-managed JWT secret.
 
-Gym discovery uses a server-side Geoapify integration:
+Gym discovery uses server-side provider adapters. Geoapify supports text search and nearby discovery, while TomTom provides an optional nearby-discovery and details integration:
 
 ```text
 FITMAP_GEOAPIFY_API_KEY=<provider-key>
 FITMAP_GEOAPIFY_TIMEOUT_SECONDS=5.0
+
+FITMAP_TOMTOM_API_KEY=<tomtom-provider-key>
+FITMAP_TOMTOM_TIMEOUT_SECONDS=10.0
 ```
+
+The TomTom key is optional. When TomTom is not configured, an explicit TomTom request is unavailable; the mobile nearby-discovery service can retry with Geoapify. Provider keys must never be placed in mobile environment variables or committed to Git.
 
 Private media storage uses S3-compatible configuration:
 
@@ -325,13 +330,18 @@ GET /gyms/nearby
 GET /gyms/{external_id}
 ```
 
+Nearby discovery and gym details accept optional `provider_name=geoapify|tomtom`. Geoapify is the default when the parameter is omitted. Text-based search remains Geoapify-only.
+
 Favorite gym endpoints:
 
 ```text
 GET    /gyms/favorites
 POST   /gyms/{external_id}/favorite
+POST   /gyms/{external_id}/identity
 DELETE /gyms/favorites/{gym_id}
 ```
+
+Favorite creation and identity resolution accept the same optional provider selector. Favorite deletion uses the persistent internal FitMap gym UUID.
 
 The POST endpoint accepts the provider's external gym identifier.
 
@@ -347,9 +357,9 @@ Favorite operations enforce:
 - consistent provider-reference resolution;
 - preservation of the internal gym record after unfavoriting.
 
-The mobile application integrates these endpoints with the map, gym results and gym-details screen.
+The mobile application preserves provider identity across search results, map selection, details, favorites and reviews. Its nearby-discovery flow requests TomTom first and falls back to Geoapify for empty or recoverable failure responses.
 
-The gym rating and review functionality remains planned and is not part of the current implemented API.
+Gym ratings and reviews are implemented through separate endpoints using the persistent internal FitMap gym UUID, resolved from a provider-aware external identity.
 
 ### Training
 

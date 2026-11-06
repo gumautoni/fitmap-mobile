@@ -100,9 +100,11 @@ Users can:
 
 The application includes loading, empty and error states for relevant discovery operations.
 
+For device-location discovery, the mobile application requests TomTom first. An empty response or a recoverable provider/network error triggers a Geoapify fallback. Text searches by city, neighborhood or region continue using Geoapify.
+
 External gym data is accessed through the backend.
 
-The mobile application does not communicate directly with Geoapify and does not expose the provider API key.
+The mobile application communicates with external gym providers exclusively through the FitMap backend. Geoapify and TomTom credentials remain server-side.
 
 ### Gym details
 
@@ -150,7 +152,7 @@ User
 
 `Gym.id` represents the persistent internal identity managed by FitMap.
 
-External provider identifiers, including Geoapify place identifiers, are maintained separately through `GymExternalReference`.
+External provider identifiers from Geoapify and TomTom are maintained separately through `GymExternalReference`. The provider name and external ID form the external reference identity.
 
 This separation prevents persistent application relationships from depending directly on an external provider's identifier.
 
@@ -273,12 +275,14 @@ flowchart TD
     Mobile["FitMap Mobile<br/>React Native + Expo"]
     API["FitMap Backend<br/>Python + FastAPI"]
     DB[("PostgreSQL")]
-    Provider["Geoapify<br/>External Gym Provider"]
+    Geoapify["Geoapify<br/>Text Search and Fallback"]
+    TomTom["TomTom<br/>Nearby Discovery"]
     Storage["Private Object Storage<br/>S3-compatible"]
 
     Mobile -->|"REST / JSON<br/>/api/v1"| API
     API --> DB
-    API --> Provider
+    API --> Geoapify
+    API --> TomTom
     API --> Storage
 ```
 
@@ -392,7 +396,7 @@ Basic training statistics and exercise performance are derived from completed tr
 
 ### External services
 
-Gym discovery uses Geoapify through a backend-managed provider adapter.
+Gym discovery uses backend-managed adapters for Geoapify and TomTom. TomTom supports nearby discovery and gym details; Geoapify remains the textual-search provider and nearby-discovery fallback.
 
 Private progress-photo storage uses an S3-compatible storage abstraction.
 
@@ -447,8 +451,13 @@ GET    /gyms/{external_id}
 
 GET    /gyms/favorites
 POST   /gyms/{external_id}/favorite
+POST   /gyms/{external_id}/identity
 DELETE /gyms/favorites/{gym_id}
 ```
+
+The `/gyms/nearby`, `/gyms/{external_id}`, favorite-creation and identity-resolution endpoints accept an optional `provider_name` query parameter (`geoapify` or `tomtom`). Omitting it preserves Geoapify as the backend default. The `/gyms/search` endpoint remains Geoapify-only.
+
+Mobile nearby discovery selects TomTom explicitly and uses Geoapify as a fallback when appropriate.
 
 Favorite creation resolves the provider's external identifier to an internal FitMap gym record.
 
@@ -710,6 +719,10 @@ FITMAP_DB_PASSWORD=<local-password>
 
 FITMAP_GEOAPIFY_API_KEY=<provider-key>
 FITMAP_GEOAPIFY_TIMEOUT_SECONDS=5.0
+
+# Optional TomTom provider
+FITMAP_TOMTOM_API_KEY=<tomtom-provider-key>
+FITMAP_TOMTOM_TIMEOUT_SECONDS=10.0
 ```
 
 Authentication and private-media configuration must also be supplied according to the backend environment template.
@@ -1014,6 +1027,8 @@ FITMAP_AUTH_JWT_SECRET
 
 FITMAP_GEOAPIFY_API_KEY
 FITMAP_GEOAPIFY_TIMEOUT_SECONDS
+FITMAP_TOMTOM_API_KEY
+FITMAP_TOMTOM_TIMEOUT_SECONDS
 
 FITMAP_MEDIA_BUCKET_NAME
 FITMAP_MEDIA_REGION_NAME
