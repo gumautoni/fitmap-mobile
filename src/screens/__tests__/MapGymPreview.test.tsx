@@ -117,6 +117,7 @@ const navigation = {
 const gyms: GymSearchResult[] = [
   {
     id: "gym-aurora",
+    providerName: "geoapify",
     name: "Academia Aurora",
     address: "Rua das Flores, 100",
     coordinates: {
@@ -126,6 +127,7 @@ const gyms: GymSearchResult[] = [
   },
   {
     id: "gym-atlas",
+    providerName: "geoapify",
     name: "Academia Atlas",
     address: "Rua Central, 200",
     coordinates: {
@@ -277,6 +279,7 @@ describe("MapScreen - previa de academia selecionada", () => {
     mockedSearch.mockResolvedValueOnce([
       {
         id: "gym-sem-coordenadas",
+        providerName: "geoapify",
         name: "Academia Sem Coordenadas",
         address: "Endereco de teste",
         coordinates: null,

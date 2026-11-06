@@ -57,6 +57,7 @@ describe("gyms service", () => {
     expect(results).toEqual([
       {
         id: "gym-123",
+        providerName: "geoapify",
         name: "Academia Central",
         coordinates: {
           latitude: -22.4708,
@@ -90,6 +91,7 @@ describe("gyms service", () => {
     expect(results).toEqual([
       {
         id: "nearby-123",
+        providerName: "geoapify",
         name: "Academia Próxima",
         coordinates: {
           latitude: -23.0121669,
@@ -133,6 +135,7 @@ describe("gyms service", () => {
 
     expect(result).toEqual({
       id: "gym/details 123",
+      providerName: "geoapify",
       name: "Bodytech",
       coordinates: {
         latitude: -23.0121669,
@@ -165,6 +168,7 @@ describe("gyms service", () => {
 
     expect(result).toEqual({
       id: "gym-with-limited-data",
+      providerName: "geoapify",
       name: "Academia sem dados adicionais",
       coordinates: null,
       address: null,
@@ -267,5 +271,81 @@ describe("gyms service", () => {
         },
       },
     );
+  });
+
+  it("preserves TomTom identity in nearby results", async () => {
+    mockedGet.mockResolvedValue([
+      {
+        provider_name: "tomtom",
+        external_id: "tomtom-123",
+        name: "Academia TomTom",
+        coordinates: { latitude: -22.47, longitude: -43.82 },
+        address: "Barra do Pira?",
+      },
+    ]);
+
+    const results = await searchNearbyGyms(-22.47, -43.82, 10_000, "tomtom");
+
+    expect(mockedGet).toHaveBeenCalledWith(
+      "/gyms/nearby?latitude=-22.47&longitude=-43.82&radius_meters=10000&provider_name=tomtom",
+    );
+
+    expect(results).toEqual([
+      {
+        id: "tomtom-123",
+        providerName: "tomtom",
+        name: "Academia TomTom",
+        coordinates: { latitude: -22.47, longitude: -43.82 },
+        address: "Barra do Pira?",
+      },
+    ]);
+  });
+
+  it("requests TomTom details with explicit provider", async () => {
+    mockedGet.mockResolvedValue({
+      provider_name: "tomtom",
+      external_id: "tomtom/123",
+      name: "Academia TomTom",
+      coordinates: null,
+      address: null,
+      phone: null,
+      website: null,
+      opening_hours: null,
+      image_urls: [],
+      amenities: [],
+    });
+
+    const result = await getGymDetails("tomtom/123", "tomtom");
+
+    expect(mockedGet).toHaveBeenCalledWith(
+      "/gyms/tomtom%2F123?provider_name=tomtom",
+    );
+    expect(result.id).toBe("tomtom/123");
+    expect(result.providerName).toBe("tomtom");
+  });
+
+  it("adds a TomTom favorite with provider identity", async () => {
+    mockedPost.mockResolvedValue({
+      id: "favorite-tomtom",
+      gym_id: "internal-tomtom",
+      provider_name: "tomtom",
+      external_id: "tomtom/123",
+      name: "Academia TomTom",
+      coordinates: null,
+      address: null,
+      favorited_at: "2026-11-06T12:00:00Z",
+    });
+
+    const result = await addFavoriteGym("access-token", "tomtom/123", "tomtom");
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/gyms/tomtom%2F123/favorite?provider_name=tomtom",
+      undefined,
+      {
+        headers: { Authorization: "Bearer access-token" },
+      },
+    );
+    expect(result.providerName).toBe("tomtom");
+    expect(result.gymId).toBe("internal-tomtom");
   });
 });

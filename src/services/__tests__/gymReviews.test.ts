@@ -284,4 +284,26 @@ describe("gym reviews service", () => {
       backendError,
     );
   });
+
+  it("resolves TomTom identity with explicit provider", async () => {
+    mockedPost.mockResolvedValue({
+      gym_id: "internal-tomtom",
+      provider_name: "tomtom",
+      external_id: "tomtom/123",
+    });
+
+    const result = await resolveGymIdentity(
+      accessToken,
+      "tomtom/123",
+      "tomtom",
+    );
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/gyms/tomtom%2F123/identity?provider_name=tomtom",
+      undefined,
+      authorizationOptions,
+    );
+    expect(result.providerName).toBe("tomtom");
+    expect(result.gymId).toBe("internal-tomtom");
+  });
 });
