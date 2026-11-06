@@ -35,9 +35,10 @@ import { ApiClientError } from "../services/apiClient";
 import {
   getFavoriteGyms,
   searchGymsByLocation,
-  searchNearbyGyms,
+  searchNearbyGymsWithFallback,
   type FavoriteGym,
   type GymSearchResult,
+  type GymProviderName,
 } from "../services/gyms";
 import { useAppTheme } from "../theme/ThemeProvider";
 import { calculateDistanceKm } from "../utils/distance";
@@ -60,6 +61,13 @@ interface UserCoordinates {
 type LoadingAction = "text" | "location" | null;
 
 type Props = AppTabScreenProps<"Mapa">;
+
+function gymIdentityKey(
+  providerName: GymProviderName,
+  externalId: string,
+): string {
+  return JSON.stringify([providerName, externalId]);
+}
 
 function getGymRegion(gym: GymSearchResult): Region | null {
   if (!gym.coordinates) {
@@ -148,7 +156,7 @@ export default function MapScreen({ navigation }: Props) {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchedPlace, setSearchedPlace] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [selectedGymId, setSelectedGymId] = useState<string | null>(null);
+  const [selectedGymKey, setSelectedGymKey] = useState<string | null>(null);
   const [userCoordinates, setUserCoordinates] =
     useState<UserCoordinates | null>(null);
 
@@ -165,7 +173,10 @@ export default function MapScreen({ navigation }: Props) {
     [gyms],
   );
 
-  const selectedGym = gyms.find((gym) => gym.id === selectedGymId) ?? null;
+  const selectedGym =
+    gyms.find(
+      (gym) => gymIdentityKey(gym.providerName, gym.id) === selectedGymKey,
+    ) ?? null;
 
   const selectedGymDistanceKm =
     selectedGym?.coordinates && userCoordinates
@@ -177,8 +188,13 @@ export default function MapScreen({ navigation }: Props) {
         )
       : null;
 
-  const favoriteExternalIds = useMemo(
-    () => new Set(favoriteGyms.map((favorite) => favorite.externalId)),
+  const favoriteGymKeys = useMemo(
+    () =>
+      new Set(
+        favoriteGyms.map((favorite) =>
+          gymIdentityKey(favorite.providerName, favorite.externalId),
+        ),
+      ),
     [favoriteGyms],
   );
 
@@ -260,7 +276,7 @@ export default function MapScreen({ navigation }: Props) {
       setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
-      setSelectedGymId(null);
+      setSelectedGymKey(null);
 
       const results = await searchGymsByLocation(normalizedQuery);
 
@@ -273,7 +289,7 @@ export default function MapScreen({ navigation }: Props) {
       setGyms([]);
       setSearchedPlace(normalizedQuery);
       setHasSearched(true);
-      setSelectedGymId(null);
+      setSelectedGymKey(null);
       setErrorMessage(getSearchErrorMessage(error));
     } finally {
       setLoadingAction(null);
@@ -319,11 +335,11 @@ export default function MapScreen({ navigation }: Props) {
     try {
       setLoadingAction("location");
       setGyms([]);
-      setSelectedGymId(null);
+      setSelectedGymKey(null);
       setSearchedPlace("Sua localização atual");
       setHasSearched(true);
 
-      const results = await searchNearbyGyms(
+      const results = await searchNearbyGymsWithFallback(
         currentCoordinates.latitude,
         currentCoordinates.longitude,
         NEARBY_RADIUS_METERS,
@@ -334,7 +350,7 @@ export default function MapScreen({ navigation }: Props) {
       focusSearchResults(results, currentCoordinates);
     } catch (error: unknown) {
       setGyms([]);
-      setSelectedGymId(null);
+      setSelectedGymKey(null);
       setSearchedPlace("Sua localização atual");
       setHasSearched(true);
       setErrorMessage(getSearchErrorMessage(error));
@@ -349,7 +365,7 @@ export default function MapScreen({ navigation }: Props) {
   }
 
   function handleSelectGym(gym: GymSearchResult): void {
-    setSelectedGymId(gym.id);
+    setSelectedGymKey(gymIdentityKey(gym.providerName, gym.id));
 
     const nextRegion = getGymRegion(gym);
 
@@ -362,10 +378,11 @@ export default function MapScreen({ navigation }: Props) {
     gym: GymSearchResult,
     distanceKm: number | null,
   ): void {
-    setSelectedGymId(gym.id);
+    setSelectedGymKey(gymIdentityKey(gym.providerName, gym.id));
 
     navigation.navigate("DetalhesAcademia", {
       gymId: gym.id,
+      providerName: gym.providerName,
       distanceKm,
     });
   }
@@ -373,6 +390,7 @@ export default function MapScreen({ navigation }: Props) {
   function handleOpenFavoriteGym(favorite: FavoriteGym): void {
     navigation.navigate("DetalhesAcademia", {
       gymId: favorite.externalId,
+      providerName: favorite.providerName,
       distanceKm: null,
     });
   }
@@ -680,11 +698,12 @@ export default function MapScreen({ navigation }: Props) {
               return null;
             }
 
-            const isSelected = selectedGymId === gym.id;
+            const isSelected =
+              selectedGymKey === gymIdentityKey(gym.providerName, gym.id);
 
             return (
               <Marker
-                key={gym.id}
+                key={gymIdentityKey(gym.providerName, gym.id)}
                 coordinate={{
                   latitude: gym.coordinates.latitude,
                   longitude: gym.coordinates.longitude,
@@ -836,14 +855,17 @@ export default function MapScreen({ navigation }: Props) {
     <FlatList<GymSearchResult>
       style={styles.container}
       data={gyms}
-      keyExtractor={(item) => item.id}
+      keyExtractor={(item) => gymIdentityKey(item.providerName, item.id)}
       ListHeaderComponent={listHeader}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.listContent}
       renderItem={({ item }) => {
-        const isSelected = selectedGymId === item.id;
-        const isFavorite = favoriteExternalIds.has(item.id);
+        const isSelected =
+          selectedGymKey === gymIdentityKey(item.providerName, item.id);
+        const isFavorite = favoriteGymKeys.has(
+          gymIdentityKey(item.providerName, item.id),
+        );
 
         const distanceKm =
           userCoordinates && item.coordinates

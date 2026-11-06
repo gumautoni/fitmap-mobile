@@ -1,4 +1,5 @@
 import { apiClient } from "./apiClient";
+import type { GymProviderName } from "./gyms";
 
 interface GymIdentityApiResponse {
   gym_id: string;
@@ -133,11 +134,14 @@ function normalizeGymReviewReport(
 export async function resolveGymIdentity(
   accessToken: string,
   externalGymId: string,
+  providerName: GymProviderName = "geoapify",
 ): Promise<GymIdentity> {
   const encodedExternalId = encodeURIComponent(externalGymId);
+  const providerQuery =
+    providerName === "tomtom" ? "?provider_name=tomtom" : "";
 
   const response = await apiClient.post<GymIdentityApiResponse>(
-    `/gyms/${encodedExternalId}/identity`,
+    `/gyms/${encodedExternalId}/identity${providerQuery}`,
     undefined,
     {
       headers: buildAuthorizationHeaders(accessToken),

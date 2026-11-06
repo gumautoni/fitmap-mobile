@@ -108,7 +108,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
 
   const { runAuthenticatedRequest } = auth;
 
-  const { gymId, distanceKm = null } = route.params;
+  const { gymId, providerName = "geoapify", distanceKm = null } = route.params;
 
   const { width: windowWidth } = useWindowDimensions();
 
@@ -141,7 +141,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
         setErrorMessage(null);
         setCurrentImageIndex(0);
 
-        const details = await getGymDetails(gymId);
+        const details = await getGymDetails(gymId, providerName);
 
         if (active) {
           setGym(details);
@@ -163,7 +163,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
     return () => {
       active = false;
     };
-  }, [gymId]);
+  }, [gymId, providerName]);
 
   useEffect(() => {
     let active = true;
@@ -180,7 +180,10 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
 
         if (active) {
           setFavorite(
-            favorites.find((item) => item.externalId === gymId) ?? null,
+            favorites.find(
+              (item) =>
+                item.externalId === gymId && item.providerName === providerName,
+            ) ?? null,
           );
           setFavoriteStatusReady(true);
         }
@@ -202,7 +205,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
     return () => {
       active = false;
     };
-  }, [favoriteReloadVersion, gymId, runAuthenticatedRequest]);
+  }, [favoriteReloadVersion, gymId, providerName, runAuthenticatedRequest]);
 
   async function toggleFavorite(): Promise<void> {
     if (!gym || favoriteLoading || favoriteUpdating || !favoriteStatusReady) {
@@ -224,7 +227,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
       }
 
       const createdFavorite = await runAuthenticatedRequest((accessToken) =>
-        addFavoriteGym(accessToken, gym.id),
+        addFavoriteGym(accessToken, gym.id, gym.providerName),
       );
 
       setFavorite(createdFavorite);
@@ -765,6 +768,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
 
       <GymReviewsSection
         externalGymId={gym.id}
+        providerName={gym.providerName}
         runAuthenticatedRequest={runAuthenticatedRequest}
       />
       <View style={styles.sectionHeader}>

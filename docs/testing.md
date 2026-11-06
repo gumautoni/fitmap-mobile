@@ -203,6 +203,9 @@ A suíte de backend contempla os seguintes grupos de comportamento.
 - busca de academias por localização;
 - busca por coordenadas;
 - normalização dos resultados Geoapify;
+- normalização e contratos do provedor TomTom;
+- seleção explícita do provedor nos endpoints;
+- preservação da identidade por provedor e ID externo;
 - tratamento de respostas inválidas;
 - falhas de comunicação com o provider;
 - limites e tratamento de requisições;
@@ -357,7 +360,11 @@ A suíte atual contém verificações de comportamento relacionadas aos seguinte
 - requisições de listagem de favoritos;
 - adição de favoritos;
 - remoção de favoritos;
-- normalização dos identificadores.
+- normalização dos identificadores;
+- propagação do provedor pela navegação;
+- priorização da TomTom na descoberta por coordenadas;
+- fallback Geoapify para respostas vazias e falhas recuperáveis;
+- propagação de erros não recuperáveis.
 
 A aplicação mantém separados:
 
@@ -446,6 +453,38 @@ Todos os comportamentos observados nesse fluxo foram aprovados.
 Essa validação confirma o funcionamento do fluxo principal entre o aplicativo mobile, a API FastAPI e a persistência PostgreSQL no ambiente testado.
 
 Ela não representa uma auditoria completa de todos os dispositivos, sistemas operacionais ou condições de rede.
+
+
+### 5.2. Ciclo 30 — descoberta TomTom
+
+A validação do Ciclo 30, realizada em novembro de 2026,
+registrou:
+
+- 620 testes automatizados aprovados na última regressão
+  completa do backend;
+- 262 testes automatizados aprovados na última regressão
+  completa do mobile;
+- aprovação de TypeScript, ESLint e Prettier no mobile;
+- consulta real ao endpoint TomTom com HTTP 200 e 53 estabelecimentos
+  retornados para um raio de 10 km em Barra do Piraí, RJ;
+- validação funcional no dispositivo: login, mapa, permissão
+  de localização, resultados, detalhes, favoritos e
+  avaliações.
+
+O aplicativo utiliza um raio de 5 km para descoberta por
+localização. Portanto, a contagem de 53 estabelecimentos,
+obtida separadamente com raio de 10 km, não representa
+a quantidade esperada no mapa do dispositivo.
+
+Os cenários de prioridade TomTom, fallback Geoapify e
+propagação de erros foram validados com mocks nos testes
+mobile. A validação manual confirmou o fluxo funcional,
+mas não isolou uma falha real da TomTom para acionar o
+fallback, nem confirmou pelos logs o provedor utilizado
+em cada requisição do celular.
+
+Essas limitações devem ser preservadas no relato
+de validação da funcionalidade.
 
 ## 6. Verificações de qualidade
 

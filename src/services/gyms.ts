@@ -1,4 +1,6 @@
-import { apiClient } from "./apiClient";
+import { ApiClientError, apiClient } from "./apiClient";
+
+export type GymProviderName = "geoapify" | "tomtom";
 
 export interface GymCoordinates {
   latitude: number;
@@ -6,7 +8,7 @@ export interface GymCoordinates {
 }
 
 interface GymApiSearchResult {
-  provider_name: string;
+  provider_name: GymProviderName;
   external_id: string;
   name: string;
   coordinates: GymCoordinates | null;
@@ -24,7 +26,7 @@ interface GymApiDetails extends GymApiSearchResult {
 interface FavoriteGymApiResponse {
   id: string;
   gym_id: string;
-  provider_name: string;
+  provider_name: GymProviderName;
   external_id: string;
   name: string;
   coordinates: GymCoordinates | null;
@@ -34,6 +36,7 @@ interface FavoriteGymApiResponse {
 
 export interface GymSearchResult {
   id: string;
+  providerName: GymProviderName;
   name: string;
   coordinates: GymCoordinates | null;
   address: string | null;
@@ -50,7 +53,7 @@ export interface GymDetails extends GymSearchResult {
 export interface FavoriteGym {
   id: string;
   gymId: string;
-  providerName: string;
+  providerName: GymProviderName;
   externalId: string;
   name: string;
   coordinates: GymCoordinates | null;
@@ -64,9 +67,21 @@ function buildAuthorizationHeaders(accessToken: string): HeadersInit {
   };
 }
 
+function providerQuerySuffix(
+  providerName: GymProviderName,
+  existingQuery = false,
+): string {
+  if (providerName === "geoapify") {
+    return "";
+  }
+
+  return `${existingQuery ? "&" : "?"}provider_name=${providerName}`;
+}
+
 function normalizeGymSearchResult(result: GymApiSearchResult): GymSearchResult {
   return {
     id: result.external_id,
+    providerName: result.provider_name,
     name: result.name,
     coordinates: result.coordinates,
     address: result.address,
@@ -76,6 +91,7 @@ function normalizeGymSearchResult(result: GymApiSearchResult): GymSearchResult {
 function normalizeGymDetails(result: GymApiDetails): GymDetails {
   return {
     id: result.external_id,
+    providerName: result.provider_name,
     name: result.name,
     coordinates: result.coordinates,
     address: result.address,
@@ -122,18 +138,64 @@ export async function searchNearbyGyms(
   latitude: number,
   longitude: number,
   radiusMeters = 5_000,
+  providerName: GymProviderName = "geoapify",
 ): Promise<GymSearchResult[]> {
   const results = await apiClient.get<GymApiSearchResult[]>(
-    `/gyms/nearby?latitude=${latitude}&longitude=${longitude}&radius_meters=${radiusMeters}`,
+    `/gyms/nearby?latitude=${latitude}&longitude=${longitude}&radius_meters=${radiusMeters}${providerQuerySuffix(providerName, true)}`,
   );
 
   return results.map(normalizeGymSearchResult);
 }
 
-export async function getGymDetails(gymId: string): Promise<GymDetails> {
+function isRecoverableTomTomError(error: unknown): boolean {
+  if (error instanceof ApiClientError) {
+    return (
+      error.code === "gym_provider_unavailable" &&
+      (error.status === 502 || error.status === 503)
+    );
+  }
+
+  return (
+    error instanceof Error &&
+    (error.message === "The request timed out." ||
+      error.message === "The backend could not be reached.")
+  );
+}
+
+export async function searchNearbyGymsWithFallback(
+  latitude: number,
+  longitude: number,
+  radiusMeters = 5_000,
+): Promise<GymSearchResult[]> {
+  try {
+    const tomtomResults = await searchNearbyGyms(
+      latitude,
+      longitude,
+      radiusMeters,
+      "tomtom",
+    );
+
+    if (tomtomResults.length > 0) {
+      return tomtomResults;
+    }
+  } catch (error: unknown) {
+    if (!isRecoverableTomTomError(error)) {
+      throw error;
+    }
+  }
+
+  return searchNearbyGyms(latitude, longitude, radiusMeters);
+}
+
+export async function getGymDetails(
+  gymId: string,
+  providerName: GymProviderName = "geoapify",
+): Promise<GymDetails> {
   const encodedGymId = encodeURIComponent(gymId);
 
-  const result = await apiClient.get<GymApiDetails>(`/gyms/${encodedGymId}`);
+  const result = await apiClient.get<GymApiDetails>(
+    `/gyms/${encodedGymId}${providerQuerySuffix(providerName)}`,
+  );
 
   return normalizeGymDetails(result);
 }
@@ -154,11 +216,12 @@ export async function getFavoriteGyms(
 export async function addFavoriteGym(
   accessToken: string,
   externalGymId: string,
+  providerName: GymProviderName = "geoapify",
 ): Promise<FavoriteGym> {
   const encodedGymId = encodeURIComponent(externalGymId);
 
   const result = await apiClient.post<FavoriteGymApiResponse>(
-    `/gyms/${encodedGymId}/favorite`,
+    `/gyms/${encodedGymId}/favorite${providerQuerySuffix(providerName)}`,
     undefined,
     {
       headers: buildAuthorizationHeaders(accessToken),
