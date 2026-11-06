@@ -1,4 +1,4 @@
-import { apiClient } from "./apiClient";
+import { ApiClientError, apiClient } from "./apiClient";
 
 export type GymProviderName = "geoapify" | "tomtom";
 
@@ -145,6 +145,46 @@ export async function searchNearbyGyms(
   );
 
   return results.map(normalizeGymSearchResult);
+}
+
+function isRecoverableTomTomError(error: unknown): boolean {
+  if (error instanceof ApiClientError) {
+    return (
+      error.code === "gym_provider_unavailable" &&
+      (error.status === 502 || error.status === 503)
+    );
+  }
+
+  return (
+    error instanceof Error &&
+    (error.message === "The request timed out." ||
+      error.message === "The backend could not be reached.")
+  );
+}
+
+export async function searchNearbyGymsWithFallback(
+  latitude: number,
+  longitude: number,
+  radiusMeters = 5_000,
+): Promise<GymSearchResult[]> {
+  try {
+    const tomtomResults = await searchNearbyGyms(
+      latitude,
+      longitude,
+      radiusMeters,
+      "tomtom",
+    );
+
+    if (tomtomResults.length > 0) {
+      return tomtomResults;
+    }
+  } catch (error: unknown) {
+    if (!isRecoverableTomTomError(error)) {
+      throw error;
+    }
+  }
+
+  return searchNearbyGyms(latitude, longitude, radiusMeters);
 }
 
 export async function getGymDetails(

@@ -35,7 +35,7 @@ import { ApiClientError } from "../services/apiClient";
 import {
   getFavoriteGyms,
   searchGymsByLocation,
-  searchNearbyGyms,
+  searchNearbyGymsWithFallback,
   type FavoriteGym,
   type GymSearchResult,
   type GymProviderName,
@@ -339,7 +339,7 @@ export default function MapScreen({ navigation }: Props) {
       setSearchedPlace("Sua localização atual");
       setHasSearched(true);
 
-      const results = await searchNearbyGyms(
+      const results = await searchNearbyGymsWithFallback(
         currentCoordinates.latitude,
         currentCoordinates.longitude,
         NEARBY_RADIUS_METERS,

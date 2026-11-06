@@ -1,4 +1,4 @@
-import { apiClient } from "../apiClient";
+import { ApiClientError, apiClient } from "../apiClient";
 import {
   addFavoriteGym,
   getFavoriteGyms,
@@ -6,9 +6,17 @@ import {
   removeFavoriteGym,
   searchGymsByLocation,
   searchNearbyGyms,
+  searchNearbyGymsWithFallback,
 } from "../gyms";
 
+jest.mock("../../config/environment", () => ({
+  environment: {
+    apiUrl: "http://test-api/api/v1",
+  },
+}));
+
 jest.mock("../apiClient", () => ({
+  ...jest.requireActual<typeof import("../apiClient")>("../apiClient"),
   apiClient: {
     get: jest.fn(),
     post: jest.fn(),
@@ -347,5 +355,128 @@ describe("gyms service", () => {
     );
     expect(result.providerName).toBe("tomtom");
     expect(result.gymId).toBe("internal-tomtom");
+  });
+
+  const tomtomNearbyUrl =
+    "/gyms/nearby?latitude=-22.47&longitude=-43.82&radius_meters=5000&provider_name=tomtom";
+
+  const geoapifyNearbyUrl =
+    "/gyms/nearby?latitude=-22.47&longitude=-43.82&radius_meters=5000";
+
+  const tomtomGym = {
+    provider_name: "tomtom",
+    external_id: "tomtom-123",
+    name: "Academia TomTom",
+    coordinates: { latitude: -22.47, longitude: -43.82 },
+    address: "Barra do Piraí",
+  };
+
+  const geoapifyGym = {
+    provider_name: "geoapify",
+    external_id: "geoapify-123",
+    name: "Academia Geoapify",
+    coordinates: { latitude: -22.47, longitude: -43.82 },
+    address: "Barra do Piraí",
+  };
+
+  it("prioritizes TomTom when nearby results are available", async () => {
+    mockedGet.mockResolvedValueOnce([tomtomGym]);
+
+    const results = await searchNearbyGymsWithFallback(-22.47, -43.82);
+
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+    expect(mockedGet).toHaveBeenCalledWith(tomtomNearbyUrl);
+    expect(results).toEqual([
+      {
+        id: "tomtom-123",
+        providerName: "tomtom",
+        name: "Academia TomTom",
+        coordinates: { latitude: -22.47, longitude: -43.82 },
+        address: "Barra do Piraí",
+      },
+    ]);
+  });
+
+  it("falls back to Geoapify when TomTom returns no gyms", async () => {
+    mockedGet.mockResolvedValueOnce([]).mockResolvedValueOnce([geoapifyGym]);
+
+    const results = await searchNearbyGymsWithFallback(-22.47, -43.82);
+
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+    expect(mockedGet).toHaveBeenNthCalledWith(1, tomtomNearbyUrl);
+    expect(mockedGet).toHaveBeenNthCalledWith(2, geoapifyNearbyUrl);
+    expect(results[0].providerName).toBe("geoapify");
+  });
+
+  it.each([502, 503])(
+    "falls back when TomTom returns provider error %i",
+    async (status) => {
+      mockedGet
+        .mockRejectedValueOnce(
+          new ApiClientError(
+            "Provider unavailable",
+            status,
+            "gym_provider_unavailable",
+          ),
+        )
+        .mockResolvedValueOnce([geoapifyGym]);
+
+      const results = await searchNearbyGymsWithFallback(-22.47, -43.82);
+
+      expect(mockedGet).toHaveBeenCalledTimes(2);
+      expect(mockedGet).toHaveBeenNthCalledWith(1, tomtomNearbyUrl);
+      expect(mockedGet).toHaveBeenNthCalledWith(2, geoapifyNearbyUrl);
+      expect(results[0].providerName).toBe("geoapify");
+    },
+  );
+
+  it("falls back when the TomTom request times out", async () => {
+    mockedGet
+      .mockRejectedValueOnce(new Error("The request timed out."))
+      .mockResolvedValueOnce([geoapifyGym]);
+
+    const results = await searchNearbyGymsWithFallback(-22.47, -43.82);
+
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+    expect(results[0].providerName).toBe("geoapify");
+  });
+
+  it("does not hide unexpected validation errors", async () => {
+    mockedGet.mockRejectedValueOnce(
+      new ApiClientError("Invalid request", 422, "request_validation_error"),
+    );
+
+    await expect(
+      searchNearbyGymsWithFallback(-22.47, -43.82),
+    ).rejects.toMatchObject({
+      status: 422,
+      code: "request_validation_error",
+    });
+
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates errors when Geoapify fallback also fails", async () => {
+    const fallbackError = new ApiClientError(
+      "Geoapify unavailable",
+      502,
+      "gym_provider_unavailable",
+    );
+
+    mockedGet
+      .mockRejectedValueOnce(
+        new ApiClientError(
+          "TomTom unavailable",
+          503,
+          "gym_provider_unavailable",
+        ),
+      )
+      .mockRejectedValueOnce(fallbackError);
+
+    await expect(searchNearbyGymsWithFallback(-22.47, -43.82)).rejects.toBe(
+      fallbackError,
+    );
+
+    expect(mockedGet).toHaveBeenCalledTimes(2);
   });
 });

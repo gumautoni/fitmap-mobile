@@ -4,12 +4,14 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react-native";
+import * as Location from "expo-location";
 import type { ComponentProps, ContextType } from "react";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
   getFavoriteGyms,
   searchGymsByLocation,
+  searchNearbyGymsWithFallback,
   type GymSearchResult,
 } from "../../services/gyms";
 import MapScreen from "../MapScreen";
@@ -104,11 +106,15 @@ jest.mock("react-native-maps", () => {
 jest.mock("../../services/gyms", () => ({
   getFavoriteGyms: jest.fn(),
   searchGymsByLocation: jest.fn(),
-  searchNearbyGyms: jest.fn(),
+  searchNearbyGymsWithFallback: jest.fn(),
 }));
 
 const mockedFavorites = getFavoriteGyms as jest.Mock;
 const mockedSearch = searchGymsByLocation as jest.Mock;
+const mockedNearby = searchNearbyGymsWithFallback as jest.Mock;
+const mockedPermissions =
+  Location.requestForegroundPermissionsAsync as jest.Mock;
+const mockedCurrentPosition = Location.getCurrentPositionAsync as jest.Mock;
 
 const navigation = {
   navigate: jest.fn(),
@@ -186,6 +192,16 @@ describe("MapScreen - previa de academia selecionada", () => {
 
     mockedFavorites.mockResolvedValue([]);
     mockedSearch.mockResolvedValue(gyms);
+    mockedNearby.mockReset();
+    mockedPermissions.mockReset();
+    mockedCurrentPosition.mockReset();
+    mockedPermissions.mockResolvedValue({ status: "granted" });
+    mockedCurrentPosition.mockResolvedValue({
+      coords: {
+        latitude: -22.47034,
+        longitude: -43.82633,
+      },
+    });
   });
 
   it("nao apresenta a previa antes da selecao", async () => {
@@ -373,5 +389,58 @@ describe("MapScreen - previa de academia selecionada", () => {
       providerName: "tomtom",
       distanceKm: null,
     });
+  });
+
+  it("shows nearby TomTom gyms and preserves provider in navigation", async () => {
+    mockedNearby.mockResolvedValueOnce([
+      {
+        id: "tomtom-nearby",
+        providerName: "tomtom",
+        name: "Academia TomTom Próxima",
+        address: "Barra do Piraí",
+        coordinates: {
+          latitude: -22.47034,
+          longitude: -43.82633,
+        },
+      },
+    ] satisfies GymSearchResult[]);
+
+    await mountMap();
+
+    await fireEvent.press(screen.getByLabelText("Usar minha localização"));
+
+    await waitFor(() => {
+      expect(mockedNearby).toHaveBeenCalledWith(-22.47034, -43.82633, 5_000);
+    });
+
+    await fireEvent.press(
+      await screen.findByTestId("map-marker-Academia TomTom Próxima"),
+    );
+
+    await fireEvent.press(
+      screen.getByLabelText("Ver detalhes de Academia TomTom Próxima no mapa"),
+    );
+
+    expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
+      gymId: "tomtom-nearby",
+      providerName: "tomtom",
+      distanceKm: expect.any(Number),
+    });
+  });
+
+  it("does not search nearby gyms when location permission is denied", async () => {
+    mockedPermissions.mockResolvedValueOnce({
+      status: "denied",
+    });
+
+    await mountMap();
+
+    await fireEvent.press(screen.getByLabelText("Usar minha localização"));
+
+    expect(
+      await screen.findByText(/Permissão de localização negada/),
+    ).toBeTruthy();
+
+    expect(mockedNearby).not.toHaveBeenCalled();
   });
 });
