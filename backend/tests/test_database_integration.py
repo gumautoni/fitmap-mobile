@@ -12,27 +12,29 @@ from fitmap.training.models import Exercise
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = BACKEND_DIR / "alembic.ini"
 
-EXPECTED_INITIAL_EXERCISE_CATALOG = {
-    UUID("00000000-0000-4000-8000-000000000001"): "Barbell Bench Press",
-    UUID("00000000-0000-4000-8000-000000000002"): "Incline Dumbbell Press",
-    UUID("00000000-0000-4000-8000-000000000003"): "Push-up",
-    UUID("00000000-0000-4000-8000-000000000004"): "Lat Pulldown",
-    UUID("00000000-0000-4000-8000-000000000005"): "Seated Cable Row",
-    UUID("00000000-0000-4000-8000-000000000006"): "Barbell Row",
-    UUID("00000000-0000-4000-8000-000000000007"): "Back Squat",
-    UUID("00000000-0000-4000-8000-000000000008"): "Leg Press",
-    UUID("00000000-0000-4000-8000-000000000009"): "Romanian Deadlift",
-    UUID("00000000-0000-4000-8000-000000000010"): "Leg Extension",
-    UUID("00000000-0000-4000-8000-000000000011"): "Leg Curl",
-    UUID("00000000-0000-4000-8000-000000000012"): "Standing Calf Raise",
-    UUID("00000000-0000-4000-8000-000000000013"): "Overhead Press",
-    UUID("00000000-0000-4000-8000-000000000014"): "Dumbbell Lateral Raise",
-    UUID("00000000-0000-4000-8000-000000000015"): "Barbell Biceps Curl",
-    UUID("00000000-0000-4000-8000-000000000016"): "Dumbbell Biceps Curl",
-    UUID("00000000-0000-4000-8000-000000000017"): "Cable Triceps Pushdown",
-    UUID("00000000-0000-4000-8000-000000000018"): "Overhead Triceps Extension",
-    UUID("00000000-0000-4000-8000-000000000019"): "Plank",
-    UUID("00000000-0000-4000-8000-000000000020"): "Crunch",
+EXPECTED_PORTUGUESE_EXERCISE_CATALOG = {
+    UUID("00000000-0000-4000-8000-000000000001"): "Supino reto com barra",
+    UUID("00000000-0000-4000-8000-000000000002"): "Supino inclinado com halteres",
+    UUID("00000000-0000-4000-8000-000000000003"): "Flex\u00e3o de bra\u00e7os",
+    UUID("00000000-0000-4000-8000-000000000004"): "Puxada frontal na polia alta",
+    UUID("00000000-0000-4000-8000-000000000005"): "Remada sentada na polia baixa",
+    UUID("00000000-0000-4000-8000-000000000006"): "Remada curvada com barra",
+    UUID("00000000-0000-4000-8000-000000000007"): "Agachamento livre com barra",
+    UUID("00000000-0000-4000-8000-000000000008"): "Leg press",
+    UUID("00000000-0000-4000-8000-000000000009"): "Levantamento terra romeno",
+    UUID("00000000-0000-4000-8000-000000000010"): "Cadeira extensora",
+    UUID("00000000-0000-4000-8000-000000000011"): "Flexora de pernas na m\u00e1quina",
+    UUID("00000000-0000-4000-8000-000000000012"): "Eleva\u00e7\u00e3o de panturrilhas em p\u00e9",
+    UUID("00000000-0000-4000-8000-000000000013"): "Desenvolvimento de ombros",
+    UUID("00000000-0000-4000-8000-000000000014"): "Eleva\u00e7\u00e3o lateral com halteres",
+    UUID("00000000-0000-4000-8000-000000000015"): "Rosca direta com barra",
+    UUID("00000000-0000-4000-8000-000000000016"): "Rosca b\u00edceps com halteres",
+    UUID("00000000-0000-4000-8000-000000000017"): "Tr\u00edceps na polia alta",
+    UUID(
+        "00000000-0000-4000-8000-000000000018"
+    ): "Extens\u00e3o de tr\u00edceps acima da cabe\u00e7a",
+    UUID("00000000-0000-4000-8000-000000000019"): "Prancha isom\u00e9trica",
+    UUID("00000000-0000-4000-8000-000000000020"): "Abdominal curto",
 }
 
 pytestmark = pytest.mark.integration
@@ -58,7 +60,7 @@ def test_postgresql_connection_uses_isolated_test_database(
     assert database_name == "fitmap_test"
 
 
-def test_initial_exercise_catalog_is_seeded(
+def test_original_catalog_ids_have_portuguese_names(
     database_engine: Engine,
 ) -> None:
     with database_engine.connect() as connection:
@@ -69,15 +71,15 @@ def test_initial_exercise_catalog_is_seeded(
                 Exercise.owner_user_id,
                 Exercise.is_archived,
             ).where(
-                Exercise.id.in_(EXPECTED_INITIAL_EXERCISE_CATALOG),
+                Exercise.id.in_(EXPECTED_PORTUGUESE_EXERCISE_CATALOG),
             )
         ).all()
 
-    assert len(rows) == len(EXPECTED_INITIAL_EXERCISE_CATALOG)
+    assert len(rows) == len(EXPECTED_PORTUGUESE_EXERCISE_CATALOG)
 
     persisted_catalog = {row.id: row.name for row in rows}
 
-    assert persisted_catalog == EXPECTED_INITIAL_EXERCISE_CATALOG
+    assert persisted_catalog == EXPECTED_PORTUGUESE_EXERCISE_CATALOG
     assert all(row.owner_user_id is None for row in rows)
     assert all(row.is_archived is False for row in rows)
 
