@@ -428,6 +428,48 @@ describe("MapScreen - previa de academia selecionada", () => {
     });
   });
 
+  it("clears the previous city when using current location", async () => {
+    mockedNearby.mockResolvedValueOnce(gyms);
+
+    await loadResults();
+
+    expect(
+      screen.getByPlaceholderText("Cidade, bairro ou região").props.value,
+    ).toBe("Barra do Piraí");
+
+    await fireEvent.press(screen.getByLabelText("Usar minha localização"));
+
+    await waitFor(() => {
+      expect(mockedNearby).toHaveBeenCalledWith(-22.47034, -43.82633, 5_000);
+
+      expect(
+        screen.getByPlaceholderText("Cidade, bairro ou região").props.value,
+      ).toBe("");
+
+      expect(screen.getByText("Sua localização atual")).toBeTruthy();
+    });
+  });
+
+  it("preserves the previous query when location permission is denied", async () => {
+    await loadResults();
+
+    mockedPermissions.mockResolvedValueOnce({
+      status: "denied",
+    });
+
+    await fireEvent.press(screen.getByLabelText("Usar minha localização"));
+
+    expect(
+      await screen.findByText(/Permissão de localização negada/),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByPlaceholderText("Cidade, bairro ou região").props.value,
+    ).toBe("Barra do Piraí");
+
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
+
   it("does not search nearby gyms when location permission is denied", async () => {
     mockedPermissions.mockResolvedValueOnce({
       status: "denied",

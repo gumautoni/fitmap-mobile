@@ -5,7 +5,6 @@ from fitmap.gyms.config import (
     TomTomProviderSettings,
 )
 from fitmap.gyms.geoapify import GeoapifyGymProvider
-from fitmap.gyms.providers import GymProvider
 from fitmap.gyms.tomtom import TomTomGymProvider
 
 
@@ -13,7 +12,7 @@ def create_geoapify_gym_provider(
     *,
     settings: GymProviderSettings,
     client: httpx2.AsyncClient,
-) -> GymProvider:
+) -> GeoapifyGymProvider:
     return GeoapifyGymProvider(
         api_key=settings.api_key.get_secret_value(),
         client=client,
