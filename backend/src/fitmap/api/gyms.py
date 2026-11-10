@@ -28,6 +28,10 @@ from fitmap.gyms.favorites import (
     remove_favorite_gym,
     resolve_gym_identity,
 )
+from fitmap.gyms.location_autocomplete import (
+    GeoapifyLocationAutocomplete,
+    LocationSuggestion,
+)
 from fitmap.gyms.providers import (
     Coordinates,
     GymDetails,
@@ -67,6 +71,24 @@ GymProviderDependency = Annotated[
     GymProvider,
     Depends(get_gym_provider),
 ]
+
+
+async def get_location_autocomplete() -> AsyncIterator[GeoapifyLocationAutocomplete]:
+    settings = get_gym_provider_settings()
+
+    async with httpx2.AsyncClient() as client:
+        yield GeoapifyLocationAutocomplete(
+            api_key=settings.api_key.get_secret_value(),
+            client=client,
+            timeout_seconds=settings.timeout_seconds,
+        )
+
+
+LocationAutocompleteDependency = Annotated[
+    GeoapifyLocationAutocomplete,
+    Depends(get_location_autocomplete),
+]
+
 
 GymProviderName = Literal["geoapify", "tomtom"]
 
@@ -218,6 +240,33 @@ def _favorite_response(
         address=favorite.address,
         favorited_at=favorite.favorited_at,
     )
+
+
+@router.get(
+    "/locations/suggest",
+    response_model=list[LocationSuggestion],
+)
+async def suggest_locations(
+    query: Annotated[str, Query(min_length=2, max_length=100)],
+    provider: LocationAutocompleteDependency,
+) -> list[LocationSuggestion]:
+    normalized_query = query.strip()
+
+    if len(normalized_query) < 2:
+        raise ApiError(
+            status_code=422,
+            code="request_validation_error",
+            message="Request validation failed.",
+        )
+
+    try:
+        return await provider.suggest(query=normalized_query)
+    except GymProviderError as exc:
+        raise ApiError(
+            status_code=502,
+            code="location_suggestions_unavailable",
+            message="Location suggestions are unavailable.",
+        ) from exc
 
 
 @router.get(

@@ -7,6 +7,7 @@ import {
   searchGymsByLocation,
   searchNearbyGyms,
   searchNearbyGymsWithFallback,
+  suggestGymLocations,
 } from "../gyms";
 
 jest.mock("../../config/environment", () => ({
@@ -33,6 +34,52 @@ describe("gyms service", () => {
     mockedGet.mockReset();
     mockedPost.mockReset();
     mockedDelete.mockReset();
+  });
+
+  it("does not request suggestions for invalid query lengths", async () => {
+    expect(await suggestGymLocations(" ")).toEqual([]);
+    expect(await suggestGymLocations(" A ")).toEqual([]);
+    expect(await suggestGymLocations("X".repeat(101))).toEqual([]);
+    expect(mockedGet).not.toHaveBeenCalled();
+  });
+
+  it("encodes the query and preserves location coordinates", async () => {
+    const suggestions = [
+      {
+        label: "Centro, Volta Redonda, RJ, Brasil",
+        query: "Centro, Volta Redonda, RJ, Brasil",
+        coordinates: {
+          latitude: -22.512419,
+          longitude: -44.0905846,
+        },
+      },
+    ];
+
+    mockedGet.mockResolvedValue(suggestions);
+
+    const results = await suggestGymLocations(" Centro, Volta Redonda ");
+
+    expect(mockedGet).toHaveBeenCalledWith(
+      "/gyms/locations/suggest?query=Centro%2C%20Volta%20Redonda",
+    );
+
+    expect(results).toEqual(suggestions);
+    expect(results[0].coordinates).toEqual({
+      latitude: -22.512419,
+      longitude: -44.0905846,
+    });
+  });
+
+  it("propagates errors from the suggestions endpoint", async () => {
+    const error = new ApiClientError(
+      "Location suggestions are unavailable.",
+      502,
+      "location_suggestions_unavailable",
+    );
+
+    mockedGet.mockRejectedValue(error);
+
+    await expect(suggestGymLocations("Volta Red")).rejects.toBe(error);
   });
 
   it("returns an empty list for an empty textual query without calling the backend", async () => {

@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -12,7 +13,9 @@ import {
   getFavoriteGyms,
   searchGymsByLocation,
   searchNearbyGymsWithFallback,
+  suggestGymLocations,
   type GymSearchResult,
+  type LocationSuggestion,
 } from "../../services/gyms";
 import MapScreen from "../MapScreen";
 
@@ -107,11 +110,13 @@ jest.mock("../../services/gyms", () => ({
   getFavoriteGyms: jest.fn(),
   searchGymsByLocation: jest.fn(),
   searchNearbyGymsWithFallback: jest.fn(),
+  suggestGymLocations: jest.fn(),
 }));
 
 const mockedFavorites = getFavoriteGyms as jest.Mock;
 const mockedSearch = searchGymsByLocation as jest.Mock;
 const mockedNearby = searchNearbyGymsWithFallback as jest.Mock;
+const mockedSuggestions = suggestGymLocations as jest.Mock;
 const mockedPermissions =
   Location.requestForegroundPermissionsAsync as jest.Mock;
 const mockedCurrentPosition = Location.getCurrentPositionAsync as jest.Mock;
@@ -193,6 +198,8 @@ describe("MapScreen - previa de academia selecionada", () => {
     mockedFavorites.mockResolvedValue([]);
     mockedSearch.mockResolvedValue(gyms);
     mockedNearby.mockReset();
+    mockedSuggestions.mockReset();
+    mockedSuggestions.mockResolvedValue([]);
     mockedPermissions.mockReset();
     mockedCurrentPosition.mockReset();
     mockedPermissions.mockResolvedValue({ status: "granted" });
@@ -466,6 +473,176 @@ describe("MapScreen - previa de academia selecionada", () => {
     expect(
       screen.getByPlaceholderText("Cidade, bairro ou região").props.value,
     ).toBe("Barra do Piraí");
+
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
+
+  it("busca o bairro selecionado pelas coordenadas corretas", async () => {
+    const suggestion: LocationSuggestion = {
+      label: "Centro, Volta Redonda, RJ, Brasil",
+      query: "Centro, Volta Redonda, RJ, Brasil",
+      coordinates: {
+        latitude: -22.512419,
+        longitude: -44.0905846,
+      },
+    };
+
+    mockedSuggestions.mockResolvedValueOnce([suggestion]);
+    mockedNearby.mockResolvedValueOnce(gyms);
+
+    await mountMap();
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou região"),
+      "Centro, Volta Redonda",
+    );
+
+    await fireEvent.press(
+      await screen.findByLabelText(
+        "Selecionar localidade Centro, Volta Redonda, RJ, Brasil",
+        {},
+        { timeout: 3000 },
+      ),
+    );
+
+    await waitFor(() => {
+      expect(mockedNearby).toHaveBeenCalledWith(
+        -22.512419,
+        -44.0905846,
+        10_000,
+      );
+    });
+
+    expect(mockedSearch).not.toHaveBeenCalled();
+
+    expect(
+      screen.getByPlaceholderText("Cidade, bairro ou região").props.value,
+    ).toBe(suggestion.label);
+  });
+
+  it("descarta sugestoes antigas apos editar o texto", async () => {
+    let resolveOld: ((items: LocationSuggestion[]) => void) | undefined;
+
+    mockedSuggestions.mockImplementationOnce(
+      () =>
+        new Promise<LocationSuggestion[]>((resolve) => {
+          resolveOld = resolve;
+        }),
+    );
+
+    const current: LocationSuggestion = {
+      label: "Barra do Piraí, RJ, Brasil",
+      query: "Barra do Piraí, RJ, Brasil",
+      coordinates: {
+        latitude: -22.47,
+        longitude: -43.82,
+      },
+    };
+
+    mockedSuggestions.mockResolvedValueOnce([current]);
+
+    await mountMap();
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou região"),
+      "Volta Red",
+    );
+
+    await waitFor(
+      () => {
+        expect(mockedSuggestions).toHaveBeenCalledWith("Volta Red");
+      },
+      { timeout: 3000 },
+    );
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou região"),
+      "Barra do Pir",
+    );
+
+    await screen.findByLabelText(
+      "Selecionar localidade Barra do Piraí, RJ, Brasil",
+      {},
+      { timeout: 3000 },
+    );
+
+    await act(async () => {
+      resolveOld?.([
+        {
+          label: "Volta Redonda, RJ, Brasil",
+          query: "Volta Redonda, RJ, Brasil",
+          coordinates: {
+            latitude: -22.52,
+            longitude: -44.1,
+          },
+        },
+      ]);
+    });
+
+    expect(
+      screen.queryByLabelText(
+        "Selecionar localidade Volta Redonda, RJ, Brasil",
+      ),
+    ).toBeNull();
+
+    expect(
+      screen.getByLabelText("Selecionar localidade Barra do Piraí, RJ, Brasil"),
+    ).toBeTruthy();
+  });
+
+  it("informa quando nenhuma localidade e encontrada", async () => {
+    mockedSuggestions.mockResolvedValueOnce([]);
+
+    await mountMap();
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou região"),
+      "Vassouras",
+    );
+
+    expect(
+      await screen.findByText(
+        "Nenhuma localidade encontrada. Utilize a busca por texto.",
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeTruthy();
+
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
+
+  it("mantem a busca manual quando as sugestoes falham", async () => {
+    mockedSuggestions.mockRejectedValueOnce(
+      new Error("Suggestions unavailable"),
+    );
+
+    await mountMap();
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou região"),
+      "Vassouras",
+    );
+
+    await waitFor(
+      () => {
+        expect(mockedSuggestions).toHaveBeenCalledWith("Vassouras");
+      },
+      { timeout: 3000 },
+    );
+
+    expect(
+      await screen.findByText(
+        "Não foi possível carregar localidades. Utilize a busca por texto.",
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText("Buscar academias"));
+
+    await waitFor(() => {
+      expect(mockedSearch).toHaveBeenCalledWith("Vassouras");
+    });
 
     expect(mockedNearby).not.toHaveBeenCalled();
   });
