@@ -42,6 +42,8 @@ class _GeoapifyPlacesResponse(BaseModel):
 
 class _GeoapifyGeocodingResult(BaseModel):
     place_id: str | None = None
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
 
 
 def _empty_geocoding_results() -> list[_GeoapifyGeocodingResult]:
@@ -158,14 +160,22 @@ class GeoapifyGymProvider:
         *,
         query: str,
     ) -> list[GymSearchResult]:
+        results, _ = await self.search_text_with_location(query=query)
+        return results
+
+    async def search_text_with_location(
+        self,
+        *,
+        query: str,
+    ) -> tuple[list[GymSearchResult], Coordinates | None]:
         normalized_query = query.strip()
 
         if not normalized_query:
-            return []
+            return [], None
 
-        place_id = self._location_cache.get(normalized_query)
+        cached_location = self._location_cache.get_location(normalized_query)
 
-        if place_id is None:
+        if cached_location is None:
             geocoding_params: dict[str, Any] = {
                 "text": normalized_query,
                 "type": "locality",
@@ -185,26 +195,37 @@ class GeoapifyGymProvider:
             except httpx2.HTTPError as exc:
                 raise GeoapifyProviderError("Geoapify Geocoding API request failed.") from exc
 
-            geocoding_payload = _parse_response(
+            payload = _parse_response(
                 response,
                 _GeoapifyGeocodingResponse,
                 error_message=("Geoapify Geocoding API returned invalid response data."),
             )
 
-            if not geocoding_payload.results:
-                return []
+            if not payload.results:
+                return [], None
 
-            location = geocoding_payload.results[0]
+            location = payload.results[0]
 
             if location.place_id is None:
-                return []
+                return [], None
+
+            coordinates = None
+
+            if location.lat is not None and location.lon is not None:
+                coordinates = Coordinates(
+                    latitude=location.lat,
+                    longitude=location.lon,
+                )
 
             place_id = location.place_id
 
-            self._location_cache.set(
+            self._location_cache.set_location(
                 normalized_query,
                 place_id,
+                coordinates=coordinates,
             )
+        else:
+            place_id, coordinates = cached_location
 
         places_params: dict[str, Any] = {
             "categories": _GYM_CATEGORIES,
@@ -227,10 +248,10 @@ class GeoapifyGymProvider:
         places_payload = _parse_response(
             response,
             _GeoapifyPlacesResponse,
-            error_message="Geoapify Places API returned invalid response data.",
+            error_message=("Geoapify Places API returned invalid response data."),
         )
 
-        return self._normalize_search_results(places_payload)
+        return self._normalize_search_results(places_payload), coordinates
 
     async def get_details(
         self,

@@ -36,6 +36,7 @@ from fitmap.gyms.providers import (
     GymSearchResult,
 )
 from fitmap.gyms.schemas import FavoriteGymResponse, GymIdentityResponse
+from fitmap.gyms.text_search import FallbackGymSearchProvider
 from fitmap.gyms.tomtom import TomTomGymProvider
 
 router = APIRouter(
@@ -48,9 +49,17 @@ async def get_gym_provider() -> AsyncIterator[GymProvider]:
     settings = get_gym_provider_settings()
 
     async with httpx2.AsyncClient() as client:
-        yield create_geoapify_gym_provider(
+        geoapify = create_geoapify_gym_provider(
             settings=settings,
             client=client,
+        )
+        tomtom = create_tomtom_gym_provider(
+            settings=get_tomtom_provider_settings(),
+            client=client,
+        )
+        yield FallbackGymSearchProvider(
+            geoapify=geoapify,
+            tomtom=tomtom,
         )
 
 

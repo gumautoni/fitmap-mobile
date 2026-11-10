@@ -336,6 +336,7 @@ export default function MapScreen({ navigation }: Props) {
       setLoadingAction("location");
       setGyms([]);
       setSelectedGymKey(null);
+      setQuery("");
       setSearchedPlace("Sua localização atual");
       setHasSearched(true);
 
