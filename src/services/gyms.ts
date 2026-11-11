@@ -34,6 +34,12 @@ interface FavoriteGymApiResponse {
   favorited_at: string;
 }
 
+export interface LocationSuggestion {
+  label: string;
+  query: string;
+  coordinates: GymCoordinates;
+}
+
 export interface GymSearchResult {
   id: string;
   providerName: GymProviderName;
@@ -114,6 +120,20 @@ function normalizeFavoriteGym(result: FavoriteGymApiResponse): FavoriteGym {
     address: result.address,
     favoritedAt: result.favorited_at,
   };
+}
+
+export async function suggestGymLocations(
+  query: string,
+): Promise<LocationSuggestion[]> {
+  const normalizedQuery = query.trim();
+
+  if (normalizedQuery.length < 2 || normalizedQuery.length > 100) {
+    return [];
+  }
+
+  return apiClient.get<LocationSuggestion[]>(
+    `/gyms/locations/suggest?query=${encodeURIComponent(normalizedQuery)}`,
+  );
 }
 
 export async function searchGymsByLocation(

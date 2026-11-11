@@ -12,6 +12,7 @@ import {
 import React, {
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -36,7 +37,9 @@ import {
   getFavoriteGyms,
   searchGymsByLocation,
   searchNearbyGymsWithFallback,
+  suggestGymLocations,
   type FavoriteGym,
+  type LocationSuggestion,
   type GymSearchResult,
   type GymProviderName,
 } from "../services/gyms";
@@ -52,6 +55,8 @@ const INITIAL_REGION: Region = {
 
 const RESULT_REGION_DELTA = 0.05;
 const NEARBY_RADIUS_METERS = 5_000;
+const SELECTED_RADIUS_METERS = 10_000;
+const SUGGESTION_DELAY_MS = 350;
 
 interface UserCoordinates {
   latitude: number;
@@ -149,8 +154,14 @@ export default function MapScreen({ navigation }: Props) {
   const mapRef = useRef<MapView | null>(null);
 
   const favoritesRequestIdRef = useRef(0);
+  const suggestionsRequestIdRef = useRef(0);
 
   const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionsStatus, setSuggestionsStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
   const [gyms, setGyms] = useState<GymSearchResult[]>([]);
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -167,6 +178,59 @@ export default function MapScreen({ navigation }: Props) {
   >(null);
 
   const loading = loadingAction !== null;
+
+  function dismissSuggestions(): void {
+    suggestionsRequestIdRef.current += 1;
+    setShowSuggestions(false);
+    setSuggestions([]);
+    setSuggestionsStatus("idle");
+  }
+
+  function handleQueryChange(value: string): void {
+    suggestionsRequestIdRef.current += 1;
+    setQuery(value);
+    setShowSuggestions(true);
+    setSuggestions([]);
+    setSuggestionsStatus("idle");
+  }
+
+  useEffect(() => {
+    const text = query.trim();
+
+    if (!showSuggestions || loading || text.length < 2 || text.length > 100) {
+      return;
+    }
+
+    let active = true;
+    const requestId = ++suggestionsRequestIdRef.current;
+
+    const timeout = setTimeout(() => {
+      if (!active) {
+        return;
+      }
+
+      setSuggestionsStatus("loading");
+
+      void suggestGymLocations(text)
+        .then((results) => {
+          if (active && suggestionsRequestIdRef.current === requestId) {
+            setSuggestions(results);
+            setSuggestionsStatus("success");
+          }
+        })
+        .catch(() => {
+          if (active && suggestionsRequestIdRef.current === requestId) {
+            setSuggestions([]);
+            setSuggestionsStatus("error");
+          }
+        });
+    }, SUGGESTION_DELAY_MS);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [query, showSuggestions, loading]);
 
   const mappableGyms = useMemo(
     () => gyms.filter((gym) => gym.coordinates !== null),
@@ -232,6 +296,10 @@ export default function MapScreen({ navigation }: Props) {
 
       return () => {
         favoritesRequestIdRef.current += 1;
+        suggestionsRequestIdRef.current += 1;
+        setShowSuggestions(false);
+        setSuggestions([]);
+        setSuggestionsStatus("idle");
       };
     }, [loadFavorites]),
   );
@@ -264,6 +332,7 @@ export default function MapScreen({ navigation }: Props) {
 
   async function handleSearch(): Promise<void> {
     Keyboard.dismiss();
+    dismissSuggestions();
 
     const normalizedQuery = query.trim();
 
@@ -296,8 +365,43 @@ export default function MapScreen({ navigation }: Props) {
     }
   }
 
+  async function handleSelectSuggestion(
+    suggestion: LocationSuggestion,
+  ): Promise<void> {
+    Keyboard.dismiss();
+    dismissSuggestions();
+    setQuery(suggestion.label);
+
+    try {
+      setLoadingAction("text");
+      setErrorMessage(null);
+      setGyms([]);
+      setSelectedGymKey(null);
+
+      const results = await searchNearbyGymsWithFallback(
+        suggestion.coordinates.latitude,
+        suggestion.coordinates.longitude,
+        SELECTED_RADIUS_METERS,
+      );
+
+      setGyms(results);
+      setSearchedPlace(suggestion.label);
+      setHasSearched(true);
+      focusSearchResults(results, suggestion.coordinates);
+    } catch (error: unknown) {
+      setGyms([]);
+      setSelectedGymKey(null);
+      setSearchedPlace(suggestion.label);
+      setHasSearched(true);
+      setErrorMessage(getSearchErrorMessage(error));
+    } finally {
+      setLoadingAction(null);
+    }
+  }
+
   async function handleUseCurrentLocation(): Promise<void> {
     Keyboard.dismiss();
+    dismissSuggestions();
     setLoadingAction("location");
     setErrorMessage(null);
 
@@ -582,7 +686,7 @@ export default function MapScreen({ navigation }: Props) {
             placeholder="Cidade, bairro ou região"
             placeholderTextColor={theme.colors.textMuted}
             value={query}
-            onChangeText={setQuery}
+            onChangeText={handleQueryChange}
             returnKeyType="search"
             onSubmitEditing={() => {
               void handleSearch();
@@ -618,6 +722,51 @@ export default function MapScreen({ navigation }: Props) {
             )}
           </Pressable>
         </View>
+
+        {showSuggestions &&
+        !loading &&
+        query.trim().length >= 2 &&
+        (suggestionsStatus !== "idle" || suggestions.length > 0) ? (
+          <View style={styles.locationSuggestions}>
+            {suggestionsStatus === "loading" ? (
+              <View style={styles.locationSuggestionLoading}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.locationSuggestionText}>
+                  Buscando localidades...
+                </Text>
+              </View>
+            ) : suggestionsStatus === "error" ? (
+              <Text style={styles.locationSuggestionFeedback}>
+                Não foi possível carregar localidades. Utilize a busca por
+                texto.
+              </Text>
+            ) : suggestions.length === 0 ? (
+              <Text style={styles.locationSuggestionFeedback}>
+                Nenhuma localidade encontrada. Utilize a busca por texto.
+              </Text>
+            ) : (
+              suggestions.map((suggestion) => (
+                <Pressable
+                  key={`${suggestion.query}:${suggestion.coordinates.latitude}:${suggestion.coordinates.longitude}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Selecionar localidade ${suggestion.label}`}
+                  onPress={() => {
+                    void handleSelectSuggestion(suggestion);
+                  }}
+                  style={({ pressed }) => [
+                    styles.locationSuggestion,
+                    pressed && styles.locationSuggestionPressed,
+                  ]}
+                >
+                  <MapPin size={17} color={theme.colors.primary} />
+                  <Text style={styles.locationSuggestionText} numberOfLines={2}>
+                    {suggestion.label}
+                  </Text>
+                </Pressable>
+              ))
+            )}
+          </View>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"
@@ -1358,6 +1507,53 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
         },
       ],
       opacity: 0.9,
+    },
+
+    locationSuggestions: {
+      marginTop: theme.spacing.sm,
+      borderRadius: theme.radii.lg,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      overflow: "hidden",
+    },
+
+    locationSuggestion: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+
+    locationSuggestionPressed: {
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    locationSuggestionLoading: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+    },
+
+    locationSuggestionText: {
+      flex: 1,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+    },
+
+    locationSuggestionFeedback: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.md,
+      color: theme.colors.textMuted,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.small,
     },
 
     locationAction: {
