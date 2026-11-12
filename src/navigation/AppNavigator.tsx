@@ -36,8 +36,8 @@ function MainTabsNavigator() {
   const insets = useSafeAreaInsets();
 
   const light = theme.mode === "light";
-  const accent = light ? "#2563EB" : theme.colors.primary;
-  const surface = light ? "#FCFAF7" : theme.colors.surface;
+  const accent = theme.colors.primary;
+  const surface = theme.colors.surface;
 
   return (
     <Tab.Navigator
@@ -60,19 +60,23 @@ function MainTabsNavigator() {
 
         tabBarLabelStyle: {
           fontFamily: theme.typography.fontFamily.bold,
-          fontSize: 10,
-          marginTop: 2,
+          fontSize: 11,
+          marginTop: 3,
         },
 
+        tabBarIconStyle: { width: 58, height: 32 },
+
         tabBarStyle: {
-          height: 60 + insets.bottom,
-          paddingTop: 7,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+          height: 68 + insets.bottom,
+          paddingTop: 9,
           paddingBottom: Math.max(insets.bottom, 6),
           backgroundColor: surface,
-          borderTopColor: light ? "#E2DDD4" : theme.colors.border,
+          borderTopColor: light ? "#ECD5C2" : theme.colors.border,
           borderTopWidth: 1,
           shadowColor: "#0F172A",
-          shadowOpacity: light ? 0.07 : 0.18,
+          shadowOpacity: light ? 0.13 : 0.18,
           shadowRadius: 12,
           shadowOffset: {
             width: 0,
@@ -94,19 +98,19 @@ function MainTabsNavigator() {
           return (
             <View
               style={{
-                width: 48,
-                height: 29,
+                width: 56,
+                height: 32,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 11,
-                backgroundColor: focused
-                  ? light
-                    ? "#E8EFFC"
-                    : theme.colors.primarySoft
-                  : "transparent",
+                borderRadius: 18,
+                backgroundColor: focused ? theme.colors.primary : "transparent",
               }}
             >
-              <Icon size={21} color={color} strokeWidth={focused ? 2.3 : 1.8} />
+              <Icon
+                size={22}
+                color={focused ? theme.colors.textOnPrimary : color}
+                strokeWidth={focused ? 2.4 : 1.8}
+              />
             </View>
           );
         },
@@ -202,13 +206,16 @@ export default function AppNavigator() {
       <Stack.Screen
         name="MainTabs"
         component={MainTabsNavigator}
-        options={{ headerShown: false }}
+        options={{ headerShown: false, title: "FIT Map" }}
       />
 
       <Stack.Screen
         name="Perfil"
         component={ProfileScreen}
-        options={{ title: "Meu perfil" }}
+        options={{
+          title: "Meu perfil",
+          headerBackButtonDisplayMode: "minimal",
+        }}
       />
 
       <Stack.Screen
@@ -284,7 +291,10 @@ export default function AppNavigator() {
       <Stack.Screen
         name="DetalhesAcademia"
         component={GymDetailsScreen}
-        options={{ title: "Detalhes da academia" }}
+        options={{
+          title: "Detalhes da academia",
+          headerBackButtonDisplayMode: "minimal",
+        }}
       />
     </Stack.Navigator>
   );

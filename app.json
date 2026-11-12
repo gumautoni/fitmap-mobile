@@ -7,14 +7,14 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "fitmap",
-    "icon": "./assets/images/logo-fitmap.png",
+    "icon": "./assets/images/brand/fitmap-app-icon.png",
     "plugins": [
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo-fitmap.png",
+          "image": "./assets/images/brand/fitmap-logo-full-light.png",
           "resizeMode": "contain",
-          "backgroundColor": "#111827",
+          "backgroundColor": "#FAF7F2",
           "imageWidth": 200
         }
       ],
@@ -39,8 +39,8 @@
       "package": "com.bryan.fitmap",
       "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo-fitmap.png",
-        "backgroundColor": "#111827"
+        "foregroundImage": "./assets/images/brand/fitmap-adaptive-foreground.png",
+        "backgroundColor": "#FAF7F2"
       }
     },
     "ios": {

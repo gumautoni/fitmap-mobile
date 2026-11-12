@@ -1,3 +1,5 @@
+import { lightSurfaceDepth } from "../theme/surfaces";
+import ScreenGradient from "../components/ScreenGradient";
 import {
   ChevronRight,
   Clock3,
@@ -426,6 +428,7 @@ export default function ProfileScreen(_: ProfileScreenProps) {
   if (loading && !profile) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+        <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
 
@@ -442,6 +445,7 @@ export default function ProfileScreen(_: ProfileScreenProps) {
   if (!profile) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+        <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
           <UserRound
             size={42}
@@ -497,6 +501,7 @@ export default function ProfileScreen(_: ProfileScreenProps) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+      <ScreenGradient theme={theme} />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -849,7 +854,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor:
+        theme.mode === "light" ? "transparent" : theme.colors.background,
     },
 
     content: {
@@ -952,6 +958,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderRadius: theme.radii.xl,
       padding: theme.spacing.lg,
       marginBottom: theme.spacing["3xl"],
+      ...lightSurfaceDepth(theme, "featured"),
     },
 
     completionTop: {
@@ -1039,6 +1046,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       padding: theme.spacing.lg,
+      ...lightSurfaceDepth(theme),
     },
 
     fieldLabel: {

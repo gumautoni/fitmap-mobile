@@ -1,3 +1,8 @@
+import MotionPressable from "../components/MotionPressable";
+import { useReducedMotion } from "../hooks/useReducedMotion";
+import MotionScrollView from "../components/MotionScrollView";
+import { lightSurfaceDepth } from "../theme/surfaces";
+import ScreenGradient from "../components/ScreenGradient";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   AlertCircle,
@@ -13,7 +18,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -96,6 +100,7 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   const { runAuthenticatedRequest } = auth;
 
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -222,6 +227,7 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   if (loading && workouts.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+        <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
 
@@ -238,6 +244,7 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
   if (error && workouts.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+        <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
           <View style={styles.stateIcon}>
             <AlertCircle
@@ -278,7 +285,8 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-      <ScrollView
+      <ScreenGradient theme={theme} />
+      <MotionScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -357,7 +365,8 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
           ) : (
             <View style={styles.list}>
               {activeWorkouts.map((workout) => (
-                <Pressable
+                <MotionPressable
+                  reduceMotion={reduceMotion}
                   key={workout.id}
                   accessibilityRole="button"
                   accessibilityLabel={`Abrir treino ${workout.name}`}
@@ -394,7 +403,7 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                     strokeWidth={2.2}
                     color={theme.colors.textMuted}
                   />
-                </Pressable>
+                </MotionPressable>
               ))}
             </View>
           )}
@@ -497,7 +506,7 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
             </View>
           )}
         </View>
-      </ScrollView>
+      </MotionScrollView>
     </SafeAreaView>
   );
 }
@@ -511,7 +520,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor:
+        theme.mode === "light" ? "transparent" : theme.colors.background,
     },
 
     content: {
@@ -711,6 +721,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme, "featured"),
     },
 
     emptyIcon: {
@@ -754,15 +765,16 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      shadowColor: "#101820",
+      shadowOpacity: theme.mode === "light" ? 0.055 : 0,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: theme.mode === "light" ? 1 : 0,
+      ...lightSurfaceDepth(theme),
     },
 
     workoutCardPressed: {
-      opacity: 0.72,
-      transform: [
-        {
-          scale: 0.995,
-        },
-      ],
+      opacity: 0.94,
     },
 
     workoutIcon: {
@@ -808,6 +820,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme),
     },
 
     archivedEmptyTitle: {
@@ -833,6 +846,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme),
     },
 
     archivedCardHeader: {

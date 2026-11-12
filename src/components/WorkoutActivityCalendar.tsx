@@ -1,3 +1,4 @@
+import { lightSurfaceDepth } from "../theme/surfaces";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   CalendarDays,
@@ -78,7 +79,7 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const activityColor = theme.mode === "light" ? "#0F766E" : "#57D6B8";
-  const todayColor = theme.mode === "light" ? "#2563EB" : theme.colors.primary;
+  const todayColor = theme.colors.primary;
   const trackColor = theme.mode === "light" ? "#D7DFD9" : "#404B59";
 
   const [today, setToday] = useState(() => new Date());
@@ -488,12 +489,7 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
               <View style={styles.monthStatDivider} />
 
               <View style={styles.monthStat}>
-                <Dumbbell
-                  size={16}
-                  color={
-                    theme.mode === "light" ? "#2563EB" : theme.colors.primary
-                  }
-                />
+                <Dumbbell size={16} color={theme.colors.primary} />
                 <Text style={styles.monthStatValue}>
                   {monthActivity.completedSessions}
                 </Text>
@@ -659,9 +655,9 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
 function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
   const light = theme.mode === "light";
-  const accent = light ? "#2563EB" : theme.colors.primary;
+  const accent = theme.colors.primary;
   const teal = "#0F766E";
-  const surface = light ? "#FCFAF7" : theme.colors.surface;
+  const surface = theme.colors.surface;
 
   return StyleSheet.create({
     accentColor: {
@@ -683,6 +679,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
         height: 4,
       },
       elevation: 1,
+      ...lightSurfaceDepth(theme, "featured"),
     },
 
     header: {

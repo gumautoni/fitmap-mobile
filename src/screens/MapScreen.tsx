@@ -1,3 +1,5 @@
+import { lightSurfaceDepth } from "../theme/surfaces";
+import ScreenGradient from "../components/ScreenGradient";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
 import {
@@ -837,7 +839,11 @@ export default function MapScreen({ navigation }: Props) {
             >
               <View style={styles.userMarkerOuter}>
                 <View style={styles.userMarkerInner}>
-                  <Navigation size={15} strokeWidth={2.6} color="#FFFFFF" />
+                  <Navigation
+                    size={15}
+                    strokeWidth={2.6}
+                    color={theme.colors.textOnPrimary}
+                  />
                 </View>
               </View>
             </Marker>
@@ -877,7 +883,7 @@ export default function MapScreen({ navigation }: Props) {
                     <Dumbbell
                       size={isSelected ? 17 : 15}
                       strokeWidth={2.5}
-                      color="#FFFFFF"
+                      color={theme.colors.textOnPrimary}
                     />
                   </View>
 
@@ -1002,227 +1008,240 @@ export default function MapScreen({ navigation }: Props) {
   );
 
   return (
-    <FlatList<GymSearchResult>
-      style={styles.container}
-      data={gyms}
-      keyExtractor={(item) => gymIdentityKey(item.providerName, item.id)}
-      ListHeaderComponent={listHeader}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.listContent}
-      renderItem={({ item }) => {
-        const isSelected =
-          selectedGymKey === gymIdentityKey(item.providerName, item.id);
-        const isFavorite = favoriteGymKeys.has(
-          gymIdentityKey(item.providerName, item.id),
-        );
+    <View style={styles.screen}>
+      <ScreenGradient theme={theme} />
+      <FlatList<GymSearchResult>
+        style={styles.container}
+        data={gyms}
+        keyExtractor={(item) => gymIdentityKey(item.providerName, item.id)}
+        ListHeaderComponent={listHeader}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => {
+          const isSelected =
+            selectedGymKey === gymIdentityKey(item.providerName, item.id);
+          const isFavorite = favoriteGymKeys.has(
+            gymIdentityKey(item.providerName, item.id),
+          );
 
-        const distanceKm =
-          userCoordinates && item.coordinates
-            ? calculateDistanceKm(
-                userCoordinates.latitude,
-                userCoordinates.longitude,
-                item.coordinates.latitude,
-                item.coordinates.longitude,
-              )
-            : null;
+          const distanceKm =
+            userCoordinates && item.coordinates
+              ? calculateDistanceKm(
+                  userCoordinates.latitude,
+                  userCoordinates.longitude,
+                  item.coordinates.latitude,
+                  item.coordinates.longitude,
+                )
+              : null;
 
-        return (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Selecionar ${item.name}`}
-            onPress={() => handleSelectGym(item)}
-            style={({ pressed }) => [
-              styles.gymCard,
-              isSelected && styles.gymCardSelected,
-              pressed && styles.gymCardPressed,
-            ]}
-          >
-            {isSelected ? <View style={styles.selectedAccent} /> : null}
+          return (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Selecionar ${item.name}`}
+              onPress={() => handleSelectGym(item)}
+              style={({ pressed }) => [
+                styles.gymCard,
+                isSelected && styles.gymCardSelected,
+                pressed && styles.gymCardPressed,
+              ]}
+            >
+              {isSelected ? <View style={styles.selectedAccent} /> : null}
 
-            <View style={styles.gymCardHeader}>
-              <View style={styles.gymIcon}>
-                <Dumbbell
-                  size={21}
-                  strokeWidth={2.2}
-                  color={
-                    isSelected
-                      ? theme.colors.textOnPrimary
-                      : theme.colors.primary
-                  }
-                />
+              <View style={styles.gymCardHeader}>
+                <View style={styles.gymIcon}>
+                  <Dumbbell
+                    size={21}
+                    strokeWidth={2.2}
+                    color={
+                      isSelected
+                        ? theme.colors.textOnPrimary
+                        : theme.colors.primary
+                    }
+                  />
+                </View>
+
+                <View style={styles.gymTitleArea}>
+                  <Text style={styles.gymName} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+
+                  {isSelected || isFavorite ? (
+                    <View style={styles.gymBadgesRow}>
+                      {isSelected ? (
+                        <View style={styles.selectedBadge}>
+                          <Text style={styles.selectedBadgeText}>
+                            Selecionada
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {isFavorite ? (
+                        <View style={styles.favoriteBadge}>
+                          <Heart
+                            size={11}
+                            strokeWidth={2.3}
+                            color={theme.colors.primary}
+                            fill={theme.colors.primary}
+                          />
+
+                          <Text style={styles.favoriteBadgeText}>Favorita</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
               </View>
 
-              <View style={styles.gymTitleArea}>
-                <Text style={styles.gymName} numberOfLines={2}>
-                  {item.name}
-                </Text>
+              <View style={styles.gymInfo}>
+                <View style={styles.infoRow}>
+                  <MapPin
+                    size={15}
+                    strokeWidth={2.1}
+                    color={theme.colors.textMuted}
+                  />
 
-                {isSelected || isFavorite ? (
-                  <View style={styles.gymBadgesRow}>
-                    {isSelected ? (
-                      <View style={styles.selectedBadge}>
-                        <Text style={styles.selectedBadgeText}>
-                          Selecionada
-                        </Text>
-                      </View>
-                    ) : null}
+                  <Text style={styles.gymAddress} numberOfLines={2}>
+                    {item.address ?? "Endereço não informado"}
+                  </Text>
+                </View>
 
-                    {isFavorite ? (
-                      <View style={styles.favoriteBadge}>
-                        <Heart
-                          size={11}
-                          strokeWidth={2.3}
-                          color={theme.colors.primary}
-                          fill={theme.colors.primary}
-                        />
+                {distanceKm !== null ? (
+                  <View style={styles.infoRow}>
+                    <Navigation
+                      size={15}
+                      strokeWidth={2.1}
+                      color={theme.colors.primary}
+                    />
 
-                        <Text style={styles.favoriteBadgeText}>Favorita</Text>
-                      </View>
-                    ) : null}
+                    <Text style={styles.gymDistance}>
+                      {formatDistance(distanceKm)}
+                    </Text>
                   </View>
                 ) : null}
               </View>
-            </View>
 
-            <View style={styles.gymInfo}>
-              <View style={styles.infoRow}>
-                <MapPin
-                  size={15}
-                  strokeWidth={2.1}
-                  color={theme.colors.textMuted}
-                />
-
-                <Text style={styles.gymAddress} numberOfLines={2}>
-                  {item.address ?? "Endereço não informado"}
-                </Text>
-              </View>
-
-              {distanceKm !== null ? (
-                <View style={styles.infoRow}>
-                  <Navigation
-                    size={15}
-                    strokeWidth={2.1}
-                    color={theme.colors.primary}
-                  />
-
-                  <Text style={styles.gymDistance}>
-                    {formatDistance(distanceKm)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-
-            <View style={styles.cardFooter}>
-              <View
-                style={[
-                  styles.locationStatus,
-                  !item.coordinates && styles.locationStatusMuted,
-                ]}
-              >
+              <View style={styles.cardFooter}>
                 <View
                   style={[
-                    styles.locationStatusDot,
-                    !item.coordinates && styles.locationStatusDotMuted,
+                    styles.locationStatus,
+                    !item.coordinates && styles.locationStatusMuted,
                   ]}
-                />
+                >
+                  <View
+                    style={[
+                      styles.locationStatusDot,
+                      !item.coordinates && styles.locationStatusDotMuted,
+                    ]}
+                  />
 
-                <Text style={styles.locationStatusText}>
-                  {item.coordinates
-                    ? "Disponível no mapa"
-                    : "Localização não informada"}
+                  <Text style={styles.locationStatusText}>
+                    {item.coordinates
+                      ? "Disponível no mapa"
+                      : "Localização não informada"}
+                  </Text>
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver detalhes de ${item.name}`}
+                  onPress={(event) => {
+                    event.stopPropagation();
+
+                    handleOpenGymDetails(item, distanceKm);
+                  }}
+                  style={({ pressed }) => [
+                    styles.detailsButton,
+                    pressed && styles.detailsButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.detailsButtonText}>Ver detalhes</Text>
+
+                  <ArrowRight
+                    size={16}
+                    strokeWidth={2.3}
+                    color={theme.colors.textOnPrimary}
+                  />
+                </Pressable>
+              </View>
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            {loading ? (
+              <>
+                <View style={styles.emptyIcon}>
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.primary}
+                  />
+                </View>
+
+                <Text style={styles.emptyTitle}>
+                  {loadingAction === "location"
+                    ? "Buscando perto de você"
+                    : "Procurando academias"}
                 </Text>
-              </View>
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Ver detalhes de ${item.name}`}
-                onPress={(event) => {
-                  event.stopPropagation();
+                <Text style={styles.emptyText}>
+                  Estamos consultando as opções disponíveis.
+                </Text>
+              </>
+            ) : hasSearched && !errorMessage ? (
+              <>
+                <View style={styles.emptyIcon}>
+                  <Search
+                    size={22}
+                    strokeWidth={2.2}
+                    color={theme.colors.primary}
+                  />
+                </View>
 
-                  handleOpenGymDetails(item, distanceKm);
-                }}
-                style={({ pressed }) => [
-                  styles.detailsButton,
-                  pressed && styles.detailsButtonPressed,
-                ]}
-              >
-                <Text style={styles.detailsButtonText}>Ver detalhes</Text>
+                <Text style={styles.emptyTitle}>
+                  Nenhuma academia encontrada
+                </Text>
 
-                <ArrowRight
-                  size={16}
-                  strokeWidth={2.3}
-                  color={theme.colors.textOnPrimary}
-                />
-              </Pressable>
-            </View>
-          </Pressable>
-        );
-      }}
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          {loading ? (
-            <>
-              <View style={styles.emptyIcon}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              </View>
+                <Text style={styles.emptyText}>
+                  Tente pesquisar outra cidade, bairro ou região.
+                </Text>
+              </>
+            ) : !hasSearched ? (
+              <>
+                <View style={styles.emptyIcon}>
+                  <Dumbbell
+                    size={23}
+                    strokeWidth={2.2}
+                    color={theme.colors.primary}
+                  />
+                </View>
 
-              <Text style={styles.emptyTitle}>
-                {loadingAction === "location"
-                  ? "Buscando perto de você"
-                  : "Procurando academias"}
-              </Text>
+                <Text style={styles.emptyTitle}>
+                  Encontre seu espaço de treino
+                </Text>
 
-              <Text style={styles.emptyText}>
-                Estamos consultando as opções disponíveis.
-              </Text>
-            </>
-          ) : hasSearched && !errorMessage ? (
-            <>
-              <View style={styles.emptyIcon}>
-                <Search
-                  size={22}
-                  strokeWidth={2.2}
-                  color={theme.colors.primary}
-                />
-              </View>
-
-              <Text style={styles.emptyTitle}>Nenhuma academia encontrada</Text>
-
-              <Text style={styles.emptyText}>
-                Tente pesquisar outra cidade, bairro ou região.
-              </Text>
-            </>
-          ) : !hasSearched ? (
-            <>
-              <View style={styles.emptyIcon}>
-                <Dumbbell
-                  size={23}
-                  strokeWidth={2.2}
-                  color={theme.colors.primary}
-                />
-              </View>
-
-              <Text style={styles.emptyTitle}>
-                Encontre seu espaço de treino
-              </Text>
-
-              <Text style={styles.emptyText}>
-                Pesquise uma região ou use sua localização para começar.
-              </Text>
-            </>
-          ) : null}
-        </View>
-      }
-    />
+                <Text style={styles.emptyText}>
+                  Pesquise uma região ou use sua localização para começar.
+                </Text>
+              </>
+            ) : null}
+          </View>
+        }
+      />
+    </View>
   );
 }
 
 function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
   return StyleSheet.create({
-    container: {
+    screen: {
       flex: 1,
       backgroundColor: theme.colors.background,
+    },
+    container: {
+      flex: 1,
+      backgroundColor:
+        theme.mode === "light" ? "transparent" : theme.colors.background,
     },
 
     listContent: {
@@ -1318,6 +1337,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      ...lightSurfaceDepth(theme),
     },
 
     favoriteErrorCard: {
@@ -1399,6 +1419,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
       borderColor: theme.colors.border,
+      ...lightSurfaceDepth(theme),
     },
 
     favoriteCardPressed: {
@@ -1688,6 +1709,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
         height: 4,
       },
       elevation: 6,
+      ...lightSurfaceDepth(theme, "featured"),
     },
 
     selectedMapPreviewCopy: {
@@ -1747,9 +1769,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderRadius: 19,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "rgba(92, 200, 255, 0.22)",
+      backgroundColor: "rgba(20, 184, 166, 0.22)",
       borderWidth: 1,
-      borderColor: "rgba(92, 200,255,0.50)",
+      borderColor: "rgba(20, 184, 166, 0.50)",
     },
 
     userMarkerInner: {

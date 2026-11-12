@@ -1,3 +1,4 @@
+import { lightSurfaceDepth } from "../theme/surfaces";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Line, Polyline } from "react-native-svg";
@@ -201,7 +202,7 @@ export default function BodyEvolutionChart({
                 <Polyline
                   points={linePoints}
                   fill="none"
-                  stroke={theme.colors.primary}
+                  stroke={theme.colors.techAccent}
                   strokeWidth={2.8}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -214,7 +215,7 @@ export default function BodyEvolutionChart({
                   cx={point.x}
                   cy={point.y}
                   r={coordinates.length > 15 ? 2.5 : 4}
-                  fill={theme.colors.primary}
+                  fill={theme.colors.techAccent}
                 />
               ))}
             </Svg>
@@ -258,6 +259,7 @@ function createStyles(theme: AppTheme) {
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
       gap: theme.spacing.md,
+      ...lightSurfaceDepth(theme, "featured"),
     },
     header: {
       gap: theme.spacing.xs,

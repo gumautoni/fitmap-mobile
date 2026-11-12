@@ -13,14 +13,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import FitMapBrand from "../components/FitMapBrand";
 import type { AuthStackScreenProps } from "../navigation/types";
 import { useAppTheme } from "../theme/ThemeProvider";
-import type { AppTheme } from "../theme/themes";
+import { lightColors as authColors, type AppTheme } from "../theme/themes";
 
 type Props = AuthStackScreenProps<"BoasVindas">;
 
-const BRAND_BLUE = "#3F51E8";
-const BACKGROUND = "#F7F9FF";
+const BRAND_PRIMARY = authColors.primary;
+const BACKGROUND = authColors.background;
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { theme } = useAppTheme();
@@ -41,15 +42,8 @@ export default function WelcomeScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.mainContent}>
-          <View style={styles.wordmark} accessibilityLabel="FitMap">
-            <Image
-              source={require("../../assets/images/fitmap-logo-symbol.png")}
-              style={styles.wordmarkSymbol}
-              resizeMode="contain"
-              accessible={false}
-            />
-            <Text style={styles.wordmarkFit}>Fit</Text>
-            <Text style={styles.wordmarkMap}>Map</Text>
+          <View style={styles.wordmark}>
+            <FitMapBrand variant="full" mode="light" width={164} />
           </View>
 
           <Text style={styles.eyebrow}>SAÚDE • TREINO • EVOLUÇÃO</Text>
@@ -67,7 +61,7 @@ export default function WelcomeScreen({ navigation }: Props) {
           <View style={[styles.hero, { height: artworkHeight }]}>
             <View style={styles.imageFrame}>
               <Image
-                source={require("../../assets/images/welcome-map-3d.png")}
+                source={require("../../assets/images/brand/welcome-map-orange.png")}
                 style={styles.heroImage}
                 resizeMode="cover"
                 accessible={false}
@@ -75,7 +69,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
               <LinearGradient
                 pointerEvents="none"
-                colors={[BACKGROUND, "rgba(247,249,255,0)"]}
+                colors={[BACKGROUND, "rgba(250,247,242,0)"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.imageFade}
@@ -85,7 +79,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             <View style={styles.features}>
               <View style={styles.feature}>
                 <View style={styles.featureIcon}>
-                  <MapPin size={21} color={BRAND_BLUE} strokeWidth={2.2} />
+                  <MapPin size={21} color={BRAND_PRIMARY} strokeWidth={2.2} />
                 </View>
                 <Text style={styles.featureTitle}>Descubra</Text>
                 <Text style={styles.featureText}>academias na sua região</Text>
@@ -93,7 +87,7 @@ export default function WelcomeScreen({ navigation }: Props) {
 
               <View style={styles.feature}>
                 <View style={styles.featureIcon}>
-                  <Dumbbell size={21} color={BRAND_BLUE} strokeWidth={2.2} />
+                  <Dumbbell size={21} color={BRAND_PRIMARY} strokeWidth={2.2} />
                 </View>
                 <Text style={styles.featureTitle}>Organize</Text>
                 <Text style={styles.featureText}>seus treinos e rotinas</Text>
@@ -101,7 +95,11 @@ export default function WelcomeScreen({ navigation }: Props) {
 
               <View style={styles.feature}>
                 <View style={styles.featureIcon}>
-                  <TrendingUp size={21} color={BRAND_BLUE} strokeWidth={2.2} />
+                  <TrendingUp
+                    size={21}
+                    color={BRAND_PRIMARY}
+                    strokeWidth={2.2}
+                  />
                 </View>
                 <Text style={styles.featureTitle}>Acompanhe</Text>
                 <Text style={styles.featureText}>sua evolução</Text>
@@ -134,7 +132,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             ]}
           >
             <Text style={styles.secondaryButtonText}>Entrar</Text>
-            <ArrowRight color={BRAND_BLUE} size={20} strokeWidth={2.3} />
+            <ArrowRight color={BRAND_PRIMARY} size={20} strokeWidth={2.3} />
           </Pressable>
         </View>
       </ScrollView>
@@ -155,7 +153,7 @@ function createStyles(theme: AppTheme) {
       width: 290,
       height: 290,
       borderRadius: 145,
-      backgroundColor: "#ECF3FF",
+      backgroundColor: authColors.primarySoft,
     },
     decorationBottom: {
       position: "absolute",
@@ -164,7 +162,7 @@ function createStyles(theme: AppTheme) {
       width: 190,
       height: 190,
       borderRadius: 95,
-      backgroundColor: "#EFF5FF",
+      backgroundColor: authColors.surfaceSecondary,
     },
     scrollContent: {
       flexGrow: 1,
@@ -181,41 +179,27 @@ function createStyles(theme: AppTheme) {
       alignItems: "center",
       marginBottom: 8,
     },
-    wordmarkSymbol: {
-      width: 56,
-      height: 56,
-      marginRight: 2,
-    },
-    wordmarkFit: {
-      color: "#13243C",
-      fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 28,
-    },
-    wordmarkMap: {
-      color: BRAND_BLUE,
-      fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 28,
-    },
+
     eyebrow: {
-      color: "#63789B",
+      color: authColors.textSecondary,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: 10,
       letterSpacing: 1.8,
       marginBottom: 24,
     },
     title: {
-      color: "#13243C",
+      color: authColors.textPrimary,
       fontFamily: theme.typography.fontFamily.extrabold,
       fontSize: 31,
       lineHeight: 39,
       marginBottom: 12,
     },
     titleAccent: {
-      color: BRAND_BLUE,
+      color: BRAND_PRIMARY,
     },
     subtitle: {
       maxWidth: 305,
-      color: "#65758F",
+      color: authColors.textSecondary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: 14,
       lineHeight: 22,
@@ -235,7 +219,7 @@ function createStyles(theme: AppTheme) {
       width: "75%",
       overflow: "hidden",
       borderRadius: 22,
-      backgroundColor: "#E3EEFF",
+      backgroundColor: authColors.primarySoft,
     },
     heroImage: {
       width: "100%",
@@ -265,16 +249,16 @@ function createStyles(theme: AppTheme) {
       borderRadius: 12,
       justifyContent: "center",
       alignItems: "center",
-      backgroundColor: "#E8F0FF",
+      backgroundColor: authColors.primarySoft,
       marginBottom: 3,
     },
     featureTitle: {
-      color: "#162847",
+      color: authColors.textPrimary,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: 13,
     },
     featureText: {
-      color: "#6F7F96",
+      color: authColors.textSecondary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: 11,
       lineHeight: 16,
@@ -287,7 +271,7 @@ function createStyles(theme: AppTheme) {
     primaryButton: {
       minHeight: 58,
       borderRadius: 17,
-      backgroundColor: BRAND_BLUE,
+      backgroundColor: BRAND_PRIMARY,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
@@ -302,7 +286,7 @@ function createStyles(theme: AppTheme) {
       minHeight: 58,
       borderRadius: 17,
       borderWidth: 1.5,
-      borderColor: "#B4C4E1",
+      borderColor: "#8B8178",
       backgroundColor: "#FFFFFF",
       flexDirection: "row",
       alignItems: "center",
@@ -310,7 +294,7 @@ function createStyles(theme: AppTheme) {
       paddingHorizontal: 20,
     },
     secondaryButtonText: {
-      color: "#172844",
+      color: authColors.textPrimary,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: 15,
     },

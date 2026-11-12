@@ -1,3 +1,4 @@
+import { lightSurfaceDepth } from "../theme/surfaces";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   useCallback,
@@ -274,6 +275,7 @@ function createStyles(theme: AppTheme) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme, "featured"),
     },
     header: {
       flexDirection: "row",
