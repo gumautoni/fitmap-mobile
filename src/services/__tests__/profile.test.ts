@@ -28,6 +28,7 @@ describe("profile service", () => {
       weekly_workout_goal: 4,
       preferred_workout_duration_minutes: 60,
       measurement_system: "metric",
+      height_cm: "175.00",
     });
 
     const result = await getProfile("current-access-token");
@@ -48,6 +49,7 @@ describe("profile service", () => {
       weeklyWorkoutGoal: 4,
       preferredWorkoutDurationMinutes: 60,
       measurementSystem: "metric",
+      heightCm: "175.00",
     });
   });
 
@@ -62,6 +64,7 @@ describe("profile service", () => {
       weekly_workout_goal: null,
       preferred_workout_duration_minutes: null,
       measurement_system: null,
+      height_cm: null,
     });
 
     const result = await getProfile("current-access-token");
@@ -76,6 +79,7 @@ describe("profile service", () => {
       weeklyWorkoutGoal: null,
       preferredWorkoutDurationMinutes: null,
       measurementSystem: null,
+      heightCm: null,
     });
   });
 
@@ -90,6 +94,7 @@ describe("profile service", () => {
       weekly_workout_goal: 5,
       preferred_workout_duration_minutes: 75,
       measurement_system: "imperial",
+      height_cm: "180.00",
     });
 
     const result = await updateProfile("current-access-token", {
@@ -99,6 +104,7 @@ describe("profile service", () => {
       weeklyWorkoutGoal: 5,
       preferredWorkoutDurationMinutes: 75,
       measurementSystem: "imperial",
+      heightCm: "180.00",
     });
 
     expect(mockedPatch).toHaveBeenCalledWith(
@@ -110,6 +116,7 @@ describe("profile service", () => {
         weekly_workout_goal: 5,
         preferred_workout_duration_minutes: 75,
         measurement_system: "imperial",
+        height_cm: "180.00",
       },
       {
         headers: {
@@ -128,6 +135,7 @@ describe("profile service", () => {
       weeklyWorkoutGoal: 5,
       preferredWorkoutDurationMinutes: 75,
       measurementSystem: "imperial",
+      heightCm: "180.00",
     });
   });
 
@@ -142,11 +150,13 @@ describe("profile service", () => {
       weekly_workout_goal: 3,
       preferred_workout_duration_minutes: 60,
       measurement_system: "metric",
+      height_cm: null,
     });
 
     await updateProfile("current-access-token", {
       fitnessGoal: null,
       weeklyWorkoutGoal: 3,
+      heightCm: null,
     });
 
     expect(mockedPatch).toHaveBeenCalledWith(
@@ -154,6 +164,7 @@ describe("profile service", () => {
       {
         fitness_goal: null,
         weekly_workout_goal: 3,
+        height_cm: null,
       },
       {
         headers: {

@@ -17,6 +17,7 @@ export interface UserProfile {
   weeklyWorkoutGoal: number | null;
   preferredWorkoutDurationMinutes: number | null;
   measurementSystem: MeasurementSystem | null;
+  heightCm: string | null;
 }
 
 export interface UpdateProfileInput {
@@ -26,6 +27,7 @@ export interface UpdateProfileInput {
   weeklyWorkoutGoal?: number | null;
   preferredWorkoutDurationMinutes?: number | null;
   measurementSystem?: MeasurementSystem | null;
+  heightCm?: string | null;
 }
 
 interface ProfileResponse {
@@ -38,6 +40,7 @@ interface ProfileResponse {
   weekly_workout_goal: number | null;
   preferred_workout_duration_minutes: number | null;
   measurement_system: MeasurementSystem | null;
+  height_cm: string | null;
 }
 
 interface ProfileUpdatePayload {
@@ -47,6 +50,7 @@ interface ProfileUpdatePayload {
   weekly_workout_goal?: number | null;
   preferred_workout_duration_minutes?: number | null;
   measurement_system?: MeasurementSystem | null;
+  height_cm?: string | null;
 }
 
 function normalizeProfile(profile: ProfileResponse): UserProfile {
@@ -60,6 +64,7 @@ function normalizeProfile(profile: ProfileResponse): UserProfile {
     weeklyWorkoutGoal: profile.weekly_workout_goal,
     preferredWorkoutDurationMinutes: profile.preferred_workout_duration_minutes,
     measurementSystem: profile.measurement_system,
+    heightCm: profile.height_cm ?? null,
   };
 }
 
@@ -97,6 +102,10 @@ function buildProfileUpdatePayload(
 
   if (input.measurementSystem !== undefined) {
     payload.measurement_system = input.measurementSystem;
+  }
+
+  if (input.heightCm !== undefined) {
+    payload.height_cm = input.heightCm;
   }
 
   return payload;

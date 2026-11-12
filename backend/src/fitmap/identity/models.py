@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -7,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
     Uuid,
@@ -113,6 +115,10 @@ class UserProfile(Base):
             ("measurement_system IS NULL OR measurement_system IN ('metric', 'imperial')"),
             name="ck_user_profiles_measurement_system",
         ),
+        CheckConstraint(
+            "height_cm IS NULL OR (height_cm >= 50 AND height_cm <= 250)",
+            name="ck_user_profiles_height_cm",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -147,6 +153,10 @@ class UserProfile(Base):
     )
     measurement_system: Mapped[str | None] = mapped_column(
         String(10),
+        nullable=True,
+    )
+    height_cm: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2),
         nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(

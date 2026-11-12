@@ -26,6 +26,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import BmiCard from "../components/BmiCard";
 import BodyMetricsSection from "../components/BodyMetricsSection";
 import FitnessGoalsSection from "../components/FitnessGoalsSection";
 import ProgressPhotoCapture from "../components/ProgressPhotoCapture";
@@ -175,6 +176,7 @@ export default function ProgressScreen() {
   const [reduceMotion, setReduceMotion] = useState(true);
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [bmiRefreshVersion, setBmiRefreshVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -474,7 +476,13 @@ export default function ProgressScreen() {
           </View>
         ) : null}
 
-        <BodyMetricsSection />
+        <BmiCard refreshVersion={bmiRefreshVersion} />
+
+        <BodyMetricsSection
+          onWeightSaved={() => {
+            setBmiRefreshVersion((current) => current + 1);
+          }}
+        />
 
         <FitnessGoalsSection />
 

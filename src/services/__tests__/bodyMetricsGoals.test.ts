@@ -91,6 +91,28 @@ describe("body metrics and fitness goals service", () => {
     expect(result).toEqual(expectedMetric);
   });
 
+  it("omits recorded_at for a current measurement", async () => {
+    mockedPost.mockResolvedValue(metricResponse);
+
+    const result = await createBodyMetric("test-access-token", {
+      metricType: "weight",
+      value: "80.00",
+      unit: "kg",
+    });
+
+    expect(mockedPost).toHaveBeenCalledWith(
+      "/progress/body-metrics",
+      {
+        metric_type: "weight",
+        value: "80.00",
+        unit: "kg",
+      },
+      expectedHeaders,
+    );
+
+    expect(result).toEqual(expectedMetric);
+  });
+
   it("loads and normalizes body metric history", async () => {
     mockedGet.mockResolvedValue([metricResponse]);
 

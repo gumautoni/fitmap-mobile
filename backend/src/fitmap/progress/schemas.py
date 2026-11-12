@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Self
@@ -100,7 +100,9 @@ class BodyMetricCreateRequest(BaseModel):
 
     unit: BodyMetricUnit
 
-    recorded_at: AwareDatetime
+    recorded_at: AwareDatetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+    )
 
     @model_validator(mode="after")
     def validate_metric_unit(self) -> Self:

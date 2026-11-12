@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import ProfileHeightEditor from "../components/ProfileHeightEditor";
 import { AuthContext } from "../context/AuthContext";
 import type { AppStackScreenProps } from "../navigation/types";
 import {
@@ -610,6 +611,15 @@ export default function ProfileScreen(_: ProfileScreenProps) {
               </Text>
             </View>
           </View>
+
+          <ProfileHeightEditor
+            heightCm={profile.heightCm}
+            saving={saving}
+            onSave={async (heightCm) => {
+              const updated = await persistProfileUpdate({ heightCm });
+              return updated !== null;
+            }}
+          />
         </View>
 
         <View style={styles.section}>

@@ -98,10 +98,12 @@ const authValue: NonNullable<ContextType<typeof AuthContext>> = {
   updateAuthenticatedUser: jest.fn(),
 };
 
-async function renderSection(): Promise<void> {
+async function renderSection(
+  onWeightSaved: () => void = () => undefined,
+): Promise<void> {
   await render(
     <AuthContext.Provider value={authValue}>
-      <BodyMetricsSection />
+      <BodyMetricsSection onWeightSaved={onWeightSaved} />
     </AuthContext.Provider>,
   );
 }
@@ -162,12 +164,13 @@ describe("BodyMetricsSection", () => {
   });
 
   it("registers a weight measurement using a decimal comma", async () => {
+    const onWeightSaved = jest.fn();
     mockedCreateBodyMetric.mockResolvedValue({
       ...savedWeight,
       value: "78.50",
     });
 
-    await renderSection();
+    await renderSection(onWeightSaved);
 
     await waitFor(() => {
       expect(screen.getByText("Nenhuma medida registrada")).toBeTruthy();
@@ -185,7 +188,6 @@ describe("BodyMetricsSection", () => {
         metricType: "weight",
         value: "78.50",
         unit: "kg",
-        recordedAt: expect.any(String),
       });
     });
 
@@ -193,19 +195,22 @@ describe("BodyMetricsSection", () => {
       expect(screen.getByText("78,50 kg")).toBeTruthy();
     });
 
+    expect(onWeightSaved).toHaveBeenCalledTimes(1);
+
     expect(screen.getByLabelText("Valor da medida corporal").props.value).toBe(
       "",
     );
   });
 
   it("registers a circumference in inches", async () => {
+    const onWeightSaved = jest.fn();
     mockedCreateBodyMetric.mockResolvedValue({
       ...savedWaist,
       value: "34.50",
       unit: "in",
     });
 
-    await renderSection();
+    await renderSection(onWeightSaved);
 
     await waitFor(() => {
       expect(screen.getByText("Nenhuma medida registrada")).toBeTruthy();
@@ -227,13 +232,14 @@ describe("BodyMetricsSection", () => {
         metricType: "waist",
         value: "34.50",
         unit: "in",
-        recordedAt: expect.any(String),
       });
     });
 
     await waitFor(() => {
       expect(screen.getByText("34,50 in")).toBeTruthy();
     });
+
+    expect(onWeightSaved).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -280,6 +286,12 @@ describe("BodyMetricsSection", () => {
       ).toBeTruthy();
     });
 
+    expect(
+      screen.getByText(/Não foi possível carregar a evolução corporal/),
+    ).toBeTruthy();
+
+    expect(screen.queryByText("Nenhuma medida registrada")).toBeNull();
+
     await fireEvent.press(
       screen.getByLabelText("Atualizar histórico de medidas"),
     );
@@ -296,11 +308,13 @@ describe("BodyMetricsSection", () => {
   });
 
   it("preserves the entered value when saving fails", async () => {
+    const onWeightSaved = jest.fn();
+
     mockedCreateBodyMetric.mockRejectedValueOnce(
       new Error("The backend could not be reached."),
     );
 
-    await renderSection();
+    await renderSection(onWeightSaved);
 
     await waitFor(() => {
       expect(screen.getByText("Nenhuma medida registrada")).toBeTruthy();
@@ -324,5 +338,6 @@ describe("BodyMetricsSection", () => {
     );
 
     expect(screen.queryByText("79,50 kg")).toBeNull();
+    expect(onWeightSaved).not.toHaveBeenCalled();
   });
 });
