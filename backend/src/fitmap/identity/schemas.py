@@ -1,5 +1,6 @@
 import string
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Self
 from uuid import UUID
@@ -119,6 +120,7 @@ class ProfileResponse(BaseModel):
     weekly_workout_goal: int | None = None
     preferred_workout_duration_minutes: int | None = None
     measurement_system: MeasurementSystem | None = None
+    height_cm: Decimal | None = None
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -142,6 +144,13 @@ class ProfileUpdateRequest(BaseModel):
         le=180,
     )
     measurement_system: MeasurementSystem | None = None
+    height_cm: Decimal | None = Field(
+        default=None,
+        ge=Decimal("50"),
+        le=Decimal("250"),
+        max_digits=5,
+        decimal_places=2,
+    )
 
     @field_validator("name")
     @classmethod

@@ -22,7 +22,7 @@ export interface CreateBodyMetricInput {
   metricType: BodyMetricType;
   value: string;
   unit: BodyMetricUnit;
-  recordedAt: string;
+  recordedAt?: string;
 }
 
 export interface FitnessGoal {
@@ -137,7 +137,9 @@ export async function createBodyMetric(
       metric_type: input.metricType,
       value: input.value,
       unit: input.unit,
-      recorded_at: input.recordedAt,
+      ...(input.recordedAt !== undefined
+        ? { recorded_at: input.recordedAt }
+        : {}),
     },
     {
       headers: authorizationHeaders(accessToken),

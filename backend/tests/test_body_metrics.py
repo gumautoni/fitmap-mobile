@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -9,12 +9,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from fitmap.identity.models import User
+from fitmap.progress.bmi import get_bmi_snapshot
 from fitmap.progress.body_metrics import (
     create_body_metric_record,
     list_body_metric_records,
 )
 from fitmap.progress.models import BodyMetricRecord
-from fitmap.progress.schemas import BodyMetricType, BodyMetricUnit
+from fitmap.progress.schemas import (
+    BodyMetricCreateRequest,
+    BodyMetricType,
+    BodyMetricUnit,
+)
 
 
 @pytest.fixture
@@ -297,3 +302,60 @@ def test_deleting_user_cascades_to_body_metrics(
     )
 
     assert remaining_record is None
+
+
+def test_current_weight_uses_server_time_and_updates_bmi_immediately(
+    db_session: Session,
+) -> None:
+    user = create_user(db_session)
+
+    create_weight_record(
+        db_session=db_session,
+        user_id=user.id,
+        value=Decimal("80.00"),
+        recorded_at=datetime.now(UTC) - timedelta(days=1),
+    )
+
+    before = datetime.now(UTC)
+
+    payload = BodyMetricCreateRequest.model_validate(
+        {
+            "metric_type": "weight",
+            "value": "78.50",
+            "unit": "kg",
+        }
+    )
+
+    assert before <= payload.recorded_at <= datetime.now(UTC)
+
+    record = create_body_metric_record(
+        db_session=db_session,
+        user_id=user.id,
+        metric_type=payload.metric_type,
+        value=payload.value,
+        unit=payload.unit,
+        recorded_at=payload.recorded_at,
+    )
+
+    snapshot = get_bmi_snapshot(
+        db_session=db_session,
+        user_id=user.id,
+    )
+
+    assert snapshot.weight_kg == Decimal("78.50")
+    assert snapshot.weight_recorded_at == record.recorded_at
+
+
+def test_explicit_historical_measurement_preserves_timestamp() -> None:
+    recorded_at = datetime(2026, 10, 1, tzinfo=UTC)
+
+    payload = BodyMetricCreateRequest.model_validate(
+        {
+            "metric_type": "weight",
+            "value": "80.00",
+            "unit": "kg",
+            "recorded_at": recorded_at,
+        }
+    )
+
+    assert payload.recorded_at == recorded_at

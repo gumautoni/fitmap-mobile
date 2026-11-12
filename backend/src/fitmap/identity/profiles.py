@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import TypedDict
 from uuid import UUID
 
@@ -14,6 +15,7 @@ class ProfileUpdateValues(TypedDict, total=False):
     weekly_workout_goal: int | None
     preferred_workout_duration_minutes: int | None
     measurement_system: str | None
+    height_cm: Decimal | None
 
 
 _PROFILE_FIELDS = (
@@ -22,6 +24,7 @@ _PROFILE_FIELDS = (
     "weekly_workout_goal",
     "preferred_workout_duration_minutes",
     "measurement_system",
+    "height_cm",
 )
 
 
@@ -89,6 +92,9 @@ def update_user_profile(
 
     if "measurement_system" in updates:
         profile.measurement_system = updates["measurement_system"]
+
+    if "height_cm" in updates:
+        profile.height_cm = updates["height_cm"]
 
     db_session.add(profile)
     db_session.flush()

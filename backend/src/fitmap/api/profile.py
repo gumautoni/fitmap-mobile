@@ -53,6 +53,7 @@ def build_profile_response(
             if profile is not None and profile.measurement_system is not None
             else None
         ),
+        height_cm=profile.height_cm if profile is not None else None,
     )
 
 
@@ -88,6 +89,9 @@ def build_profile_updates(
         updates["measurement_system"] = (
             payload.measurement_system.value if payload.measurement_system is not None else None
         )
+
+    if "height_cm" in fields_set:
+        updates["height_cm"] = payload.height_cm
 
     return updates
 

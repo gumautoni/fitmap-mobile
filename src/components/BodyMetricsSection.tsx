@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 
+import BodyEvolutionChart from "./BodyEvolutionChart";
 import { AuthContext } from "../context/AuthContext";
 import { ApiClientError } from "../services/apiClient";
 import {
@@ -100,7 +101,13 @@ function validateValue(input: string): string | null {
   return normalized;
 }
 
-export default function BodyMetricsSection() {
+interface BodyMetricsSectionProps {
+  onWeightSaved?: () => void;
+}
+
+export default function BodyMetricsSection({
+  onWeightSaved,
+}: BodyMetricsSectionProps) {
   const auth = useContext(AuthContext);
 
   if (!auth) {
@@ -200,7 +207,6 @@ export default function BodyMetricsSection() {
           metricType: selectedType,
           value: normalizedValue,
           unit: selectedUnit,
-          recordedAt: new Date().toISOString(),
         }),
       );
 
@@ -212,6 +218,10 @@ export default function BodyMetricsSection() {
       ]);
 
       setValue("");
+
+      if (created.metricType === "weight") {
+        onWeightSaved?.();
+      }
     } catch (saveError) {
       setFormError(getErrorMessage(saveError));
     } finally {
@@ -352,6 +362,8 @@ export default function BodyMetricsSection() {
         </Pressable>
       </View>
 
+      <BodyEvolutionChart metrics={metrics} loading={loading} error={error} />
+
       <View style={styles.historyHeading}>
         <View style={styles.historyTitleRow}>
           <Ruler size={20} strokeWidth={2} color={theme.colors.primary} />
@@ -381,7 +393,7 @@ export default function BodyMetricsSection() {
           <ActivityIndicator size="small" color={theme.colors.primary} />
           <Text style={styles.emptyText}>Carregando medidas...</Text>
         </View>
-      ) : metrics.length === 0 ? (
+      ) : error && metrics.length === 0 ? null : metrics.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Nenhuma medida registrada</Text>
           <Text style={styles.emptyText}>

@@ -39,6 +39,7 @@ class ProfilePayload(TypedDict):
     weekly_workout_goal: int | None
     preferred_workout_duration_minutes: int | None
     measurement_system: str | None
+    height_cm: str | None
 
 
 @pytest.fixture
@@ -130,6 +131,7 @@ def test_get_profile_returns_authenticated_users_profile(
         "weekly_workout_goal": None,
         "preferred_workout_duration_minutes": None,
         "measurement_system": None,
+        "height_cm": None,
     }
 
 
@@ -651,3 +653,113 @@ def test_update_profile_rejects_unauthenticated_request(
             "message": "Invalid or expired access token.",
         }
     }
+
+
+def test_profile_height_can_be_created_preserved_and_cleared(
+    client: TestClient,
+    database_engine: Engine,
+    created_emails: list[str],
+) -> None:
+    authentication = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+    headers = authorization_headers(authentication)
+
+    created = client.patch(
+        "/api/v1/profile",
+        headers=headers,
+        json={"height_cm": "170.50"},
+    )
+
+    assert created.status_code == 200
+    assert created.json()["height_cm"] == "170.50"
+
+    with database_engine.connect() as connection:
+        persisted = connection.scalar(
+            select(UserProfile.height_cm).where(
+                UserProfile.user_id == UUID(authentication["user"]["id"]),
+            )
+        )
+
+    assert persisted == 170.50
+
+    partial = client.patch(
+        "/api/v1/profile",
+        headers=headers,
+        json={"weekly_workout_goal": 3},
+    )
+
+    assert partial.status_code == 200
+    assert partial.json()["height_cm"] == "170.50"
+
+    cleared = client.patch(
+        "/api/v1/profile",
+        headers=headers,
+        json={"height_cm": None},
+    )
+
+    assert cleared.status_code == 200
+    assert cleared.json()["height_cm"] is None
+
+    loaded = client.get(
+        "/api/v1/profile",
+        headers=headers,
+    )
+
+    assert loaded.status_code == 200
+    assert loaded.json()["height_cm"] is None
+
+
+@pytest.mark.parametrize(
+    "invalid_height",
+    ["0", "49.99", "250.01", "170.555", "NaN", "abc"],
+)
+def test_profile_rejects_invalid_height(
+    client: TestClient,
+    created_emails: list[str],
+    invalid_height: str,
+) -> None:
+    authentication = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+
+    response = client.patch(
+        "/api/v1/profile",
+        headers=authorization_headers(authentication),
+        json={"height_cm": invalid_height},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "request_validation_error"
+
+
+def test_profile_height_is_private_to_authenticated_user(
+    client: TestClient,
+    created_emails: list[str],
+) -> None:
+    first = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+    second = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+
+    updated = client.patch(
+        "/api/v1/profile",
+        headers=authorization_headers(first),
+        json={"height_cm": "182.00"},
+    )
+
+    assert updated.status_code == 200
+
+    second_profile = client.get(
+        "/api/v1/profile",
+        headers=authorization_headers(second),
+    )
+
+    assert second_profile.status_code == 200
+    assert second_profile.json()["height_cm"] is None
