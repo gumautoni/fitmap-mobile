@@ -1,51 +1,53 @@
-import { radii, spacing, typography } from "./tokens";
+import { brandColors, radii, spacing, typography } from "./tokens";
 
 export const lightColors = {
-  primary: "#3F51E8",
-  primaryPressed: "#303FBE",
-  primarySoft: "#EEF0FF",
+  primary: brandColors.orangeInk,
+  primaryPressed: "#9A3412",
+  primarySoft: brandColors.orangeSoft,
 
-  heroStart: "#3F51E8",
-  heroEnd: "#303FBE",
-  heroText: "#FFFFFF",
-  heroTextMuted: "#DCE1FF",
-  heroDetail: "rgba(255, 255, 255, 0.16)",
+  heroStart: brandColors.orange,
+  heroEnd: brandColors.gold,
+  heroText: brandColors.graphite,
+  heroTextMuted: "#30221B",
+  heroDetail: "rgba(255, 255, 255, 0.22)",
+  heroActionText: brandColors.orangeInk,
 
-  techAccent: "#5CC8FF",
-  performanceAccent: "#B8F04A",
+  techAccent: brandColors.turquoiseInk,
+  performanceAccent: brandColors.gold,
 
-  background: "#F7F8FA",
-  surface: "#FFFFFF",
-  surfaceSecondary: "#F1F3F7",
+  background: brandColors.warmWhite,
+  surface: brandColors.warmSurface,
+  surfaceSecondary: "#F1ECE5",
 
-  textPrimary: "#171A21",
-  textSecondary: "#667085",
-  textMuted: "#98A2B3",
+  textPrimary: brandColors.graphite,
+  textSecondary: "#57534E",
+  textMuted: "#78716C",
   textOnPrimary: "#FFFFFF",
 
-  border: "#E5E7EC",
-  divider: "#ECEEF2",
+  border: brandColors.warmBorder,
+  divider: "#EDE7DF",
 
   success: "#16A36A",
   warning: "#F5A524",
   danger: "#D92D20",
 
-  icon: "#667085",
+  icon: "#57534E",
 } as const;
 
 export const darkColors = {
-  primary: "#6977FF",
-  primaryPressed: "#5261F0",
-  primarySoft: "#22294F",
+  primary: brandColors.orangeLight,
+  primaryPressed: brandColors.orangeWarm,
+  primarySoft: "#382419",
 
-  heroStart: "#1B2243",
-  heroEnd: "#27337B",
+  heroStart: "#2B201C",
+  heroEnd: "#78351D",
   heroText: "#FFFFFF",
-  heroTextMuted: "#C9D0FF",
-  heroDetail: "rgba(105, 119, 255, 0.22)",
+  heroTextMuted: "#FFE0C5",
+  heroDetail: "rgba(249, 115, 22, 0.22)",
+  heroActionText: brandColors.orangeInk,
 
-  techAccent: "#5CC8FF",
-  performanceAccent: "#B8F04A",
+  techAccent: brandColors.turquoiseLight,
+  performanceAccent: brandColors.gold,
 
   background: "#0E1118",
   surface: "#161B26",
@@ -53,8 +55,8 @@ export const darkColors = {
 
   textPrimary: "#F7F8FA",
   textSecondary: "#B4BCCB",
-  textMuted: "#7D8798",
-  textOnPrimary: "#FFFFFF",
+  textMuted: "#929DAF",
+  textOnPrimary: brandColors.graphite,
 
   border: "#2B3444",
   divider: "#252D3A",

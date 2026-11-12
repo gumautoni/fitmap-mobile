@@ -1,7 +1,7 @@
+import { lightColors as authColors } from "../../theme/themes";
 import { ArrowLeft } from "lucide-react-native";
 import React from "react";
 import {
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,14 +13,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import FitMapBrand from "../FitMapBrand";
 import AuthBackground from "./AuthBackground";
 
 const COLORS = {
-  background: "#F7F9FF",
-  navy: "#152744",
-  blue: "#3F51E8",
-  muted: "#677997",
-  border: "#DCE5F4",
+  background: authColors.background,
+  navy: authColors.textPrimary,
+
+  muted: authColors.textSecondary,
+  border: authColors.border,
 };
 
 /**
@@ -65,18 +66,7 @@ export default function AuthScreenShell({
               </Pressable>
 
               <View style={styles.brand}>
-                <View style={styles.logoShadow}>
-                  <Image
-                    source={require("../../../assets/images/fitmap-logo-symbol.png")}
-                    resizeMode="contain"
-                    style={styles.logo}
-                    accessibilityLabel="Símbolo do FitMap"
-                  />
-                </View>
-                <View style={styles.wordmark} accessibilityLabel="FitMap">
-                  <Text style={styles.wordmarkFit}>Fit</Text>
-                  <Text style={styles.wordmarkMap}>Map</Text>
-                </View>
+                <FitMapBrand variant="full" mode="light" width={174} />
               </View>
 
               <Text style={styles.eyebrow}>{eyebrow}</Text>
@@ -132,30 +122,11 @@ const styles = StyleSheet.create({
     gap: 11,
     marginBottom: 9,
   },
-  logoShadow: {
-    width: 55,
-    height: 55,
-    borderRadius: 18,
-    backgroundColor: "rgba(234,241,255,0.82)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logo: { width: 48, height: 48 },
-  wordmark: { flexDirection: "row", alignItems: "center" },
-  wordmarkFit: {
-    fontFamily: "Manrope_800ExtraBold",
-    fontSize: 27,
-    color: COLORS.navy,
-  },
-  wordmarkMap: {
-    fontFamily: "Manrope_800ExtraBold",
-    fontSize: 27,
-    color: COLORS.blue,
-  },
+
   eyebrow: {
     fontSize: 10,
     letterSpacing: 2,
-    color: "#6B80A5",
+    color: authColors.textSecondary,
     fontFamily: "Manrope_700Bold",
     textAlign: "center",
     marginBottom: 22,
@@ -184,7 +155,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 24,
     padding: 20,
-    shadowColor: "#24458A",
+    shadowColor: authColors.primaryPressed,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.07,
     shadowRadius: 20,

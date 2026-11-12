@@ -1,3 +1,4 @@
+import { lightColors as authColors } from "../../theme/themes";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight } from "lucide-react-native";
 import React from "react";
@@ -31,7 +32,7 @@ export default function AuthButton({
       ]}
     >
       <LinearGradient
-        colors={["#3F51E8", "#245FEC"]}
+        colors={[authColors.primary, authColors.primaryPressed]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradient}

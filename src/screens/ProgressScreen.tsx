@@ -1,3 +1,7 @@
+import { useReducedMotion } from "../hooks/useReducedMotion";
+import MotionScrollView from "../components/MotionScrollView";
+import { lightMetricDetail, lightSurfaceDepth } from "../theme/surfaces";
+import ScreenGradient from "../components/ScreenGradient";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -12,14 +16,12 @@ import {
   ShieldCheck,
   TrendingUp,
 } from "lucide-react-native";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  AccessibilityInfo,
   Alert,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -173,28 +175,12 @@ export default function ProgressScreen() {
   const [selectedPhoto, setSelectedPhoto] = useState<ProgressPhoto | null>(
     null,
   );
-  const [reduceMotion, setReduceMotion] = useState(true);
+  const reduceMotion = useReducedMotion();
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [bmiRefreshVersion, setBmiRefreshVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (active) setReduceMotion(enabled);
-      })
-      .catch(() => {
-        // Mantem as animacoes desativadas em caso de falha.
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const loadProgress = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -304,6 +290,7 @@ export default function ProgressScreen() {
   if (loading && !statistics) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+        <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
 
@@ -320,6 +307,7 @@ export default function ProgressScreen() {
   if (error && !statistics) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
+        <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
           <View style={styles.stateIcon}>
             <AlertCircle
@@ -365,7 +353,8 @@ export default function ProgressScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
-      <ScrollView
+      <ScreenGradient theme={theme} />
+      <MotionScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -405,6 +394,18 @@ export default function ProgressScreen() {
 
         <View style={styles.metricsGrid}>
           <View style={styles.metricCard}>
+            <View
+              style={styles.metricIcon}
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <Dumbbell
+                size={21}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+            </View>
             <Text style={styles.metricValue}>
               {statistics.completedWorkouts}
             </Text>
@@ -413,6 +414,18 @@ export default function ProgressScreen() {
           </View>
 
           <View style={styles.metricCard}>
+            <View
+              style={styles.metricIcon}
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <CalendarDays
+                size={21}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+            </View>
             <Text style={styles.metricValue}>
               {statistics.completedWorkoutsLast7Days}
             </Text>
@@ -421,6 +434,18 @@ export default function ProgressScreen() {
           </View>
 
           <View style={styles.metricCard}>
+            <View
+              style={styles.metricIcon}
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <Activity
+                size={21}
+                strokeWidth={2.2}
+                color={theme.colors.primary}
+              />
+            </View>
             <Text style={styles.metricValue}>
               {statistics.completedWorkoutsLast30Days}
             </Text>
@@ -429,7 +454,19 @@ export default function ProgressScreen() {
           </View>
 
           <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>
+            <View
+              style={[styles.metricIcon, styles.metricIconTeal]}
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <TrendingUp
+                size={21}
+                strokeWidth={2.2}
+                color={theme.colors.techAccent}
+              />
+            </View>
+            <Text style={[styles.metricValue, styles.metricValueTeal]}>
               {statistics.trainingDaysLast30Days}
             </Text>
 
@@ -743,7 +780,7 @@ export default function ProgressScreen() {
             </View>
           )}
         </View>
-      </ScrollView>
+      </MotionScrollView>
 
       {selectedPhoto && accessToken ? (
         <ProgressPhotoViewer
@@ -766,7 +803,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor:
+        theme.mode === "light" ? "transparent" : theme.colors.background,
     },
 
     content: {
@@ -925,16 +963,34 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     metricCard: {
       width: "47.8%",
-      minHeight: 116,
+      minHeight: 146,
       justifyContent: "space-between",
       padding: theme.spacing.lg,
       borderWidth: 1,
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme),
+      ...lightMetricDetail(theme),
     },
 
+    metricIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: theme.colors.primarySoft,
+    },
+    metricIconTeal: {
+      backgroundColor: theme.mode === "light" ? "#E0F7F3" : "#173630",
+    },
+    metricValueTeal: {
+      color: theme.colors.techAccent,
+    },
     metricValue: {
+      marginTop: theme.spacing.sm,
+      fontVariant: ["tabular-nums"],
       color: theme.colors.primary,
       fontFamily: theme.typography.fontFamily.extrabold,
       fontSize: theme.typography.size.metric,
@@ -960,6 +1016,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme, "featured"),
     },
 
     setsIcon: {
@@ -1184,6 +1241,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme),
     },
 
     performanceEmptyTitle: {
@@ -1213,6 +1271,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       borderColor: theme.colors.border,
       borderRadius: theme.radii.xl,
       backgroundColor: theme.colors.surface,
+      ...lightSurfaceDepth(theme),
     },
 
     performanceCardHeader: {

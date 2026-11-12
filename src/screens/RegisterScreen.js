@@ -1,3 +1,4 @@
+import { lightColors as authColors } from "../theme/themes";
 import {
   CheckCircle2,
   Circle,
@@ -46,7 +47,7 @@ function PasswordRequirements({ password }) {
             {passed ? (
               <CheckCircle2 size={14} color="#267256" strokeWidth={2} />
             ) : (
-              <Circle size={14} color="#8C9BB1" strokeWidth={1.7} />
+              <Circle size={14} color={authColors.icon} strokeWidth={1.7} />
             )}
             <Text
               style={[
@@ -224,7 +225,7 @@ const styles = StyleSheet.create({
   requirementsTitle: {
     fontFamily: "Manrope_700Bold",
     fontSize: 11,
-    color: "#596C8A",
+    color: authColors.textSecondary,
     marginBottom: 7,
   },
   requirementRow: {
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
     fontFamily: "Manrope_500Medium",
     fontSize: 11,
     lineHeight: 16,
-    color: "#7787A0",
+    color: authColors.textSecondary,
     flexShrink: 1,
   },
   requirementPassed: { color: "#267256" },
@@ -253,13 +254,13 @@ const styles = StyleSheet.create({
   footerText: {
     fontFamily: "Manrope_500Medium",
     fontSize: 12,
-    color: "#657895",
+    color: authColors.textSecondary,
   },
   footerLink: { paddingVertical: 4 },
   footerLinkText: {
     fontFamily: "Manrope_700Bold",
     fontSize: 12,
-    color: "#3F51E8",
+    color: authColors.primary,
   },
   errorBox: {
     backgroundColor: "#FFF4F3",

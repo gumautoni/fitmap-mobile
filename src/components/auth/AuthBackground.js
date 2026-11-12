@@ -9,7 +9,7 @@ import { ImageBackground, StyleSheet } from "react-native";
 export default function AuthBackground({ children }) {
   return (
     <ImageBackground
-      source={require("../../../assets/images/auth-ribbon-background.png")}
+      source={require("../../../assets/images/brand/auth-ribbon-orange.png")}
       resizeMode="stretch"
       style={styles.background}
     >

@@ -1,31 +1,30 @@
+import MotionPressable from "../components/MotionPressable";
+import { useReducedMotion } from "../hooks/useReducedMotion";
+import MotionScrollView from "../components/MotionScrollView";
+import { lightSurfaceDepth } from "../theme/surfaces";
+import ScreenGradient from "../components/ScreenGradient";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight, Dumbbell, TrendingUp, Zap } from "lucide-react-native";
-import React, {
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import React, { useCallback, useContext, useMemo, useState } from "react";
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import FitMapBrand from "../components/FitMapBrand";
 import FitMapLocationGymPin3D from "../components/FitMapLocationGymPin3D";
 import WorkoutActivityCalendar from "../components/WorkoutActivityCalendar";
 import { AuthContext } from "../context/AuthContext";
 import { getWorkouts } from "../services/training";
 import { getActiveWorkoutSession } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
+import { brandColors } from "../theme/tokens";
 
 function getInitials(name) {
   const parts = name?.trim()?.split(/\s+/)?.filter(Boolean);
@@ -48,6 +47,7 @@ export default function HomeScreen({ navigation }) {
   const runAuthenticatedRequest = auth?.runAuthenticatedRequest;
 
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -155,67 +155,64 @@ export default function HomeScreen({ navigation }) {
     );
   }
 
-  useEffect(() => {
-    let active = true;
-    let floatAnimation;
-    let pulseAnimation;
+  useFocusEffect(
+    useCallback(() => {
+      floatValue.setValue(0);
+      pulseValue.setValue(0);
 
-    async function startAnimations() {
-      const reduceMotion = await AccessibilityInfo.isReduceMotionEnabled();
-
-      if (!active || reduceMotion) {
+      if (reduceMotion) {
         return;
       }
 
-      floatAnimation = Animated.loop(
+      const floatAnimation = Animated.loop(
         Animated.sequence([
           Animated.timing(floatValue, {
             toValue: 1,
             duration: 1900,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
+            isInteraction: false,
           }),
-
           Animated.timing(floatValue, {
             toValue: 0,
             duration: 1900,
             easing: Easing.inOut(Easing.ease),
             useNativeDriver: true,
+            isInteraction: false,
           }),
         ]),
       );
 
-      pulseAnimation = Animated.loop(
+      const pulseAnimation = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseValue, {
             toValue: 1,
             duration: 1750,
             easing: Easing.out(Easing.ease),
             useNativeDriver: true,
+            isInteraction: false,
           }),
-
           Animated.timing(pulseValue, {
             toValue: 0,
             duration: 450,
             easing: Easing.in(Easing.ease),
             useNativeDriver: true,
+            isInteraction: false,
           }),
         ]),
       );
 
       floatAnimation.start();
       pulseAnimation.start();
-    }
 
-    void startAnimations();
-
-    return () => {
-      active = false;
-
-      floatAnimation?.stop();
-      pulseAnimation?.stop();
-    };
-  }, [floatValue, pulseValue]);
+      return () => {
+        floatAnimation.stop();
+        pulseAnimation.stop();
+        floatValue.setValue(0);
+        pulseValue.setValue(0);
+      };
+    }, [floatValue, pulseValue, reduceMotion]),
+  );
 
   const floatingTransform = {
     transform: [
@@ -267,17 +264,14 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      <ScrollView
+      <ScreenGradient theme={theme} />
+      <MotionScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBar}>
-          <View style={styles.wordmark}>
-            <Text style={styles.wordmarkFit}>Fit</Text>
-
-            <Text style={styles.wordmarkMap}>Map</Text>
-          </View>
+          <FitMapBrand variant="wordmark" mode={theme.mode} width={112} />
 
           <Pressable
             accessibilityRole="button"
@@ -300,7 +294,8 @@ export default function HomeScreen({ navigation }) {
           </Text>
         </View>
 
-        <Pressable
+        <MotionPressable
+          reduceMotion={reduceMotion}
           accessibilityRole="button"
           accessibilityLabel="Explorar academias"
           onPress={() => navigation.navigate("Mapa")}
@@ -310,11 +305,7 @@ export default function HomeScreen({ navigation }) {
           ]}
         >
           <LinearGradient
-            colors={
-              theme.mode === "light"
-                ? ["#1C2654", "#4546A9"]
-                : ["#161B37", "#382970"]
-            }
+            colors={[theme.colors.heroStart, theme.colors.heroEnd]}
             start={{
               x: 0,
               y: 0,
@@ -361,7 +352,7 @@ export default function HomeScreen({ navigation }) {
                 <ArrowRight
                   size={18}
                   strokeWidth={2.4}
-                  color={theme.colors.primaryPressed}
+                  color={theme.colors.heroActionText}
                 />
               </View>
             </View>
@@ -371,15 +362,15 @@ export default function HomeScreen({ navigation }) {
 
               <Animated.View style={floatingTransform}>
                 <FitMapLocationGymPin3D
-                  size={194}
-                  primary={theme.colors.primary}
-                  primaryDark={theme.colors.primaryPressed}
+                  size={154}
+                  primary={brandColors.orange}
+                  primaryDark={brandColors.orangeInk}
                   accent={theme.colors.techAccent}
                 />
               </Animated.View>
             </View>
           </LinearGradient>
-        </Pressable>
+        </MotionPressable>
 
         <WorkoutActivityCalendar
           onOpenWorkout={(workoutSessionId) =>
@@ -414,7 +405,8 @@ export default function HomeScreen({ navigation }) {
           </Pressable>
         </View>
 
-        <Pressable
+        <MotionPressable
+          reduceMotion={reduceMotion}
           accessibilityRole="button"
           accessibilityLabel={trainingAction}
           onPress={openTrainingAction}
@@ -470,7 +462,7 @@ export default function HomeScreen({ navigation }) {
               />
             </View>
           </View>
-        </Pressable>
+        </MotionPressable>
 
         <View style={styles.sectionHeader}>
           <View>
@@ -498,7 +490,8 @@ export default function HomeScreen({ navigation }) {
           </Pressable>
         </View>
 
-        <Pressable
+        <MotionPressable
+          reduceMotion={reduceMotion}
           accessibilityRole="button"
           accessibilityLabel="Abrir meu progresso"
           onPress={() => navigation.navigate("Progresso")}
@@ -514,7 +507,7 @@ export default function HomeScreen({ navigation }) {
               <TrendingUp
                 size={25}
                 strokeWidth={2.2}
-                color={theme.colors.primary}
+                color={theme.colors.techAccent}
               />
             </View>
 
@@ -557,16 +550,15 @@ export default function HomeScreen({ navigation }) {
               />
             </View>
           </View>
-        </Pressable>
-      </ScrollView>
+        </MotionPressable>
+      </MotionScrollView>
     </SafeAreaView>
   );
 }
 
 function createStyles(theme) {
-  const isLight = theme.mode === "light";
-  const homeBackground = isLight ? "#F2EFE9" : theme.colors.background;
-  const homeSurface = isLight ? "#FCFAF7" : theme.colors.surface;
+  const homeBackground = theme.colors.background;
+  const homeSurface = theme.colors.surface;
 
   return StyleSheet.create({
     safeArea: {
@@ -576,7 +568,7 @@ function createStyles(theme) {
 
     container: {
       flex: 1,
-      backgroundColor: homeBackground,
+      backgroundColor: theme.mode === "light" ? "transparent" : homeBackground,
     },
 
     content: {
@@ -590,25 +582,6 @@ function createStyles(theme) {
       alignItems: "center",
       justifyContent: "space-between",
       marginBottom: theme.spacing["2xl"],
-    },
-
-    wordmark: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-
-    wordmarkFit: {
-      color: theme.colors.primary,
-      fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 25,
-      letterSpacing: -1,
-    },
-
-    wordmarkMap: {
-      color: theme.colors.textPrimary,
-      fontFamily: theme.typography.fontFamily.extrabold,
-      fontSize: 25,
-      letterSpacing: -1,
     },
 
     profileButton: {
@@ -669,15 +642,11 @@ function createStyles(theme) {
     heroPressable: {
       borderRadius: theme.radii.xl,
       marginBottom: theme.spacing["3xl"],
+      ...lightSurfaceDepth(theme, "hero"),
     },
 
     heroPressed: {
-      opacity: 0.97,
-      transform: [
-        {
-          scale: 0.992,
-        },
-      ],
+      opacity: 0.94,
     },
 
     hero: {
@@ -824,17 +793,17 @@ function createStyles(theme) {
     },
 
     heroActionText: {
-      color: theme.colors.primaryPressed,
+      color: theme.colors.heroActionText,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: theme.typography.size.small,
     },
 
     performanceVisual: {
       position: "absolute",
-      width: 200,
-      height: 215,
-      right: -18,
-      top: 46,
+      width: 158,
+      height: 190,
+      right: -10,
+      top: 68,
       alignItems: "center",
       justifyContent: "center",
       zIndex: 2,
@@ -907,6 +876,8 @@ function createStyles(theme) {
         height: 8,
       },
       elevation: 2,
+      ...lightSurfaceDepth(theme, "featured"),
+      ...(theme.mode === "light" ? { overflow: "visible" } : {}),
     },
 
     trainingAccent: {
@@ -1014,6 +985,8 @@ function createStyles(theme) {
         height: 8,
       },
       elevation: 2,
+      ...lightSurfaceDepth(theme, "featured"),
+      ...(theme.mode === "light" ? { overflow: "visible" } : {}),
     },
 
     progressAccent: {
@@ -1024,7 +997,7 @@ function createStyles(theme) {
       width: 3,
       borderTopRightRadius: 3,
       borderBottomRightRadius: 3,
-      backgroundColor: theme.colors.performanceAccent,
+      backgroundColor: theme.colors.techAccent,
     },
 
     progressMain: {
@@ -1038,7 +1011,8 @@ function createStyles(theme) {
       width: 54,
       height: 54,
       borderRadius: 18,
-      backgroundColor: theme.colors.primarySoft,
+      backgroundColor:
+        theme.mode === "light" ? brandColors.turquoiseSoft : "#16352F",
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1115,12 +1089,7 @@ function createStyles(theme) {
     },
 
     cardPressed: {
-      opacity: 0.83,
-      transform: [
-        {
-          scale: 0.995,
-        },
-      ],
+      opacity: 0.94,
     },
 
     discoveryMain: {

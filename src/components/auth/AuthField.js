@@ -1,8 +1,9 @@
+import { lightColors as authColors } from "../../theme/themes";
 import { Eye, EyeOff } from "lucide-react-native";
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-const PRIMARY = "#3F51E8";
+const PRIMARY = authColors.primary;
 
 export default function AuthField({
   label,
@@ -32,7 +33,7 @@ export default function AuthField({
         {Icon ? (
           <Icon
             size={18}
-            color={focused ? PRIMARY : "#7384A3"}
+            color={focused ? PRIMARY : authColors.icon}
             strokeWidth={2}
           />
         ) : null}
@@ -42,7 +43,7 @@ export default function AuthField({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor="#97A5BB"
+          placeholderTextColor="#6B625A"
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           secureTextEntry={secure && !revealed}
@@ -61,9 +62,9 @@ export default function AuthField({
             style={styles.eyeButton}
           >
             {revealed ? (
-              <EyeOff size={19} color="#6C7D9A" />
+              <EyeOff size={19} color={authColors.icon} />
             ) : (
-              <Eye size={19} color="#6C7D9A" />
+              <Eye size={19} color={authColors.icon} />
             )}
           </Pressable>
         ) : null}
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
   container: { marginBottom: 15 },
   label: {
     fontFamily: "Manrope_700Bold",
-    color: "#1B2C4A",
+    color: authColors.textPrimary,
     fontSize: 12,
     marginBottom: 7,
   },
@@ -94,9 +95,9 @@ const styles = StyleSheet.create({
     minHeight: 53,
     paddingHorizontal: 14,
     borderWidth: 1.3,
-    borderColor: "#D8E2F1",
+    borderColor: "#8B8178",
     borderRadius: 14,
-    backgroundColor: "#FBFCFF",
+    backgroundColor: authColors.surface,
     gap: 10,
   },
   fieldFocused: {
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
     minHeight: 50,
     fontSize: 14,
     fontFamily: "Manrope_500Medium",
-    color: "#172744",
+    color: authColors.textPrimary,
     padding: 0,
   },
   eyeButton: { padding: 4, marginRight: -4 },
@@ -123,7 +124,7 @@ const styles = StyleSheet.create({
   },
   helperText: {
     fontFamily: "Manrope_500Medium",
-    color: "#7383A0",
+    color: authColors.textSecondary,
     fontSize: 11,
     lineHeight: 16,
     marginTop: 5,

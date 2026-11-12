@@ -52,3 +52,23 @@ export const typography = {
     metric: 40,
   },
 } as const;
+
+export const brandColors = {
+  orange: "#FF5722",
+  orangeWarm: "#F97316",
+  orangeLight: "#FB923C",
+  orangeInk: "#C2410C",
+  orangeSoft: "#FFF0E4",
+
+  gold: "#FFB800",
+
+  turquoise: "#14B8A6",
+  turquoiseLight: "#2DD4BF",
+  turquoiseInk: "#0F766E",
+  turquoiseSoft: "#E0F7F3",
+
+  graphite: "#101820",
+  warmWhite: "#FAF7F2",
+  warmSurface: "#FFFCF8",
+  warmBorder: "#E9E5DF",
+} as const;

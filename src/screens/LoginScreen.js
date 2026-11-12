@@ -1,3 +1,4 @@
+import { lightColors as authColors } from "../theme/themes";
 import { LockKeyhole, Mail } from "lucide-react-native";
 import React, { useContext, useRef, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
@@ -143,13 +144,13 @@ const styles = StyleSheet.create({
   footerText: {
     fontFamily: "Manrope_500Medium",
     fontSize: 12,
-    color: "#657895",
+    color: authColors.textSecondary,
   },
   footerLink: { paddingVertical: 4 },
   footerLinkText: {
     fontFamily: "Manrope_700Bold",
     fontSize: 12,
-    color: "#3F51E8",
+    color: authColors.primary,
   },
   errorBox: {
     backgroundColor: "#FFF4F3",
