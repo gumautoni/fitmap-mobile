@@ -67,6 +67,11 @@ def authenticate_user(
     return user
 
 
+def initialize_authentication_password_hash() -> None:
+    """Prepare the dummy password hash before serving authentication requests."""
+    _get_dummy_password_hash()
+
+
 @lru_cache
 def _get_dummy_password_hash() -> str:
     return hash_password("FitMap-dummy-authentication-password")
