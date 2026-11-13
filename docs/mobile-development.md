@@ -253,6 +253,117 @@ Essa organização facilita:
 * testes;
 * alterações na comunicação com o backend.
 
+## Filtros de descoberta de academias
+
+A implementação da FUNC-05 atende ao requisito funcional
+`FR-GYM-010`, permitindo filtrar os resultados de busca
+de academias por atributos disponíveis no aplicativo.
+
+### Comportamento
+
+Os filtros estão disponíveis após uma busca que retorna
+academias e incluem:
+
+* busca parcial pelo nome da academia, ignorando acentos,
+  capitalização e espaços nas extremidades da consulta;
+* distância máxima de 1, 3 ou 5 quilômetros;
+* opção para visualizar todas as distâncias;
+* combinação dos filtros de nome e distância;
+* limpeza dos filtros sem executar uma nova busca.
+
+A filtragem é realizada localmente sobre os resultados
+recebidos do backend. A lista, os marcadores do mapa,
+o contador e a prévia da academia selecionada utilizam
+o mesmo conjunto de resultados visíveis.
+
+Quando uma academia selecionada deixa de atender aos
+filtros, sua seleção é removida. Quando permanece visível,
+a seleção é preservada.
+
+Os filtros são reiniciados ao iniciar uma nova busca
+efetiva por texto, sugestão de localidade ou localização
+atual. A seção de academias favoritas permanece independente
+dos filtros de busca.
+
+### Localização e distância
+
+A filtragem por distância utiliza a localização atual do
+dispositivo, obtida mediante permissão do usuário.
+
+Sem coordenadas válidas do dispositivo, os filtros de
+distância ficam desabilitados e a filtragem por nome
+continua disponível.
+
+Ao detectar uma permissão negada ou falha na obtenção
+da localização durante uma solicitação explícita, o aplicativo
+remove a referência de localização anterior e a restrição
+de distância, preservando os resultados disponíveis.
+
+Academias sem coordenadas válidas podem aparecer na lista
+quando não existe uma restrição de distância ativa,
+mas não são representadas como marcadores no mapa.
+
+As distâncias são geográficas, em linha reta, e não
+representam trajetos por vias públicas.
+
+### Organização técnica
+
+A lógica de filtragem está isolada em
+`src/utils/gymResultFilters.ts`.
+
+O módulo realiza:
+
+* normalização dos nomes;
+* validação de coordenadas geográficas;
+* cálculo seguro das distâncias;
+* aplicação combinada dos filtros;
+* preservação da identidade e da ordem original dos resultados;
+* filtragem sem mutação dos dados recebidos.
+
+A integração com a interface ocorre em
+`src/screens/MapScreen.tsx`.
+
+Não foram introduzidas dependências, chamadas adicionais
+à API, alterações no contrato HTTP ou mudanças no banco
+de dados para implementar a funcionalidade.
+
+### Validação
+
+A implementação foi desenvolvida com testes unitários e
+de integração, incluindo as fases Red e Green.
+
+Evidências da validação local da FUNC-05:
+
+* 35 novos testes unitários;
+* 15 novos testes de integração;
+* 491 testes mobile aprovados em 37 suítes;
+* 441 testes da baseline preservados;
+* TypeScript, ESLint e Prettier aprovados;
+* árvore de dependências npm validada;
+* nenhum aviso de sincronização React `act`
+  na execução final da regressão.
+
+A execução no iPhone via Expo Go confirmou o funcionamento
+dos filtros de nome e distância, incluindo a habilitação
+dos limites de distância após obter a localização atual.
+
+A validação manual não constitui evidência de testes
+completos em todas as plataformas, versões de sistema,
+configurações de acessibilidade ou builds nativos.
+
+### Limitações
+
+Os filtros operam somente sobre as academias retornadas
+pelo provedor de busca. Não garantem a cobertura de todas
+as academias existentes em uma região.
+
+Preço, avaliações, equipamentos e outras características
+não disponíveis no contrato atual de busca não são utilizados
+como critérios de filtragem.
+
+A ordenação selecionável dos resultados pertence ao escopo
+separado da FUNC-06, associado ao requisito `FR-GYM-011`.
+
 ## Autenticação
 
 O FitMap utiliza autenticação gerenciada pelo backend FastAPI e persistida em PostgreSQL.

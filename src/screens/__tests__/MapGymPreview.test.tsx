@@ -662,4 +662,556 @@ describe("MapScreen - previa de academia selecionada", () => {
 
     expect(mockedNearby).not.toHaveBeenCalled();
   });
+
+  it("filters: hides controls before a successful search", async () => {
+    await mountMap();
+
+    expect(screen.queryByLabelText("Filtrar por nome da academia")).toBeNull();
+
+    expect(screen.queryByLabelText("At\u00e9 1 km")).toBeNull();
+  });
+
+  it("filters: synchronizes name filtering across list map and count", async () => {
+    await loadResults();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "  ATLAS  ",
+    );
+
+    expect(screen.getByLabelText("Selecionar Academia Atlas")).toBeTruthy();
+
+    expect(screen.getByTestId("map-marker-Academia Atlas")).toBeTruthy();
+
+    expect(screen.queryByLabelText("Selecionar Academia Aurora")).toBeNull();
+
+    expect(screen.queryByTestId("map-marker-Academia Aurora")).toBeNull();
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^1$/);
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
+
+  it("filters: clears hidden selection without restoring it after reset", async () => {
+    await loadResults();
+
+    await fireEvent.press(screen.getByTestId("map-marker-Academia Aurora"));
+
+    expect(
+      screen.getByLabelText("Ver detalhes de Academia Aurora no mapa"),
+    ).toBeTruthy();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Atlas",
+    );
+
+    expect(screen.queryByText("ACADEMIA SELECIONADA")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Limpar filtros"));
+
+    expect(screen.getByTestId("map-marker-Academia Aurora")).toBeTruthy();
+
+    expect(screen.getByTestId("map-marker-Academia Atlas")).toBeTruthy();
+
+    expect(screen.queryByText("ACADEMIA SELECIONADA")).toBeNull();
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters: preserves selection when the selected gym remains visible", async () => {
+    await loadResults();
+
+    await fireEvent.press(screen.getByTestId("map-marker-Academia Atlas"));
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Atlas",
+    );
+
+    await fireEvent.press(
+      screen.getByLabelText("Ver detalhes de Academia Atlas no mapa"),
+    );
+
+    expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
+      gymId: "gym-atlas",
+      providerName: "geoapify",
+      distanceKm: null,
+    });
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters: distinguishes filtered empty results and restores them locally", async () => {
+    await loadResults();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Academia inexistente",
+    );
+
+    expect(
+      screen.getByText("Nenhuma academia corresponde aos filtros"),
+    ).toBeTruthy();
+
+    expect(screen.queryByText("Nenhuma academia encontrada")).toBeNull();
+
+    expect(screen.queryByTestId("map-marker-Academia Aurora")).toBeNull();
+
+    expect(screen.queryByLabelText("Selecionar Academia Atlas")).toBeNull();
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^0$/);
+
+    await fireEvent.press(screen.getByLabelText("Limpar filtros"));
+
+    expect(
+      screen.getByLabelText("Filtrar por nome da academia").props.value,
+    ).toBe("");
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    expect(screen.getByLabelText("Selecionar Academia Aurora")).toBeTruthy();
+
+    expect(screen.getByLabelText("Selecionar Academia Atlas")).toBeTruthy();
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
+
+  it("filters: keeps name filtering available without device location", async () => {
+    await loadResults();
+
+    expect(screen.getByLabelText("At\u00e9 1 km")).toBeDisabled();
+
+    expect(screen.getByLabelText("At\u00e9 3 km")).toBeDisabled();
+
+    expect(screen.getByLabelText("At\u00e9 5 km")).toBeDisabled();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Aurora",
+    );
+
+    expect(screen.getByLabelText("Selecionar Academia Aurora")).toBeTruthy();
+
+    expect(screen.queryByLabelText("Selecionar Academia Atlas")).toBeNull();
+
+    expect(mockedPermissions).not.toHaveBeenCalled();
+    expect(mockedCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it("filters: combines name and distance using current location", async () => {
+    mockedNearby.mockResolvedValueOnce([
+      ...gyms,
+      {
+        ...gyms[0],
+        id: "aurora-far",
+        name: "Academia Aurora Distante",
+        coordinates: {
+          latitude: -22.44034,
+          longitude: -43.82633,
+        },
+      },
+      {
+        ...gyms[0],
+        id: "aurora-unknown",
+        name: "Academia Aurora Sem Coordenadas",
+        coordinates: null,
+      },
+    ] satisfies GymSearchResult[]);
+
+    await mountMap();
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Aurora",
+    );
+
+    expect(
+      screen.getByLabelText("Selecionar Academia Aurora Sem Coordenadas"),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    expect(screen.getByLabelText("Selecionar Academia Aurora")).toBeTruthy();
+
+    expect(
+      screen.queryByLabelText("Selecionar Academia Aurora Distante"),
+    ).toBeNull();
+
+    expect(
+      screen.queryByLabelText("Selecionar Academia Aurora Sem Coordenadas"),
+    ).toBeNull();
+
+    expect(
+      screen.queryByTestId("map-marker-Academia Aurora Distante"),
+    ).toBeNull();
+
+    expect(screen.queryByTestId("map-marker-Academia Atlas")).toBeNull();
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^1$/);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("filters: changes distance limits without requesting new results", async () => {
+    mockedNearby.mockResolvedValueOnce([
+      gyms[0],
+      {
+        ...gyms[1],
+        coordinates: {
+          latitude: -22.45034,
+          longitude: -43.82633,
+        },
+      },
+      {
+        ...gyms[0],
+        id: "gym-energia",
+        name: "Academia Energia",
+        coordinates: {
+          latitude: -22.43034,
+          longitude: -43.82633,
+        },
+      },
+    ] satisfies GymSearchResult[]);
+
+    await mountMap();
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^1$/);
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 3 km"));
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 5 km"));
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^3$/);
+
+    expect(
+      screen.getByLabelText("At\u00e9 5 km").props.accessibilityState?.selected,
+    ).toBe(true);
+
+    expect(
+      screen.getByLabelText("At\u00e9 3 km").props.accessibilityState?.selected,
+    ).toBe(false);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters: resets active filters when starting a new search", async () => {
+    mockedNearby.mockResolvedValueOnce(gyms);
+
+    await mountMap();
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Aurora",
+    );
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    await searchForGyms("Vassouras");
+
+    await screen.findByTestId("map-marker-Academia Atlas");
+
+    expect(
+      screen.getByLabelText("Filtrar por nome da academia").props.value,
+    ).toBe("");
+
+    expect(
+      screen.getByLabelText("Todas as dist\u00e2ncias").props.accessibilityState
+        ?.selected,
+    ).toBe(true);
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+
+    expect(mockedSearch).toHaveBeenCalledWith("Vassouras");
+  });
+
+  it("filters: preserves invalid-coordinate gyms in list without rendering markers", async () => {
+    mockedSearch.mockResolvedValueOnce([
+      ...gyms,
+      {
+        ...gyms[0],
+        id: "invalid-gym",
+        name: "Academia Coordenada Invalida",
+        coordinates: {
+          latitude: 91,
+          longitude: 0,
+        },
+      },
+    ] satisfies GymSearchResult[]);
+
+    await loadResults();
+
+    expect(
+      screen.getByLabelText("Selecionar Academia Coordenada Invalida"),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByTestId("map-marker-Academia Coordenada Invalida"),
+    ).toBeNull();
+
+    await fireEvent.press(
+      screen.getByLabelText("Selecionar Academia Coordenada Invalida"),
+    );
+
+    expect(screen.queryByText("ACADEMIA SELECIONADA")).toBeNull();
+  });
+
+  it("filters: clears distance restriction when location permission is revoked", async () => {
+    mockedNearby.mockResolvedValueOnce([
+      gyms[0],
+      {
+        ...gyms[1],
+        coordinates: {
+          latitude: -22.45034,
+          longitude: -43.82633,
+        },
+      },
+    ] satisfies GymSearchResult[]);
+
+    await mountMap();
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Academia",
+    );
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^1$/);
+
+    mockedPermissions.mockResolvedValueOnce({
+      status: "denied",
+    });
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByText(/Permiss\u00e3o de localiza\u00e7\u00e3o negada/);
+
+    expect(screen.getByLabelText("At\u00e9 1 km")).toBeDisabled();
+
+    expect(
+      screen.getByLabelText("Todas as dist\u00e2ncias").props.accessibilityState
+        ?.selected,
+    ).toBe(true);
+
+    expect(
+      screen.getByLabelText("Filtrar por nome da academia").props.value,
+    ).toBe("Academia");
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    expect(
+      screen.queryByTestId("map-marker-Sua localiza\u00e7\u00e3o"),
+    ).toBeNull();
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+    expect(mockedCurrentPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters: rejects invalid device coordinates without losing previous results", async () => {
+    await loadResults();
+
+    mockedCurrentPosition.mockResolvedValueOnce({
+      coords: {
+        latitude: 91,
+        longitude: 0,
+      },
+    });
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByText(
+      /N\u00e3o foi poss\u00edvel obter sua localiza\u00e7\u00e3o atual/,
+    );
+
+    expect(mockedNearby).not.toHaveBeenCalled();
+
+    expect(screen.getByLabelText("At\u00e9 1 km")).toBeDisabled();
+
+    expect(
+      screen.queryByTestId("map-marker-Sua localiza\u00e7\u00e3o"),
+    ).toBeNull();
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Atlas",
+    );
+
+    expect(screen.getByLabelText("Selecionar Academia Atlas")).toBeTruthy();
+
+    expect(screen.queryByLabelText("Selecionar Academia Aurora")).toBeNull();
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("filters: resets active filters when selecting a location suggestion", async () => {
+    const suggestion: LocationSuggestion = {
+      label: "Centro, Vassouras, RJ, Brasil",
+      query: "Centro, Vassouras, RJ, Brasil",
+      coordinates: {
+        latitude: -22.405,
+        longitude: -43.662,
+      },
+    };
+
+    mockedNearby.mockResolvedValueOnce(gyms).mockResolvedValueOnce(gyms);
+
+    await mountMap();
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Aurora",
+    );
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    mockedSuggestions.mockResolvedValueOnce([suggestion]);
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+      "Centro, Vassouras",
+    );
+
+    await fireEvent.press(
+      await screen.findByLabelText(
+        `Selecionar localidade ${suggestion.label}`,
+        {},
+        { timeout: 3000 },
+      ),
+    );
+
+    await screen.findByTestId("map-marker-Academia Atlas");
+
+    expect(mockedNearby).toHaveBeenCalledTimes(2);
+
+    expect(mockedNearby).toHaveBeenNthCalledWith(
+      2,
+      suggestion.coordinates.latitude,
+      suggestion.coordinates.longitude,
+      10_000,
+    );
+
+    expect(
+      screen.getByLabelText("Filtrar por nome da academia").props.value,
+    ).toBe("");
+
+    expect(
+      screen.getByLabelText("Todas as dist\u00e2ncias").props.accessibilityState
+        ?.selected,
+    ).toBe(true);
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("filters: resets active filters when repeating a device location search", async () => {
+    mockedNearby.mockResolvedValueOnce(gyms).mockResolvedValueOnce(gyms);
+
+    await mountMap();
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Atlas",
+    );
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^1$/);
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    expect(mockedNearby).toHaveBeenCalledTimes(2);
+
+    expect(
+      screen.getByLabelText("Filtrar por nome da academia").props.value,
+    ).toBe("");
+
+    expect(
+      screen.getByLabelText("Todas as dist\u00e2ncias").props.accessibilityState
+        ?.selected,
+    ).toBe(true);
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("filters: hides filter controls when the provider returns no gyms", async () => {
+    mockedSearch.mockResolvedValueOnce([]);
+
+    await mountMap();
+
+    await searchForGyms();
+
+    expect(await screen.findByText("Nenhuma academia encontrada")).toBeTruthy();
+
+    expect(
+      screen.queryByText("Nenhuma academia corresponde aos filtros"),
+    ).toBeNull();
+
+    expect(screen.queryByLabelText("Filtrar por nome da academia")).toBeNull();
+
+    expect(screen.queryByLabelText("Limpar filtros")).toBeNull();
+
+    expect(screen.queryByTestId("gym-results-count")).toBeNull();
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
 });
