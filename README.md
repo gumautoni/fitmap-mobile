@@ -1076,6 +1076,7 @@ FITMAP_DB_USER
 FITMAP_DB_PASSWORD
 
 FITMAP_AUTH_JWT_SECRET
+FITMAP_AUTH_RATE_LIMIT_SECRET
 
 FITMAP_GEOAPIFY_API_KEY
 FITMAP_GEOAPIFY_TIMEOUT_SECONDS
@@ -1094,6 +1095,23 @@ The application enforces user-data ownership through authenticated backend ident
 Private progress-photo access is authenticated and does not rely on publicly accessible object URLs.
 
 Real credentials remain outside source control and container images.
+
+The backend validates its required HS256 JWT signing secret when loading
+application settings. It rejects insufficient key lengths, recognized
+placeholders, complete repeated patterns and reuse across the JWT and
+configured cryptographic service secrets.
+
+JWT signing secrets must contain at least 32 UTF-8 bytes and be generated
+using a cryptographically secure random generator.
+
+Use independent secrets per environment and cryptographic purpose.
+Recognized test-only JWT secrets are prohibited outside the test environment.
+
+Existing valid signing secrets must remain stable unless a planned
+rotation is performed.
+
+See [backend environment configuration](backend/README.md#jwt-signing-secret)
+for generation and operational security guidance.
 
 ## Documentation
 

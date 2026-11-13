@@ -75,6 +75,55 @@ FITMAP_DB_PASSWORD=<local-password>
 Authentication requires a backend-managed JWT secret and an
 independent HMAC rate-limit secret.
 
+### JWT signing secret
+
+`FITMAP_AUTH_JWT_SECRET` is required for all backend environments.
+
+FitMap uses HS256 and validates the signing secret when loading
+application settings. The policy requires:
+
+- at least 32 UTF-8 bytes;
+- no whitespace or control characters;
+- no recognized example placeholders or complete repeated patterns;
+- independence from configured rate-limit, password-recovery,
+  email-verification and outbox encryption secrets;
+- no recognized test-only signing secrets outside the test environment.
+
+Invalid configuration prevents normal application startup.
+
+Generate a new signing secret with a cryptographically secure random
+generator. For example, from the backend directory:
+
+```bash
+uv run python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Run this command privately and transfer its output directly to your
+protected environment configuration or secret manager.
+
+The command generates 48 random bytes encoded as a URL-safe string.
+Never share its output in messages, screenshots, logs or Git commits.
+
+Length and weak-pattern checks do not prove cryptographic entropy.
+Always generate new signing secrets using a secure random generator.
+
+Use separate secrets for development, staging and production.
+Keep the signing secret persistent and consistent across workers
+within the same environment.
+
+Do not regenerate an existing valid signing secret during normal startup.
+Changing it invalidates previously issued access tokens.
+Coordinate any rotation with the authentication and session lifecycle.
+
+Validation errors hide input values in their normal textual representation.
+Do not log raw validation-error payloads or environment configuration.
+
+The CI container smoke test generates independent ephemeral secrets
+for JWT signing and rate limiting and masks them in workflow logs.
+These values are not deployment credentials.
+
+### Authentication rate limiting
+
 Configure `FITMAP_AUTH_RATE_LIMIT_SECRET` with a cryptographically random
 value of at least 32 bytes. Do not reuse JWT, recovery, verification or
 outbox encryption secrets. Never use example placeholders.
