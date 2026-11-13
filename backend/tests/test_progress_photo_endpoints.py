@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import TypedDict, cast
 from uuid import uuid4
 
@@ -6,10 +6,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, delete
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from fitmap.api.progress import get_private_object_storage
 from fitmap.identity.models import User
-from fitmap.media.storage import ObjectNotFoundError, StoredMedia
+from fitmap.media.storage import ObjectNotFoundError, ObjectStorageError, StoredMedia
+from fitmap.progress.models import ProgressPhoto
 
 
 class TokenPayload(TypedDict):
@@ -316,3 +319,315 @@ def test_invalid_progress_photo_is_not_stored(
         }
     }
     assert private_storage.objects == {}
+
+
+def test_progress_photo_flush_failure_removes_stored_object(
+    client: TestClient,
+    created_emails: list[str],
+    private_storage: InMemoryPrivateObjectStorage,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authentication = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+    headers = authorization_headers(authentication)
+    original_flush = Session.flush
+
+    def fail_photo_flush(
+        self: Session,
+        objects: Sequence[object] | None = None,
+    ) -> None:
+        if any(isinstance(instance, ProgressPhoto) for instance in self.new):
+            raise RuntimeError("Simulated progress photo flush failure")
+
+        original_flush(self, objects=objects)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Session, "flush", fail_photo_flush)
+
+        with pytest.raises(
+            RuntimeError,
+            match="Simulated progress photo flush failure",
+        ):
+            client.post(
+                "/api/v1/progress/photos",
+                headers=headers,
+                data={
+                    "recorded_at": "2026-10-17T18:00:00Z",
+                },
+                files={
+                    "photo": (
+                        "progress.jpg",
+                        b"\xff\xd8\xffimage-data",
+                        "image/jpeg",
+                    )
+                },
+            )
+
+    list_response = client.get(
+        "/api/v1/progress/photos",
+        headers=headers,
+    )
+
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+    assert private_storage.objects == {}
+
+
+def test_progress_photo_post_commit_failure_preserves_stored_object(
+    client: TestClient,
+    created_emails: list[str],
+    private_storage: InMemoryPrivateObjectStorage,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authentication = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+    headers = authorization_headers(authentication)
+    original_refresh = Session.refresh
+
+    def fail_post_commit_photo_refresh(
+        self: Session,
+        instance: object,
+    ) -> None:
+        if isinstance(instance, ProgressPhoto) and not self.in_transaction():
+            raise RuntimeError("Simulated post-commit refresh failure")
+
+        original_refresh(self, instance)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            Session,
+            "refresh",
+            fail_post_commit_photo_refresh,
+        )
+
+        try:
+            response = client.post(
+                "/api/v1/progress/photos",
+                headers=headers,
+                data={
+                    "recorded_at": "2026-10-17T18:00:00Z",
+                },
+                files={
+                    "photo": (
+                        "progress.jpg",
+                        b"\xff\xd8\xffimage-data",
+                        "image/jpeg",
+                    )
+                },
+            )
+            assert response.status_code == 201
+        except RuntimeError as exc:
+            assert str(exc) == "Simulated post-commit refresh failure"
+
+    list_response = client.get(
+        "/api/v1/progress/photos",
+        headers=headers,
+    )
+
+    assert list_response.status_code == 200
+
+    photos = list_response.json()
+
+    assert len(photos) == 1
+
+    photo_id = photos[0]["id"]
+
+    content_response = client.get(
+        f"/api/v1/progress/photos/{photo_id}/content",
+        headers=headers,
+    )
+
+    assert content_response.status_code == 200
+    assert content_response.content == b"\xff\xd8\xffimage-data"
+    assert len(private_storage.objects) == 1
+
+
+@pytest.mark.parametrize(
+    "cleanup_fails",
+    [False, True],
+    ids=["cleanup-succeeds", "cleanup-fails"],
+)
+def test_progress_photo_storage_failure_compensation(
+    client: TestClient,
+    created_emails: list[str],
+    private_storage: InMemoryPrivateObjectStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    cleanup_fails: bool,
+) -> None:
+    authentication = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+    headers = authorization_headers(authentication)
+
+    original_put = private_storage.put_object
+
+    def store_then_fail(
+        *,
+        key: str,
+        data: bytes,
+        media_type: str,
+    ) -> None:
+        original_put(
+            key=key,
+            data=data,
+            media_type=media_type,
+        )
+        raise ObjectStorageError("Simulated storage failure")
+
+    def fail_cleanup(*, key: str) -> None:
+        raise ObjectStorageError("Simulated cleanup failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            private_storage,
+            "put_object",
+            store_then_fail,
+        )
+
+        if cleanup_fails:
+            patch.setattr(
+                private_storage,
+                "delete_object",
+                fail_cleanup,
+            )
+
+        response = client.post(
+            "/api/v1/progress/photos",
+            headers=headers,
+            data={
+                "recorded_at": "2026-10-17T18:00:00Z",
+            },
+            files={
+                "photo": (
+                    "progress.jpg",
+                    b"\xff\xd8\xffimage-data",
+                    "image/jpeg",
+                )
+            },
+        )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "media_storage_unavailable"
+
+    list_response = client.get(
+        "/api/v1/progress/photos",
+        headers=headers,
+    )
+
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+    if cleanup_fails:
+        assert len(private_storage.objects) == 1
+        assert "Unable to clean up uncommitted progress photo." in caplog.text
+    else:
+        assert private_storage.objects == {}
+
+
+@pytest.mark.parametrize(
+    "failure_mode",
+    [
+        "rejected",
+        "uncertain-before-commit",
+        "uncertain-after-commit",
+    ],
+)
+def test_progress_photo_commit_failure_consistency(
+    client: TestClient,
+    created_emails: list[str],
+    private_storage: InMemoryPrivateObjectStorage,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failure_mode: str,
+) -> None:
+    authentication = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+    headers = authorization_headers(authentication)
+    original_commit = Session.commit
+
+    def fail_photo_commit(self: Session) -> None:
+        has_photo = any(
+            isinstance(instance, ProgressPhoto) for instance in self.identity_map.values()
+        )
+
+        if not has_photo:
+            original_commit(self)
+            return
+
+        if failure_mode == "rejected":
+            raise IntegrityError(
+                "COMMIT",
+                None,
+                RuntimeError("Simulated integrity rejection"),
+            )
+
+        if failure_mode == "uncertain-after-commit":
+            original_commit(self)
+
+        raise RuntimeError("Simulated uncertain commit outcome")
+
+    expected_error = IntegrityError if failure_mode == "rejected" else RuntimeError
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            Session,
+            "commit",
+            fail_photo_commit,
+        )
+
+        with pytest.raises(expected_error):
+            client.post(
+                "/api/v1/progress/photos",
+                headers=headers,
+                data={
+                    "recorded_at": "2026-10-17T18:00:00Z",
+                },
+                files={
+                    "photo": (
+                        "progress.jpg",
+                        b"\xff\xd8\xffimage-data",
+                        "image/jpeg",
+                    )
+                },
+            )
+
+    list_response = client.get(
+        "/api/v1/progress/photos",
+        headers=headers,
+    )
+
+    assert list_response.status_code == 200
+
+    photos = list_response.json()
+
+    if failure_mode == "rejected":
+        assert photos == []
+        assert private_storage.objects == {}
+        return
+
+    assert len(private_storage.objects) == 1
+    assert "Progress photo commit outcome uncertain; retaining media." in caplog.text
+
+    if failure_mode == "uncertain-before-commit":
+        assert photos == []
+        return
+
+    assert len(photos) == 1
+
+    photo_id = photos[0]["id"]
+
+    content_response = client.get(
+        f"/api/v1/progress/photos/{photo_id}/content",
+        headers=headers,
+    )
+
+    assert content_response.status_code == 200
+    assert content_response.content == b"\xff\xd8\xffimage-data"

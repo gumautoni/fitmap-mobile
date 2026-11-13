@@ -19,7 +19,13 @@ from fitmap.persistence.database import build_database_url
 
 config = context.config
 
-if config.config_file_name is not None:
+# Programmatic migrations must preserve the caller's logging configuration.
+configure_logging = config.attributes.get(
+    "configure_logging",
+    config.cmd_opts is not None,
+)
+
+if config.config_file_name is not None and configure_logging:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata

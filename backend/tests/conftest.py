@@ -27,6 +27,8 @@ ALEMBIC_INI = BACKEND_DIR / "alembic.ini"
 
 def build_alembic_config() -> Config:
     config = Config(str(ALEMBIC_INI))
+    # Preserve pytest and application logging during migrations.
+    config.attributes["configure_logging"] = False
     config.set_main_option(
         "script_location",
         str(BACKEND_DIR / "alembic"),

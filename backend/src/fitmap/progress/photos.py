@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from uuid import UUID
 
@@ -5,12 +6,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from fitmap.media.storage import (
+    ObjectStorageError,
     PrivateObjectStorage,
     build_progress_photo_storage_key,
 )
 from fitmap.media.validation import validate_progress_photo
 from fitmap.progress.models import ProgressPhoto
 from fitmap.training.models import WorkoutSession
+
+logger = logging.getLogger(__name__)
 
 
 class ProgressPhotoError(Exception):
@@ -23,6 +27,17 @@ class ProgressPhotoNotFoundError(ProgressPhotoError):
 
 class ProgressPhotoWorkoutSessionNotFoundError(ProgressPhotoError):
     pass
+
+
+def discard_uncommitted_photo(
+    *,
+    storage: PrivateObjectStorage,
+    storage_key: str,
+) -> None:
+    try:
+        storage.delete_object(key=storage_key)
+    except ObjectStorageError:
+        logger.warning("Unable to clean up uncommitted progress photo.")
 
 
 def create_progress_photo(
@@ -55,12 +70,6 @@ def create_progress_photo(
         user_id=user_id,
     )
 
-    storage.put_object(
-        key=storage_key,
-        data=validated_image.data,
-        media_type=validated_image.media_type,
-    )
-
     progress_photo = ProgressPhoto(
         user_id=user_id,
         workout_session_id=workout_session_id,
@@ -71,6 +80,19 @@ def create_progress_photo(
 
     db_session.add(progress_photo)
     db_session.flush()
+
+    try:
+        storage.put_object(
+            key=storage_key,
+            data=validated_image.data,
+            media_type=validated_image.media_type,
+        )
+    except ObjectStorageError:
+        discard_uncommitted_photo(
+            storage=storage,
+            storage_key=storage_key,
+        )
+        raise
 
     return progress_photo
 
