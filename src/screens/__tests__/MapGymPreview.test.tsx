@@ -1214,4 +1214,572 @@ describe("MapScreen - previa de academia selecionada", () => {
     expect(mockedSearch).toHaveBeenCalledTimes(1);
     expect(mockedNearby).not.toHaveBeenCalled();
   });
+
+  function getResultOrder(): string[] {
+    return screen
+      .getAllByLabelText(/^Selecionar Academia /)
+      .map((result) => String(result.props.accessibilityLabel));
+  }
+
+  function getSortSelection(label: string): boolean {
+    return (
+      screen.getByLabelText(label).props.accessibilityState?.selected === true
+    );
+  }
+
+  async function loadNearbyResults(
+    results: GymSearchResult[] = gyms,
+  ): Promise<void> {
+    mockedNearby.mockResolvedValueOnce(results);
+
+    await mountMap();
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByLabelText("Selecionar Academia Aurora");
+  }
+
+  it("sorting: hides sorting controls before searching", async () => {
+    await mountMap();
+
+    expect(screen.queryByLabelText("Ordenar por padr\u00e3o")).toBeNull();
+
+    expect(screen.queryByLabelText("Ordenar por dist\u00e2ncia")).toBeNull();
+
+    expect(screen.queryByLabelText("Ordenar por nome")).toBeNull();
+  });
+
+  it("sorting: preserves provider order by default", async () => {
+    await loadResults();
+
+    expect(getSortSelection("Ordenar por padr\u00e3o")).toBe(true);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+
+    expect(getSortSelection("Ordenar por nome")).toBe(false);
+  });
+
+  it("sorting: orders by name without requesting device location", async () => {
+    await loadResults();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(getSortSelection("Ordenar por nome")).toBe(true);
+
+    expect(getSortSelection("Ordenar por padr\u00e3o")).toBe(false);
+
+    expect(screen.getByTestId("map-marker-Academia Aurora")).toBeTruthy();
+
+    expect(screen.getByTestId("map-marker-Academia Atlas")).toBeTruthy();
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+    expect(mockedNearby).not.toHaveBeenCalled();
+    expect(mockedPermissions).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por padr\u00e3o"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+  });
+
+  it("sorting: disables distance ordering without device location", async () => {
+    await loadResults();
+
+    expect(screen.getByLabelText("Ordenar por dist\u00e2ncia")).toBeDisabled();
+
+    expect(screen.getByLabelText("Ordenar por nome")).not.toBeDisabled();
+
+    expect(mockedPermissions).not.toHaveBeenCalled();
+
+    expect(mockedCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it("sorting: orders nearby gyms by ascending distance", async () => {
+    const unknown: GymSearchResult = {
+      ...gyms[0],
+      id: "gym-unknown-distance",
+      name: "Academia Sem Coordenadas",
+      coordinates: null,
+    };
+
+    await loadNearbyResults([unknown, gyms[1], gyms[0]]);
+
+    expect(
+      screen.getByLabelText("Ordenar por dist\u00e2ncia"),
+    ).not.toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por dist\u00e2ncia"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Sem Coordenadas",
+    ]);
+
+    expect(getSortSelection("Ordenar por dist\u00e2ncia")).toBe(true);
+
+    expect(
+      screen.queryByTestId("map-marker-Academia Sem Coordenadas"),
+    ).toBeNull();
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^3$/);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+    expect(mockedPermissions).toHaveBeenCalledTimes(1);
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("sorting: preserves selected gym and details navigation", async () => {
+    await loadResults();
+
+    await fireEvent.press(screen.getByTestId("map-marker-Academia Atlas"));
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(screen.getByText("ACADEMIA SELECIONADA")).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByLabelText("Ver detalhes de Academia Atlas no mapa"),
+    );
+
+    expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
+      gymId: "gym-atlas",
+      providerName: "geoapify",
+      distanceKm: null,
+    });
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("sorting: combines ordering with name and distance filters", async () => {
+    const far: GymSearchResult = {
+      ...gyms[0],
+      id: "gym-energia-far",
+      name: "Academia Energia",
+      coordinates: {
+        latitude: -22.44034,
+        longitude: -43.82633,
+      },
+    };
+
+    await loadNearbyResults([far, gyms[0], gyms[1]]);
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Academia",
+    );
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(screen.queryByTestId("map-marker-Academia Energia")).toBeNull();
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por dist\u00e2ncia"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+
+    expect(
+      screen.getByLabelText("At\u00e9 1 km").props.accessibilityState?.selected,
+    ).toBe(true);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("sorting: preserves ordering when filters are cleared", async () => {
+    await loadResults();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Inexistente",
+    );
+
+    expect(
+      screen.getByText("Nenhuma academia corresponde aos filtros"),
+    ).toBeTruthy();
+
+    expect(getSortSelection("Ordenar por nome")).toBe(true);
+
+    await fireEvent.press(screen.getByLabelText("Limpar filtros"));
+
+    expect(getSortSelection("Ordenar por nome")).toBe(true);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("sorting: restores provider ordering on a new search", async () => {
+    await loadResults();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    await searchForGyms("Vassouras");
+
+    await screen.findByLabelText("Selecionar Academia Aurora");
+
+    expect(getSortSelection("Ordenar por padr\u00e3o")).toBe(true);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+
+    expect(mockedSearch).toHaveBeenCalledTimes(2);
+
+    expect(mockedSearch).toHaveBeenLastCalledWith("Vassouras");
+  });
+
+  it("sorting: restores provider ordering when device permission is denied", async () => {
+    await loadNearbyResults([gyms[1], gyms[0]]);
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por dist\u00e2ncia"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+
+    mockedPermissions.mockResolvedValueOnce({
+      status: "denied",
+    });
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByText(/Permiss\u00e3o de localiza\u00e7\u00e3o negada/);
+
+    expect(getSortSelection("Ordenar por padr\u00e3o")).toBe(true);
+
+    expect(screen.getByLabelText("Ordenar por dist\u00e2ncia")).toBeDisabled();
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+  });
+
+  it("sorting: preserves name ordering when device location becomes unavailable", async () => {
+    await loadNearbyResults();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    mockedCurrentPosition.mockRejectedValueOnce(
+      new Error("Location unavailable"),
+    );
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByText(
+      /N\u00e3o foi poss\u00edvel obter sua localiza\u00e7\u00e3o atual/,
+    );
+
+    expect(getSortSelection("Ordenar por nome")).toBe(true);
+
+    expect(screen.getByLabelText("Ordenar por dist\u00e2ncia")).toBeDisabled();
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+  });
+
+  it("sorting: hides sorting controls for empty provider results", async () => {
+    mockedSearch.mockResolvedValueOnce([]);
+
+    await mountMap();
+    await searchForGyms();
+
+    expect(await screen.findByText("Nenhuma academia encontrada")).toBeTruthy();
+
+    expect(screen.queryByLabelText("Ordenar por padr\u00e3o")).toBeNull();
+
+    expect(screen.queryByLabelText("Ordenar por dist\u00e2ncia")).toBeNull();
+
+    expect(screen.queryByLabelText("Ordenar por nome")).toBeNull();
+  });
+
+  it("sorting: resets ordering when selecting a location suggestion", async () => {
+    const suggestion: LocationSuggestion = {
+      label: "Centro, Vassouras, RJ, Brasil",
+      query: "Centro, Vassouras, RJ, Brasil",
+      coordinates: {
+        latitude: -22.405,
+        longitude: -43.662,
+      },
+    };
+
+    mockedNearby.mockResolvedValueOnce(gyms);
+
+    await loadResults();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    expect(getSortSelection("Ordenar por nome")).toBe(true);
+
+    mockedSuggestions.mockResolvedValueOnce([suggestion]);
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+      "Centro, Vassouras",
+    );
+
+    await fireEvent.press(
+      await screen.findByLabelText(
+        `Selecionar localidade ${suggestion.label}`,
+        {},
+        { timeout: 3000 },
+      ),
+    );
+
+    await screen.findByLabelText("Selecionar Academia Aurora");
+
+    expect(getSortSelection("Ordenar por padr\u00e3o")).toBe(true);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+
+    expect(screen.getByLabelText("Ordenar por dist\u00e2ncia")).toBeDisabled();
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+
+    expect(mockedNearby).toHaveBeenCalledWith(
+      suggestion.coordinates.latitude,
+      suggestion.coordinates.longitude,
+      10_000,
+    );
+
+    expect(mockedPermissions).not.toHaveBeenCalled();
+    expect(mockedCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it("sorting: resets ordering when repeating a device location search", async () => {
+    const reversed = [gyms[1], gyms[0]];
+
+    await loadNearbyResults(reversed);
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por dist\u00e2ncia"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+
+    mockedNearby.mockResolvedValueOnce(reversed);
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByLabelText("Selecionar Academia Aurora");
+
+    expect(getSortSelection("Ordenar por padr\u00e3o")).toBe(true);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(
+      screen.getByLabelText("Ordenar por dist\u00e2ncia"),
+    ).not.toBeDisabled();
+
+    expect(mockedNearby).toHaveBeenCalledTimes(2);
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("sorting: falls back to provider order for invalid device coordinates", async () => {
+    await loadNearbyResults([gyms[1], gyms[0]]);
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por dist\u00e2ncia"));
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Academia",
+    );
+
+    await fireEvent.press(screen.getByLabelText("At\u00e9 1 km"));
+
+    mockedCurrentPosition.mockResolvedValueOnce({
+      coords: {
+        latitude: 91,
+        longitude: 0,
+      },
+    });
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByText(
+      /N\u00e3o foi poss\u00edvel obter sua localiza\u00e7\u00e3o atual/,
+    );
+
+    expect(getSortSelection("Ordenar por padr\u00e3o")).toBe(true);
+
+    expect(screen.getByLabelText("Ordenar por dist\u00e2ncia")).toBeDisabled();
+
+    expect(screen.getByLabelText("At\u00e9 1 km")).toBeDisabled();
+
+    expect(
+      screen.getByLabelText("Todas as dist\u00e2ncias").props.accessibilityState
+        ?.selected,
+    ).toBe(true);
+
+    expect(
+      screen.getByLabelText("Filtrar por nome da academia").props.value,
+    ).toBe("Academia");
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+  });
+
+  it("sorting: preserves results and ordering for an empty search query", async () => {
+    await loadResults();
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    await searchForGyms("   ");
+
+    expect(
+      await screen.findByText(
+        "Digite uma cidade, bairro ou regi\u00e3o para buscar.",
+      ),
+    ).toBeTruthy();
+
+    expect(getSortSelection("Ordenar por nome")).toBe(true);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(screen.getByTestId("gym-results-count")).toHaveTextContent(/^2$/);
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
+
+  it("sorting: preserves favorite ordering and navigation independently", async () => {
+    mockedFavorites.mockResolvedValueOnce([
+      {
+        id: "favorite-zulu",
+        gymId: "internal-zulu",
+        providerName: "tomtom",
+        externalId: "zulu-external",
+        name: "Academia Favorita Zulu",
+        coordinates: null,
+        address: null,
+        favoritedAt: "2026-11-06T12:00:00Z",
+      },
+      {
+        id: "favorite-alfa",
+        gymId: "internal-alfa",
+        providerName: "geoapify",
+        externalId: "alfa-external",
+        name: "Academia Favorita Alfa",
+        coordinates: null,
+        address: null,
+        favoritedAt: "2026-11-06T11:00:00Z",
+      },
+    ]);
+
+    await loadResults();
+
+    await screen.findByLabelText(
+      "Abrir academia favorita Academia Favorita Zulu",
+    );
+
+    const favoriteCalls = mockedFavorites.mock.calls.length;
+
+    function getFavoriteOrder(): string[] {
+      return screen
+        .getAllByLabelText(/^Abrir academia favorita /)
+        .map((item) => String(item.props.accessibilityLabel));
+    }
+
+    const expectedFavorites = [
+      "Abrir academia favorita Academia Favorita Zulu",
+      "Abrir academia favorita Academia Favorita Alfa",
+    ];
+
+    expect(getFavoriteOrder()).toEqual(expectedFavorites);
+
+    await fireEvent.press(screen.getByLabelText("Ordenar por nome"));
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    expect(getFavoriteOrder()).toEqual(expectedFavorites);
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Atlas",
+    );
+
+    expect(getFavoriteOrder()).toEqual(expectedFavorites);
+
+    await fireEvent.press(
+      screen.getByLabelText("Abrir academia favorita Academia Favorita Zulu"),
+    );
+
+    expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
+      gymId: "zulu-external",
+      providerName: "tomtom",
+      distanceKm: null,
+    });
+
+    expect(mockedFavorites).toHaveBeenCalledTimes(favoriteCalls);
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+  });
 });

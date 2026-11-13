@@ -54,6 +54,11 @@ import {
   type GymDistanceFilter,
   type GymResultFilters,
 } from "../utils/gymResultFilters";
+import {
+  DEFAULT_GYM_RESULT_SORT,
+  sortGymResults,
+  type GymResultSort,
+} from "../utils/gymResultSorting";
 
 const INITIAL_REGION: Region = {
   latitude: -22.4708,
@@ -91,6 +96,28 @@ const DISTANCE_FILTER_OPTIONS: readonly {
     value: 5,
     label: "Até 5 km",
     accessibilityLabel: "Até 5 km",
+  },
+];
+
+const RESULT_SORT_OPTIONS: readonly {
+  value: GymResultSort;
+  label: string;
+  accessibilityLabel: string;
+}[] = [
+  {
+    value: "provider",
+    label: "Padr\u00e3o",
+    accessibilityLabel: "Ordenar por padr\u00e3o",
+  },
+  {
+    value: "distance",
+    label: "Mais pr\u00f3ximas",
+    accessibilityLabel: "Ordenar por dist\u00e2ncia",
+  },
+  {
+    value: "name",
+    label: "Nome A\u2013Z",
+    accessibilityLabel: "Ordenar por nome",
   },
 ];
 
@@ -202,6 +229,9 @@ export default function MapScreen({ navigation }: Props) {
   const [gymFilters, setGymFilters] = useState<GymResultFilters>(
     DEFAULT_GYM_RESULT_FILTERS,
   );
+  const [gymSort, setGymSort] = useState<GymResultSort>(
+    DEFAULT_GYM_RESULT_SORT,
+  );
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchedPlace, setSearchedPlace] = useState("");
@@ -273,9 +303,14 @@ export default function MapScreen({ navigation }: Props) {
 
   const canFilterByDistance = hasValidGymCoordinates(userCoordinates);
 
-  const visibleGyms = useMemo(
+  const filteredGyms = useMemo(
     () => filterGymResults(gyms, gymFilters, userCoordinates),
     [gyms, gymFilters, userCoordinates],
+  );
+
+  const visibleGyms = useMemo(
+    () => sortGymResults(filteredGyms, gymSort, userCoordinates),
+    [filteredGyms, gymSort, userCoordinates],
   );
 
   const mappableGyms = useMemo(
@@ -366,6 +401,10 @@ export default function MapScreen({ navigation }: Props) {
   function clearDeviceLocation(): void {
     setUserCoordinates(null);
 
+    setGymSort((current) =>
+      current === "distance" ? DEFAULT_GYM_RESULT_SORT : current,
+    );
+
     setGymFilters((current) =>
       current.maxDistanceKm === null
         ? current
@@ -415,6 +454,7 @@ export default function MapScreen({ navigation }: Props) {
       setErrorMessage(null);
       setGyms([]);
       setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
+      setGymSort(DEFAULT_GYM_RESULT_SORT);
       setSelectedGymKey(null);
 
       const results = await searchGymsByLocation(normalizedQuery);
@@ -447,6 +487,7 @@ export default function MapScreen({ navigation }: Props) {
       setErrorMessage(null);
       setGyms([]);
       setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
+      setGymSort(DEFAULT_GYM_RESULT_SORT);
       setSelectedGymKey(null);
 
       const results = await searchNearbyGymsWithFallback(
@@ -517,6 +558,7 @@ export default function MapScreen({ navigation }: Props) {
       setLoadingAction("location");
       setGyms([]);
       setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
+      setGymSort(DEFAULT_GYM_RESULT_SORT);
       setSelectedGymKey(null);
       setQuery("");
       setSearchedPlace("Sua localização atual");
@@ -1174,6 +1216,55 @@ export default function MapScreen({ navigation }: Props) {
               ? "Distância em linha reta da sua localização."
               : "Use sua localização para filtrar por distância."}
           </Text>
+
+          <Text style={styles.filterDistanceLabel}>Ordenar resultados</Text>
+
+          <View style={styles.distanceFiltersRow}>
+            {RESULT_SORT_OPTIONS.map((option) => {
+              const isSelected = gymSort === option.value;
+              const isDisabled =
+                option.value === "distance" && !canFilterByDistance;
+
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.accessibilityLabel}
+                  accessibilityState={{
+                    selected: isSelected,
+                    disabled: isDisabled,
+                  }}
+                  disabled={isDisabled}
+                  onPress={() => {
+                    if (!isDisabled) {
+                      setGymSort(option.value);
+                    }
+                  }}
+                  style={({ pressed }) => [
+                    styles.distanceFilterChip,
+                    isSelected && styles.distanceFilterChipSelected,
+                    isDisabled && styles.filterDisabled,
+                    pressed && !isDisabled && styles.filterPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.distanceFilterText,
+                      isSelected && styles.distanceFilterTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {!canFilterByDistance ? (
+            <Text style={styles.filterHint}>
+              Use sua localiza\u00e7\u00e3o para ordenar por proximidade.
+            </Text>
+          ) : null}
         </View>
       ) : null}
 

@@ -361,8 +361,160 @@ Preço, avaliações, equipamentos e outras características
 não disponíveis no contrato atual de busca não são utilizados
 como critérios de filtragem.
 
-A ordenação selecionável dos resultados pertence ao escopo
-separado da FUNC-06, associado ao requisito `FR-GYM-011`.
+A ordenação selecionável dos resultados é tratada
+separadamente pela FUNC-06, associada ao requisito
+`FR-GYM-011`, conforme a seção seguinte.
+
+## Ordenação de resultados de academias
+
+A implementação da FUNC-06 atende ao requisito funcional
+`FR-GYM-011`, permitindo selecionar a ordenação dos
+resultados de busca de academias.
+
+### Comportamento
+
+A ordenação está disponível após uma busca que retorna
+academias e oferece três critérios:
+
+* **Padrão:** preserva a ordem original dos resultados
+  recebidos do provedor;
+* **Mais próximas:** organiza as academias por distância
+  crescente da localização atual do dispositivo;
+* **Nome A–Z:** organiza os resultados alfabeticamente,
+  ignorando acentos, capitalização e espaços nas
+  extremidades dos nomes.
+
+A ordenação atua sobre o conjunto de resultados que
+atende aos filtros ativos da FUNC-05.
+
+Os filtros e a ordenação possuem estados independentes.
+Limpar os filtros preserva o critério de ordenação
+selecionado. Alterar a ordenação não remove os filtros
+ativos nem a seleção de uma academia que permanece visível.
+
+O critério padrão é restaurado ao iniciar uma nova busca
+efetiva por texto, sugestão de localidade ou localização
+atual.
+
+Uma tentativa de busca com consulta vazia não modifica
+os resultados existentes nem a ordenação selecionada.
+
+A seção de academias favoritas permanece independente
+da ordenação dos resultados de descoberta.
+
+### Ordenação por distância
+
+A ordenação por proximidade depende de coordenadas
+válidas do dispositivo, obtidas mediante permissão
+do usuário.
+
+Sem uma referência válida de localização, o controle
+Mais próximas permanece desabilitado.
+
+As academias com distância desconhecida ou coordenadas
+inválidas são posicionadas após aquelas com distância
+calculável, preservando sua ordem relativa original.
+
+Distâncias iguais preservam a ordem original dos
+resultados. As distâncias são geográficas, em linha
+reta, e não representam trajetos por vias públicas.
+
+Quando uma solicitação explícita de localização falha
+ou tem sua permissão negada, a referência anterior
+é removida. Se a ordenação por distância estiver ativa,
+o critério padrão é restaurado.
+
+A ordenação alfabética permanece disponível e é
+preservada nessas situações.
+
+### Organização técnica
+
+A lógica de ordenação está isolada em
+`src/utils/gymResultSorting.ts`.
+
+O módulo exporta:
+
+* `GymResultSort`: critérios de ordenação suportados;
+* `DEFAULT_GYM_RESULT_SORT`: critério padrão;
+* `sortGymResults`: função responsável pela ordenação.
+
+O processamento utiliza os recursos de validação de
+coordenadas e cálculo de distância existentes no módulo
+`src/utils/gymResultFilters.ts`.
+
+As chaves de ordenação são calculadas uma vez por
+resultado durante cada processamento. Os índices
+originais são utilizados para preservar a estabilidade
+nos empates.
+
+A função retorna um novo array sem modificar os
+objetos originais nem alterar sua identidade.
+
+A integração em `src/screens/MapScreen.tsx` utiliza
+estados independentes para filtros e ordenação,
+com resultados derivados por meio de `useMemo`.
+
+A lista, os marcadores, o contador e a prévia da
+academia selecionada utilizam o conjunto visível
+de resultados.
+
+Os controles reutilizam os estilos e componentes
+visuais existentes, incluindo indicação de seleção,
+estado desabilitado e área mínima de interação.
+
+A ordenação é executada localmente, sem novas
+dependências, chamadas adicionais à API, alterações
+no contrato HTTP ou mudanças no banco de dados.
+
+### Validação
+
+A funcionalidade foi desenvolvida com testes
+unitários e de integração nas fases Red e Green.
+
+Evidências da validação local da FUNC-06:
+
+* 20 novos testes unitários;
+* 17 novos testes de integração;
+* 37 novos testes automatizados no total;
+* 491 testes da baseline preservados;
+* 528 testes mobile aprovados em 38 suítes;
+* TypeScript, ESLint e Prettier aprovados;
+* árvore de dependências npm validada;
+* nenhum aviso React `act` na regressão final.
+
+Um aviso de sincronização da `VirtualizedList`
+foi observado durante uma execução anterior dos
+testes de integração, mas não voltou a ocorrer
+na regressão completa. Sua causa não foi considerada
+definitivamente eliminada.
+
+A validação física realizada no iPhone via Expo Go
+confirmou os seguintes cenários:
+
+* busca por cidade com ordenação padrão;
+* ordenação alfabética;
+* retorno à ordem original;
+* obtenção da localização e habilitação da proximidade;
+* apresentação das distâncias em ordem crescente;
+* combinação de ordenação e filtros;
+* preservação da ordenação ao limpar filtros;
+* preservação da seleção no mapa ao reordenar;
+* restauração da ordem padrão em uma nova busca;
+* funcionamento dos controles nos temas claro e escuro.
+
+### Limitações
+
+A ordenação opera exclusivamente sobre os resultados
+recebidos na busca atual. Não representa uma classificação
+global de todas as academias existentes na região.
+
+A implementação não utiliza avaliações, preços ou
+outros atributos indisponíveis no contrato de busca.
+
+A validação física foi realizada no iPhone via Expo Go.
+Não constitui evidência de validação completa no Android,
+em builds nativos ou em todas as configurações de
+acessibilidade.
 
 ## Autenticação
 
