@@ -29,6 +29,7 @@ from fitmap.identity.sessions import (
     IssuedSessionTokens,
     RefreshRotationStatus,
     revoke_session,
+    revoke_session_by_refresh_token,
     rotate_refresh_token,
 )
 from fitmap.security.rate_limits import (
@@ -186,6 +187,27 @@ def logout(
     revoke_session(
         db_session=db_session,
         session_id=identity.session_id,
+    )
+    db_session.commit()
+
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+
+
+@router.post(
+    "/logout/refresh",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def logout_with_refresh_token(
+    payload: RefreshRequest,
+    db_session: DatabaseSessionDependency,
+) -> Response:
+    # Do not reveal whether a presented token identifies an existing session.
+    # Only possession of the token can authorize revocation of that session.
+    revoke_session_by_refresh_token(
+        db_session=db_session,
+        refresh_token=payload.refresh_token,
     )
     db_session.commit()
 
