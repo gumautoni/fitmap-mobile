@@ -31,6 +31,31 @@ npm ci
 
 O comando `npm ci` utiliza exatamente as versões registradas no `package-lock.json`, garantindo uma instalação mais previsível e reproduzível das dependências do projeto.
 
+### Segurança das dependências
+
+Alterações nas dependências devem preservar a compatibilidade
+com o SDK Expo instalado e a instalação reproduzível pelo lockfile.
+
+Para verificar a árvore e os advisories conhecidos:
+
+```bash
+npm ls --all
+npm audit
+npm audit --omit=dev
+npx expo install --check
+```
+
+O código de saída de `npm audit` deve ser interpretado em conjunto
+com o relatório de vulnerabilidades. Não utilizar `npm audit fix --force`
+ou `--legacy-peer-deps` para ocultar conflitos de resolução.
+
+Overrides devem possuir escopo explícito, justificativa técnica
+e validação funcional proporcional ao risco.
+
+O histórico das correções, os resultados das auditorias e os riscos
+residuais estão registrados em
+[Segurança das dependências mobile](mobile-dependency-security.md).
+
 ## Configuração de ambiente
 
 O projeto possui o arquivo:

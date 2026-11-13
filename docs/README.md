@@ -24,6 +24,12 @@ Contains the functional and non-functional requirements of FitMap.
 
 Documents the supported mobile development workflow, environment configuration, validation commands and React Native/Expo development conventions.
 
+### `mobile-dependency-security.md`
+
+Documents the mobile dependency security baseline, remediation
+decisions, scoped overrides, validation evidence and residual
+development dependency risks.
+
 ### `testing.md`
 
 Documents the automated testing strategy, local validation commands, test isolation requirements and the relationship between local testing and CI.
