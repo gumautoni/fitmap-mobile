@@ -1,10 +1,11 @@
+import logging
 from collections.abc import Iterator
-from contextlib import suppress
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from sqlalchemy.exc import IntegrityError
 
 from fitmap.api.dependencies import (
     CurrentIdentityDependency,
@@ -27,6 +28,7 @@ from fitmap.progress.photos import (
     ProgressPhotoNotFoundError,
     ProgressPhotoWorkoutSessionNotFoundError,
     create_progress_photo,
+    discard_uncommitted_photo,
     get_owned_progress_photo,
     list_progress_photos,
 )
@@ -39,6 +41,9 @@ from fitmap.progress.schemas import (
 )
 from fitmap.progress.statistics import get_basic_progress_statistics
 from fitmap.training.schemas import LoadUnit
+
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter(
     prefix="/progress",
@@ -166,22 +171,34 @@ async def upload_progress_photo(
             message="Private media storage is unavailable.",
         ) from exc
 
+    storage_key = progress_photo.storage_key
+
+    try:
+        response = ProgressPhotoResponse.model_validate(
+            progress_photo,
+        )
+    except Exception:
+        discard_uncommitted_photo(
+            storage=storage,
+            storage_key=storage_key,
+        )
+        raise
+
     try:
         db_session.commit()
-        db_session.refresh(progress_photo)
-    except Exception:
-        db_session.rollback()
-
-        with suppress(ObjectStorageError):
-            storage.delete_object(
-                key=progress_photo.storage_key,
+    except Exception as exc:
+        if isinstance(exc, IntegrityError) and not exc.connection_invalidated:
+            discard_uncommitted_photo(
+                storage=storage,
+                storage_key=storage_key,
             )
+        else:
+            # An uncertain commit must not trigger destructive cleanup.
+            logger.warning("Progress photo commit outcome uncertain; retaining media.")
 
         raise
 
-    return ProgressPhotoResponse.model_validate(
-        progress_photo,
-    )
+    return response
 
 
 @router.get(
