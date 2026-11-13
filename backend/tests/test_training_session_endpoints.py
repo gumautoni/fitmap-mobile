@@ -951,3 +951,371 @@ def test_completed_session_remains_readable_with_recorded_sets(
     assert historical_set["repetitions"] == 9
     assert historical_set["load"] == "62.50"
     assert historical_set["load_unit"] == "kg"
+
+
+@pytest.fixture
+def execution_note_session(
+    client: TestClient,
+    database_engine: Engine,
+    created_emails: list[str],
+    catalog_exercise_ids: list[UUID],
+) -> tuple[AuthPayload, WorkoutSessionPayload]:
+    authentication = register_user(
+        client=client,
+        created_emails=created_emails,
+    )
+
+    workout = create_configured_workout(
+        client=client,
+        database_engine=database_engine,
+        authentication=authentication,
+        catalog_exercise_ids=catalog_exercise_ids,
+    )
+
+    session = start_session(
+        client=client,
+        authentication=authentication,
+        workout_id=workout["id"],
+    )
+
+    return authentication, session
+
+
+def test_execution_notes_persist_normalize_update_and_clear(
+    client: TestClient,
+    execution_note_session: tuple[AuthPayload, WorkoutSessionPayload],
+) -> None:
+    authentication, session = execution_note_session
+    headers = authorization_headers(authentication)
+
+    session_url = f"/api/v1/training/sessions/{session['id']}"
+    exercise_url = f"{session_url}/exercises/{session['exercises'][0]['id']}"
+
+    session_response = client.patch(
+        session_url,
+        headers=headers,
+        json={"notes": "\u0085  Good session.\nSecond  line. \u3000"},
+    )
+
+    assert session_response.status_code == 200
+    assert session_response.json()["notes"] == "Good session.\nSecond  line."
+
+    exercise_response = client.patch(
+        exercise_url,
+        headers=headers,
+        json={"notes": "  Controlled movement.  "},
+    )
+
+    assert exercise_response.status_code == 200
+
+    exercise = exercise_response.json()["exercises"][0]
+
+    assert exercise["notes"] == "Controlled movement."
+    assert exercise["planned_notes"] == "Controlled eccentric."
+    assert exercise["is_completed"] is False
+
+    persisted = client.get(session_url, headers=headers)
+
+    assert persisted.status_code == 200
+    assert persisted.json()["notes"] == "Good session.\nSecond  line."
+    assert persisted.json()["exercises"][0]["notes"] == "Controlled movement."
+
+    updated = client.patch(
+        session_url,
+        headers=headers,
+        json={"notes": "Updated workout note."},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["notes"] == "Updated workout note."
+
+    completed = client.patch(
+        exercise_url,
+        headers=headers,
+        json={"completed": True},
+    )
+
+    assert completed.status_code == 200
+
+    exercise = completed.json()["exercises"][0]
+
+    assert exercise["is_completed"] is True
+    assert exercise["notes"] == "Controlled movement."
+
+    cleared_session = client.patch(
+        session_url,
+        headers=headers,
+        json={"notes": None},
+    )
+
+    assert cleared_session.status_code == 200
+    assert cleared_session.json()["notes"] is None
+
+    cleared_exercise = client.patch(
+        exercise_url,
+        headers=headers,
+        json={"notes": " \n\t\u0085 "},
+    )
+
+    assert cleared_exercise.status_code == 200
+
+    persisted = client.get(session_url, headers=headers)
+
+    assert persisted.status_code == 200
+
+    payload = persisted.json()
+    exercise = payload["exercises"][0]
+
+    assert payload["notes"] is None
+    assert exercise["notes"] is None
+    assert exercise["planned_notes"] == "Controlled eccentric."
+    assert exercise["is_completed"] is True
+
+
+def test_execution_notes_remain_in_completed_workout_history(
+    client: TestClient,
+    execution_note_session: tuple[AuthPayload, WorkoutSessionPayload],
+) -> None:
+    authentication, session = execution_note_session
+    headers = authorization_headers(authentication)
+
+    session_url = f"/api/v1/training/sessions/{session['id']}"
+    exercise_url = f"{session_url}/exercises/{session['exercises'][0]['id']}"
+
+    response = client.patch(
+        session_url,
+        headers=headers,
+        json={"notes": "Overall workout observation."},
+    )
+
+    assert response.status_code == 200
+
+    response = client.patch(
+        exercise_url,
+        headers=headers,
+        json={"notes": "Exercise execution observation."},
+    )
+
+    assert response.status_code == 200
+
+    set_response = client.post(
+        f"{exercise_url}/sets",
+        headers=headers,
+        json={"repetitions": 10},
+    )
+
+    assert set_response.status_code == 201
+    assert set_response.json()["notes"] == "Overall workout observation."
+    assert set_response.json()["exercises"][0]["notes"] == "Exercise execution observation."
+
+    finished = client.post(
+        f"{session_url}/finish",
+        headers=headers,
+    )
+
+    assert finished.status_code == 200
+    assert finished.json()["status"] == "completed"
+
+    history = client.get(
+        "/api/v1/training/history",
+        headers=headers,
+    )
+
+    assert history.status_code == 200
+
+    history_items = history.json()
+
+    assert len(history_items) == 1
+    assert history_items[0]["id"] == session["id"]
+    assert history_items[0]["notes"] == "Overall workout observation."
+
+    details = client.get(session_url, headers=headers)
+
+    assert details.status_code == 200
+
+    historical = details.json()
+    exercise = historical["exercises"][0]
+
+    assert historical["notes"] == "Overall workout observation."
+    assert exercise["notes"] == "Exercise execution observation."
+    assert exercise["planned_notes"] == "Controlled eccentric."
+    assert exercise["sets"][0]["repetitions"] == 10
+
+
+@pytest.mark.parametrize(
+    ("action", "expected_status"),
+    [
+        ("finish", "completed"),
+        ("cancel", "cancelled"),
+    ],
+)
+def test_execution_notes_cannot_change_after_session_ends(
+    client: TestClient,
+    execution_note_session: tuple[AuthPayload, WorkoutSessionPayload],
+    action: str,
+    expected_status: str,
+) -> None:
+    authentication, session = execution_note_session
+    headers = authorization_headers(authentication)
+
+    session_url = f"/api/v1/training/sessions/{session['id']}"
+    exercise_url = f"{session_url}/exercises/{session['exercises'][0]['id']}"
+
+    for url in (session_url, exercise_url):
+        response = client.patch(
+            url,
+            headers=headers,
+            json={"notes": "Preserved note."},
+        )
+
+        assert response.status_code == 200
+
+    ended = client.post(
+        f"{session_url}/{action}",
+        headers=headers,
+    )
+
+    assert ended.status_code == 200
+    assert ended.json()["status"] == expected_status
+
+    for url in (session_url, exercise_url):
+        response = client.patch(
+            url,
+            headers=headers,
+            json={"notes": "Unauthorized modification."},
+        )
+
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "workout_session_not_active"
+
+    persisted = client.get(session_url, headers=headers)
+
+    assert persisted.status_code == 200
+    assert persisted.json()["notes"] == "Preserved note."
+    assert persisted.json()["exercises"][0]["notes"] == "Preserved note."
+
+
+def test_execution_notes_are_isolated_between_users(
+    client: TestClient,
+    database_engine: Engine,
+    created_emails: list[str],
+    catalog_exercise_ids: list[UUID],
+    execution_note_session: tuple[AuthPayload, WorkoutSessionPayload],
+) -> None:
+    owner, session = execution_note_session
+
+    other_user = register_user(
+        client=client,
+        created_emails=created_emails,
+        name="Other Notes User",
+    )
+
+    owner_headers = authorization_headers(owner)
+    other_headers = authorization_headers(other_user)
+
+    session_url = f"/api/v1/training/sessions/{session['id']}"
+    exercise_url = f"{session_url}/exercises/{session['exercises'][0]['id']}"
+
+    for url in (session_url, exercise_url):
+        response = client.patch(
+            url,
+            headers=owner_headers,
+            json={"notes": "Private note."},
+        )
+
+        assert response.status_code == 200
+
+        unauthorized = client.patch(
+            url,
+            json={"notes": "Unauthorized note."},
+        )
+
+        assert unauthorized.status_code == 401
+
+        forbidden = client.patch(
+            url,
+            headers=other_headers,
+            json={"notes": "Another user's modification."},
+        )
+
+        assert forbidden.status_code == 404
+        assert forbidden.json()["error"]["code"] == "workout_session_not_found"
+
+    other_workout = create_configured_workout(
+        client=client,
+        database_engine=database_engine,
+        authentication=other_user,
+        catalog_exercise_ids=catalog_exercise_ids,
+    )
+
+    other_session = start_session(
+        client=client,
+        authentication=other_user,
+        workout_id=other_workout["id"],
+    )
+
+    foreign_exercise_id = other_session["exercises"][0]["id"]
+
+    wrong_execution = client.patch(
+        f"{session_url}/exercises/{foreign_exercise_id}",
+        headers=owner_headers,
+        json={"notes": "Cross-session modification."},
+    )
+
+    assert wrong_execution.status_code == 404
+    assert wrong_execution.json()["error"]["code"] == "exercise_execution_not_found"
+
+    persisted = client.get(session_url, headers=owner_headers)
+
+    assert persisted.status_code == 200
+    assert persisted.json()["notes"] == "Private note."
+    assert persisted.json()["exercises"][0]["notes"] == "Private note."
+
+    other_details = client.get(
+        f"/api/v1/training/sessions/{other_session['id']}",
+        headers=other_headers,
+    )
+
+    assert other_details.status_code == 200
+    assert other_details.json()["exercises"][0]["notes"] is None
+
+
+def test_execution_notes_reject_invalid_payloads_without_changes(
+    client: TestClient,
+    execution_note_session: tuple[AuthPayload, WorkoutSessionPayload],
+) -> None:
+    authentication, session = execution_note_session
+    headers = authorization_headers(authentication)
+
+    session_url = f"/api/v1/training/sessions/{session['id']}"
+    exercise_url = f"{session_url}/exercises/{session['exercises'][0]['id']}"
+
+    for url in (session_url, exercise_url):
+        response = client.patch(
+            url,
+            headers=headers,
+            json={"notes": "Original note."},
+        )
+
+        assert response.status_code == 200
+
+        for invalid_payload in (
+            {},
+            {"notes": 123},
+            {"notes": ["Invalid"]},
+            {"notes": "Unexpected update.", "unknown": True},
+        ):
+            invalid = client.patch(
+                url,
+                headers=headers,
+                json=invalid_payload,
+            )
+
+            assert invalid.status_code == 422
+
+    persisted = client.get(session_url, headers=headers)
+
+    assert persisted.status_code == 200
+    assert persisted.json()["notes"] == "Original note."
+    assert persisted.json()["exercises"][0]["notes"] == "Original note."
+    assert persisted.json()["exercises"][0]["is_completed"] is False

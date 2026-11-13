@@ -1,3 +1,4 @@
+import { usePreventRemove } from "@react-navigation/native";
 import {
   AlertCircle,
   Check,
@@ -32,6 +33,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import WorkoutNoteEditor from "../components/WorkoutNoteEditor";
 import { AuthContext } from "../context/AuthContext";
 import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
@@ -45,12 +47,23 @@ import {
   removeSetExecution,
   startWorkoutSession,
   updateExerciseExecution,
+  updateWorkoutSession,
   type CreateSetExecutionInput,
   type ExerciseExecution,
   type SetExecution,
   type WorkoutSession,
 } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
+import {
+  getWorkoutNoteDraft,
+  hasUnsavedWorkoutNotes,
+  isWorkoutNoteDirty,
+  normalizeWorkoutNote,
+  reconcileWorkoutNoteDrafts,
+  setWorkoutNoteDraft,
+  type WorkoutNoteDrafts,
+  type WorkoutNoteTarget,
+} from "../utils/workoutNoteDrafts";
 
 type WorkoutSessionScreenProps = AppStackScreenProps<"ExecutarTreino">;
 
@@ -61,6 +74,29 @@ interface SetDraft {
 }
 
 type DraftMap = Record<string, SetDraft>;
+
+const SESSION_NOTE_TARGET = { kind: "session" } as const;
+
+function showUnsavedNotesWarning(): void {
+  Alert.alert(
+    "Observa\u00e7\u00f5es n\u00e3o salvas",
+    "Salve ou descarte as altera\u00e7\u00f5es das observa\u00e7\u00f5es antes de sair ou encerrar o treino.",
+  );
+}
+
+function isSavingNote(
+  current: WorkoutNoteTarget | null,
+  target: WorkoutNoteTarget,
+): boolean {
+  if (!current || current.kind !== target.kind) {
+    return false;
+  }
+
+  return (
+    current.kind === "session" ||
+    (target.kind === "exercise" && current.exerciseId === target.exerciseId)
+  );
+}
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
@@ -194,11 +230,15 @@ export default function WorkoutSessionScreen({
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const initializedRef = useRef(false);
+  const mutationInFlightRef = useRef(false);
 
   const [workoutSession, setWorkoutSession] = useState<WorkoutSession | null>(
     null,
   );
   const [drafts, setDrafts] = useState<DraftMap>({});
+  const [noteDrafts, setNoteDrafts] = useState<WorkoutNoteDrafts | null>(null);
+  const [savingNoteTarget, setSavingNoteTarget] =
+    useState<WorkoutNoteTarget | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyExerciseId, setBusyExerciseId] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
@@ -206,7 +246,17 @@ export default function WorkoutSessionScreen({
   const [resumedDifferentWorkout, setResumedDifferentWorkout] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const busy = busyExerciseId !== null || finishing || cancelling;
+  const busy =
+    busyExerciseId !== null ||
+    finishing ||
+    cancelling ||
+    savingNoteTarget !== null;
+
+  const unsavedNotes =
+    workoutSession !== null &&
+    hasUnsavedWorkoutNotes(noteDrafts, workoutSession);
+
+  usePreventRemove(unsavedNotes, showUnsavedNotesWarning);
 
   const [animatedCompletion] = useState(() => new Animated.Value(0));
 
@@ -263,9 +313,15 @@ export default function WorkoutSessionScreen({
   });
 
   const applyWorkoutSession = useCallback(
-    (nextWorkoutSession: WorkoutSession): void => {
+    (
+      nextWorkoutSession: WorkoutSession,
+      savedTarget?: WorkoutNoteTarget,
+    ): void => {
       setWorkoutSession(nextWorkoutSession);
       setDrafts((current) => hydrateDrafts(current, nextWorkoutSession));
+      setNoteDrafts((current) =>
+        reconcileWorkoutNoteDrafts(current, nextWorkoutSession, savedTarget),
+      );
     },
     [],
   );
@@ -340,8 +396,139 @@ export default function WorkoutSessionScreen({
     }));
   }
 
+  function updateNoteDraft(target: WorkoutNoteTarget, value: string): void {
+    if (
+      !workoutSession ||
+      workoutSession.status !== "active" ||
+      busy ||
+      mutationInFlightRef.current
+    ) {
+      return;
+    }
+
+    setNoteDrafts((current) =>
+      setWorkoutNoteDraft(current, workoutSession, target, value),
+    );
+  }
+
+  function discardNoteDraft(target: WorkoutNoteTarget): void {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
+      return;
+    }
+
+    const persisted = getWorkoutNoteDraft(null, workoutSession, target);
+
+    updateNoteDraft(target, persisted);
+  }
+
+  async function handleSaveNote(target: WorkoutNoteTarget): Promise<void> {
+    if (
+      !workoutSession ||
+      workoutSession.status !== "active" ||
+      busy ||
+      mutationInFlightRef.current ||
+      !isWorkoutNoteDirty(noteDrafts, workoutSession, target)
+    ) {
+      return;
+    }
+
+    const notes = normalizeWorkoutNote(
+      getWorkoutNoteDraft(noteDrafts, workoutSession, target),
+    );
+
+    mutationInFlightRef.current = true;
+    setSavingNoteTarget(target);
+    setError(null);
+
+    try {
+      const updatedSession = await runAuthenticatedRequest((accessToken) =>
+        target.kind === "session"
+          ? updateWorkoutSession(accessToken, workoutSession.id, { notes })
+          : updateExerciseExecution(
+              accessToken,
+              workoutSession.id,
+              target.exerciseId,
+              { notes },
+            ),
+      );
+
+      if (updatedSession.id !== workoutSession.id) {
+        throw new Error("A resposta do servidor pertence a outra sess\u00e3o.");
+      }
+
+      let confirmedNote: string | null;
+
+      if (target.kind === "session") {
+        confirmedNote = updatedSession.notes;
+      } else {
+        const updatedExercise = updatedSession.exercises.find(
+          (exercise) => exercise.id === target.exerciseId,
+        );
+
+        if (!updatedExercise) {
+          throw new Error(
+            "O servidor n\u00e3o confirmou o exerc\u00edcio atualizado.",
+          );
+        }
+
+        confirmedNote = updatedExercise.notes;
+      }
+
+      if (confirmedNote !== notes) {
+        throw new Error(
+          "O servidor n\u00e3o confirmou o conte\u00fado da observa\u00e7\u00e3o.",
+        );
+      }
+
+      applyWorkoutSession(updatedSession, target);
+    } catch (saveError) {
+      const message = getErrorMessage(saveError);
+
+      setError(message);
+
+      Alert.alert(
+        "N\u00e3o foi poss\u00edvel salvar a observa\u00e7\u00e3o",
+        message,
+      );
+    } finally {
+      mutationInFlightRef.current = false;
+      setSavingNoteTarget(null);
+    }
+  }
+
+  function renderNoteEditor(
+    target: WorkoutNoteTarget,
+    title: string,
+    scopeLabel: string,
+  ) {
+    if (!workoutSession) {
+      return null;
+    }
+
+    const value = getWorkoutNoteDraft(noteDrafts, workoutSession, target);
+
+    const persisted = getWorkoutNoteDraft(null, workoutSession, target);
+
+    return (
+      <WorkoutNoteEditor
+        title={title}
+        scopeLabel={scopeLabel}
+        value={value}
+        dirty={isWorkoutNoteDirty(noteDrafts, workoutSession, target)}
+        canDiscard={value !== persisted}
+        disabled={busy || workoutSession.status !== "active"}
+        saving={isSavingNote(savingNoteTarget, target)}
+        onChange={(nextValue) => updateNoteDraft(target, nextValue)}
+        onSave={() => {
+          void handleSaveNote(target);
+        }}
+        onDiscard={() => discardNoteDraft(target)}
+      />
+    );
+  }
+
   async function handleAddSet(exercise: ExerciseExecution): Promise<void> {
-    if (!workoutSession || busy) {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
       return;
     }
 
@@ -390,6 +577,7 @@ export default function WorkoutSessionScreen({
       input.loadUnit = draft.loadUnit;
     }
 
+    mutationInFlightRef.current = true;
     setBusyExerciseId(exercise.id);
     setError(null);
 
@@ -406,6 +594,7 @@ export default function WorkoutSessionScreen({
 
       Alert.alert("Não foi possível registrar a série", message);
     } finally {
+      mutationInFlightRef.current = false;
       setBusyExerciseId(null);
     }
   }
@@ -413,10 +602,11 @@ export default function WorkoutSessionScreen({
   async function handleToggleExercise(
     exercise: ExerciseExecution,
   ): Promise<void> {
-    if (!workoutSession || busy) {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
       return;
     }
 
+    mutationInFlightRef.current = true;
     setBusyExerciseId(exercise.id);
     setError(null);
 
@@ -435,6 +625,7 @@ export default function WorkoutSessionScreen({
 
       Alert.alert("Não foi possível atualizar o exercício", message);
     } finally {
+      mutationInFlightRef.current = false;
       setBusyExerciseId(null);
     }
   }
@@ -443,7 +634,7 @@ export default function WorkoutSessionScreen({
     exercise: ExerciseExecution,
     setExecution: SetExecution,
   ): void {
-    if (busy) {
+    if (busy || mutationInFlightRef.current) {
       return;
     }
 
@@ -470,10 +661,11 @@ export default function WorkoutSessionScreen({
     exercise: ExerciseExecution,
     setExecution: SetExecution,
   ): Promise<void> {
-    if (!workoutSession) {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
       return;
     }
 
+    mutationInFlightRef.current = true;
     setBusyExerciseId(exercise.id);
     setError(null);
 
@@ -499,12 +691,18 @@ export default function WorkoutSessionScreen({
 
       Alert.alert("Não foi possível remover a série", message);
     } finally {
+      mutationInFlightRef.current = false;
       setBusyExerciseId(null);
     }
   }
 
   function confirmFinish(): void {
-    if (!workoutSession || busy) {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
+      return;
+    }
+
+    if (unsavedNotes) {
+      showUnsavedNotesWarning();
       return;
     }
 
@@ -536,9 +734,16 @@ export default function WorkoutSessionScreen({
   }
 
   async function handleFinish(): Promise<void> {
-    if (!workoutSession) {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
       return;
     }
+
+    if (unsavedNotes) {
+      showUnsavedNotesWarning();
+      return;
+    }
+
+    mutationInFlightRef.current = true;
 
     setFinishing(true);
     setError(null);
@@ -563,12 +768,18 @@ export default function WorkoutSessionScreen({
 
       Alert.alert("Não foi possível finalizar", message);
     } finally {
+      mutationInFlightRef.current = false;
       setFinishing(false);
     }
   }
 
   function confirmCancel(): void {
-    if (!workoutSession || busy) {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
+      return;
+    }
+
+    if (unsavedNotes) {
+      showUnsavedNotesWarning();
       return;
     }
 
@@ -592,9 +803,16 @@ export default function WorkoutSessionScreen({
   }
 
   async function handleCancel(): Promise<void> {
-    if (!workoutSession) {
+    if (!workoutSession || busy || mutationInFlightRef.current) {
       return;
     }
+
+    if (unsavedNotes) {
+      showUnsavedNotesWarning();
+      return;
+    }
+
+    mutationInFlightRef.current = true;
 
     setCancelling(true);
     setError(null);
@@ -612,6 +830,7 @@ export default function WorkoutSessionScreen({
 
       Alert.alert("Não foi possível cancelar", message);
     } finally {
+      mutationInFlightRef.current = false;
       setCancelling(false);
     }
   }
@@ -768,6 +987,14 @@ export default function WorkoutSessionScreen({
             </View>
           </View>
 
+          <View style={styles.sessionNoteSection}>
+            {renderNoteEditor(
+              SESSION_NOTE_TARGET,
+              "Observa\u00e7\u00e3o do treino",
+              "do treino",
+            )}
+          </View>
+
           <View style={styles.exerciseList}>
             {workoutSession.exercises.map((exercise) => {
               const draft = drafts[exercise.id] ?? buildDefaultDraft(exercise);
@@ -870,6 +1097,17 @@ export default function WorkoutSessionScreen({
                       </Text>
                     </View>
                   ) : null}
+
+                  <View style={styles.exerciseNoteSection}>
+                    {renderNoteEditor(
+                      {
+                        kind: "exercise",
+                        exerciseId: exercise.id,
+                      },
+                      "Observa\u00e7\u00e3o do exerc\u00edcio",
+                      `do exerc\u00edcio ${exercise.exerciseName}`,
+                    )}
+                  </View>
 
                   <View style={styles.recordedSection}>
                     <Text style={styles.sectionTitle}>Séries realizadas</Text>
@@ -1408,6 +1646,14 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.small,
       lineHeight: theme.typography.lineHeight.small,
+    },
+
+    sessionNoteSection: {
+      marginTop: theme.spacing.lg,
+    },
+
+    exerciseNoteSection: {
+      marginTop: theme.spacing.lg,
     },
 
     recordedSection: {
