@@ -1,4 +1,5 @@
 from secrets import token_urlsafe
+from string import ascii_letters
 from typing import Literal
 
 import pytest
@@ -204,7 +205,7 @@ def test_validation_error_does_not_display_secret_values(
 @pytest.mark.parametrize("length", [31, 32])
 def test_hs256_minimum_byte_boundary(length: int) -> None:
     # Synthetic material used only to verify the length boundary.
-    secret = "K9x2Q7m4V8p1R6t3B5n0D4s8H2j7W9c6"[:length]
+    secret = ascii_letters[:length]
 
     assert len(secret.encode("utf-8")) == length
 

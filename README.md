@@ -972,7 +972,7 @@ checkpoint; see [Testing strategy](docs/testing.md).
 
 Pull Requests targeting `main` are validated through GitHub Actions.
 
-The CI pipeline includes three principal validation areas.
+The CI pipeline includes four principal validation areas.
 
 ### Mobile
 
@@ -998,6 +998,44 @@ The CI pipeline includes three principal validation areas.
 - checking that `.env` is excluded from the image;
 - production-oriented container startup;
 - `/health` endpoint verification.
+
+### Secret scanning
+
+- pinned Gitleaks scanner executed in an isolated Docker container;
+- default detection rules extended with FitMap-specific credential names;
+- scanning of the proposed revision and newly introduced commits;
+- detection of credentials introduced and subsequently removed within a Pull Request;
+- restricted exceptions for reviewed synthetic configuration values;
+- redacted findings and count-only CI output;
+- failure when suspicious findings or incomplete scans are detected.
+
+The scanner is implemented in `scripts/security/scan_secrets.py`,
+with its detection configuration in `.gitleaks.toml`.
+
+The SEC-05 audit completed on November 13, 2026, examined 232 reachable
+commits and 366 initially tracked files. The complementary audit produced
+54 findings, including 52 FitMap-specific findings and two historical
+generic findings. All were classified as reviewed synthetic test material,
+development defaults or configuration placeholders.
+
+No real credential exposure was identified within the audited scope.
+The current candidate snapshot produced zero findings after the test
+fixture adjustment and narrowly scoped exceptions.
+
+The audit did not rewrite Git history or rotate real credentials.
+
+Secret scanning is a preventive control, not proof that the repository
+contains no secrets. Encoded, fragmented, unsupported or otherwise
+undetectable credentials may remain outside its coverage.
+
+The Pull Request job does not scan unreachable Git objects, external
+clones, ignored local environment files, historical CI logs or external
+deployment infrastructure.
+
+The workflow uses the proposed revision's scanner configuration.
+Changes to the scanner, workflow or allowlists require security review.
+Repository protection settings must enforce the appropriate checks;
+a workflow alone does not prevent direct pushes or unauthorized merges.
 
 Pull Requests should not be merged while required checks are failing.
 

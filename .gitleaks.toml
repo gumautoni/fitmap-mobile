@@ -1,0 +1,61 @@
+title = "FitMap secret detection"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "fitmap-environment-secret"
+description = "Hardcoded FitMap environment credential"
+regex = '''(?i)\b(?:FITMAP_DB_PASSWORD|FITMAP_AUTH_JWT_SECRET|FITMAP_AUTH_RATE_LIMIT_SECRET|FITMAP_AUTH_RECOVERY_CODE_SECRET|FITMAP_AUTH_EMAIL_VERIFICATION_SECRET|FITMAP_EMAIL_OUTBOX_ENCRYPTION_KEY|FITMAP_RESEND_API_KEY|FITMAP_GEOAPIFY_API_KEY|FITMAP_TOMTOM_API_KEY|FITMAP_MEDIA_ACCESS_KEY_ID|FITMAP_MEDIA_SECRET_ACCESS_KEY)["']?[ \t]*[:=][ \t]*["']?([A-Za-z0-9_./+@%!?=:-]{4,})'''
+secretGroup = 1
+keywords = ["fitmap_"]
+
+[[rules.allowlists]]
+description = "Reviewed synthetic configuration values"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/audit/snapshot/)?backend/\.env\.example$''']
+regexes = [
+  '''^FITMAP_DB_PASSWORD["']?[ \t]*[:=][ \t]*["']?change\-me\-local$''',
+  '''^FITMAP_AUTH_JWT_SECRET["']?[ \t]*[:=][ \t]*["']?replace\-with\-a\-strong\-random\-secret$''',
+  '''^FITMAP_AUTH_RECOVERY_CODE_SECRET["']?[ \t]*[:=][ \t]*["']?replace\-with\-an\-independent\-strong\-random\-secret$''',
+  '''^FITMAP_AUTH_EMAIL_VERIFICATION_SECRET["']?[ \t]*[:=][ \t]*["']?replace\-with\-another\-independent\-strong\-random\-secret$''',
+  '''^FITMAP_RESEND_API_KEY["']?[ \t]*[:=][ \t]*["']?replace\-with\-a\-server\-only\-secret$''',
+  '''^FITMAP_RESEND_API_KEY["']?[ \t]*[:=][ \t]*["']?configure\-only\-in\-server\-env\-not\-in\-git$''',
+  '''^FITMAP_EMAIL_OUTBOX_ENCRYPTION_KEY["']?[ \t]*[:=][ \t]*["']?replace\-with\-independent\-fernet\-key$''',
+  '''^FITMAP_AUTH_RATE_LIMIT_SECRET["']?[ \t]*[:=][ \t]*["']?replace\-with\-independent\-strong\-random\-secret$''',
+  '''^FITMAP_GEOAPIFY_API_KEY["']?[ \t]*[:=][ \t]*["']?replace\-with\-geoapify\-api\-key$''',
+  '''^FITMAP_TOMTOM_API_KEY["']?[ \t]*[:=][ \t]*["']?replace\-with\-tomtom\-api\-key$''',
+  '''^FITMAP_MEDIA_ACCESS_KEY_ID["']?[ \t]*[:=][ \t]*["']?test$''',
+  '''^FITMAP_MEDIA_SECRET_ACCESS_KEY["']?[ \t]*[:=][ \t]*["']?test$''',
+]
+
+[[rules.allowlists]]
+description = "Reviewed synthetic configuration values"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/audit/snapshot/)?backend/compose\.yaml$''']
+regexes = [
+  '''^FITMAP_MEDIA_ACCESS_KEY_ID["']?[ \t]*[:=][ \t]*["']?\-test$''',
+  '''^FITMAP_MEDIA_SECRET_ACCESS_KEY["']?[ \t]*[:=][ \t]*["']?\-test$''',
+]
+
+[[rules.allowlists]]
+description = "Reviewed synthetic configuration values"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/audit/snapshot/)?README\.md$''']
+regexes = [
+  '''^FITMAP_DB_PASSWORD["']?[ \t]*[:=][ \t]*["']?change\-me\-local$''',
+  '''^FITMAP_GEOAPIFY_API_KEY["']?[ \t]*[:=][ \t]*["']?replace\-with\-geoapify\-api\-key$''',
+]
+
+[[rules.allowlists]]
+description = "Reviewed synthetic configuration values"
+condition = "AND"
+regexTarget = "match"
+paths = ['''^(?:/audit/snapshot/)?\.github/workflows/ci\.yml$''']
+regexes = [
+  '''^FITMAP_DB_PASSWORD["']?[ \t]*[:=][ \t]*["']?ci\-placeholder$''',
+  '''^FITMAP_AUTH_JWT_SECRET["']?[ \t]*[:=][ \t]*["']?ci\-test\-only\-jwt\-secret\-not\-for\-production\-use$''',
+]
