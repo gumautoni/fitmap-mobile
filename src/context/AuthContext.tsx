@@ -11,6 +11,7 @@ import {
   getCurrentUser,
   loginAccount,
   logoutSession,
+  logoutSessionByRefreshToken,
   refreshSession,
   registerAccount,
   type AuthTokens,
@@ -78,6 +79,33 @@ function normalizeAuthError(error: unknown): Error {
   return new Error("Não foi possível concluir a solicitação.");
 }
 
+async function revokeRemoteSession(
+  refreshToken: string | null,
+  accessToken: string | null,
+): Promise<boolean> {
+  if (refreshToken) {
+    try {
+      await logoutSessionByRefreshToken(refreshToken);
+
+      return true;
+    } catch {
+      // Preserve compatibility with bearer logout when available.
+    }
+  }
+
+  if (accessToken) {
+    try {
+      await logoutSession(accessToken);
+
+      return true;
+    } catch {
+      // Remote revocation cannot be guaranteed when the API is unavailable.
+    }
+  }
+
+  return false;
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -85,6 +113,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const accessTokenRef = useRef<string | null>(null);
   const refreshPromiseRef = useRef<Promise<string> | null>(null);
+  const generationRef = useRef(0);
+  const storageQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  const isCurrentGeneration = useCallback((generation: number): boolean => {
+    return generationRef.current === generation;
+  }, []);
+
+  const assertCurrentGeneration = useCallback(
+    (generation: number): void => {
+      if (!isCurrentGeneration(generation)) {
+        throw new Error("Sua sess?o expirou. Entre novamente.");
+      }
+    },
+    [isCurrentGeneration],
+  );
+
+  const invalidateGeneration = useCallback((): number => {
+    generationRef.current += 1;
+    refreshPromiseRef.current = null;
+
+    return generationRef.current;
+  }, []);
+
+  const enqueueStorage = useCallback(function enqueueStorage<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const pending = storageQueueRef.current.then(operation);
+
+    storageQueueRef.current = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return pending;
+  }, []);
 
   const updateAccessToken = useCallback((token: string | null): void => {
     accessTokenRef.current = token;
@@ -93,7 +156,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const updateAuthenticatedUser = useCallback(
     (authenticatedUser: AuthUser): void => {
-      setUser(authenticatedUser);
+      setUser((previousUser) =>
+        previousUser?.id === authenticatedUser.id
+          ? authenticatedUser
+          : previousUser,
+      );
     },
     [],
   );
@@ -103,14 +170,67 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
   }, [updateAccessToken]);
 
+  const clearCurrentSession = useCallback(
+    async (generation: number): Promise<void> => {
+      if (!isCurrentGeneration(generation)) {
+        return;
+      }
+
+      invalidateGeneration();
+      clearAuthenticationState();
+      setLoading(false);
+
+      await enqueueStorage(deleteRefreshToken).catch(() => undefined);
+    },
+    [
+      clearAuthenticationState,
+      enqueueStorage,
+      invalidateGeneration,
+      isCurrentGeneration,
+    ],
+  );
+
+  const readSessionToken = useCallback(
+    async (generation: number): Promise<string | null> => {
+      const token = await enqueueStorage(async () => {
+        assertCurrentGeneration(generation);
+        return getRefreshToken();
+      });
+
+      assertCurrentGeneration(generation);
+
+      return token;
+    },
+    [assertCurrentGeneration, enqueueStorage],
+  );
+
+  const saveSessionTokens = useCallback(
+    async (generation: number, tokens: AuthTokens): Promise<void> => {
+      await enqueueStorage(async () => {
+        assertCurrentGeneration(generation);
+
+        await saveRefreshToken(tokens.refreshToken);
+      });
+
+      assertCurrentGeneration(generation);
+    },
+    [assertCurrentGeneration, enqueueStorage],
+  );
+
   useEffect(() => {
-    let active = true;
+    const generation = generationRef.current;
 
     async function restoreSession(): Promise<void> {
+      let issuedTokens: AuthTokens | null = null;
+
       try {
         await clearLegacyAuthStorage();
 
-        const storedRefreshToken = await getRefreshToken();
+        assertCurrentGeneration(generation);
+
+        const storedRefreshToken = await readSessionToken(generation);
+
+        assertCurrentGeneration(generation);
 
         if (!storedRefreshToken) {
           return;
@@ -118,24 +238,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const tokens = await refreshSession(storedRefreshToken);
 
-        await saveRefreshToken(tokens.refreshToken);
+        issuedTokens = tokens;
+
+        assertCurrentGeneration(generation);
+
+        await saveSessionTokens(generation, tokens);
+
+        assertCurrentGeneration(generation);
 
         const currentUser = await getCurrentUser(tokens.accessToken);
 
-        if (!active) {
-          return;
-        }
+        assertCurrentGeneration(generation);
 
         updateAccessToken(tokens.accessToken);
-        updateAuthenticatedUser(currentUser);
+        setUser(currentUser);
       } catch {
-        await deleteRefreshToken().catch(() => undefined);
+        await clearCurrentSession(generation);
 
-        if (active) {
-          clearAuthenticationState();
+        // A failed or obsolete restoration must not leave newly
+        // issued credentials active when remote revocation is available.
+        if (issuedTokens) {
+          await revokeRemoteSession(
+            issuedTokens.refreshToken,
+            issuedTokens.accessToken,
+          );
         }
       } finally {
-        if (active) {
+        if (isCurrentGeneration(generation)) {
           setLoading(false);
         }
       }
@@ -144,28 +273,76 @@ export function AuthProvider({ children }: AuthProviderProps) {
     void restoreSession();
 
     return () => {
-      active = false;
+      invalidateGeneration();
     };
-  }, [clearAuthenticationState, updateAccessToken, updateAuthenticatedUser]);
+  }, [
+    assertCurrentGeneration,
+    clearCurrentSession,
+    invalidateGeneration,
+    isCurrentGeneration,
+    readSessionToken,
+    saveSessionTokens,
+    updateAccessToken,
+  ]);
 
-  async function persistAuthentication(
-    authenticatedUser: AuthUser,
-    tokens: AuthTokens,
+  async function authenticate(
+    operation: () => Promise<{
+      user: AuthUser;
+      tokens: AuthTokens;
+    }>,
   ): Promise<void> {
-    await saveRefreshToken(tokens.refreshToken);
+    const generation = invalidateGeneration();
 
-    updateAccessToken(tokens.accessToken);
-    updateAuthenticatedUser(authenticatedUser);
+    clearAuthenticationState();
+    setLoading(false);
+
+    let issuedTokens: AuthTokens | null = null;
+
+    try {
+      await enqueueStorage(deleteRefreshToken);
+
+      assertCurrentGeneration(generation);
+
+      const result = await operation();
+
+      issuedTokens = result.tokens;
+
+      assertCurrentGeneration(generation);
+
+      await saveSessionTokens(generation, result.tokens);
+
+      assertCurrentGeneration(generation);
+
+      updateAccessToken(result.tokens.accessToken);
+      setUser(result.user);
+    } catch (error) {
+      const currentGeneration = isCurrentGeneration(generation);
+
+      if (currentGeneration) {
+        await clearCurrentSession(generation);
+      }
+
+      // Revoke credentials that were issued but never became an
+      // accepted local session. Do not touch the newer session's storage.
+      if (issuedTokens) {
+        await revokeRemoteSession(
+          issuedTokens.refreshToken,
+          issuedTokens.accessToken,
+        );
+      }
+
+      if (!currentGeneration) {
+        throw new Error("Sua sess?o expirou. Entre novamente.");
+      }
+
+      throw normalizeAuthError(error);
+    }
   }
 
   async function login(email: string, password: string): Promise<void> {
-    try {
-      const result = await loginAccount(email.trim().toLowerCase(), password);
-
-      await persistAuthentication(result.user, result.tokens);
-    } catch (error) {
-      throw normalizeAuthError(error);
-    }
+    await authenticate(() =>
+      loginAccount(email.trim().toLowerCase(), password),
+    );
   }
 
   async function register(
@@ -173,78 +350,125 @@ export function AuthProvider({ children }: AuthProviderProps) {
     email: string,
     password: string,
   ): Promise<void> {
-    try {
-      const normalizedName = name.trim().replace(/\s+/g, " ");
+    const normalizedName = name.trim().replace(/\s+/g, " ");
 
-      const result = await registerAccount(
-        normalizedName,
-        email.trim().toLowerCase(),
-        password,
-      );
-
-      await persistAuthentication(result.user, result.tokens);
-    } catch (error) {
-      throw normalizeAuthError(error);
-    }
+    await authenticate(() =>
+      registerAccount(normalizedName, email.trim().toLowerCase(), password),
+    );
   }
 
-  const performAccessTokenRefresh = useCallback(async (): Promise<string> => {
-    const storedRefreshToken = await getRefreshToken();
+  const performAccessTokenRefresh = useCallback(
+    async (generation: number): Promise<string> => {
+      let issuedTokens: AuthTokens | null = null;
 
-    if (!storedRefreshToken) {
-      clearAuthenticationState();
+      try {
+        const storedRefreshToken = await readSessionToken(generation);
 
-      throw new Error("Sua sessão expirou. Entre novamente.");
-    }
+        assertCurrentGeneration(generation);
 
-    try {
-      const tokens = await refreshSession(storedRefreshToken);
+        if (!storedRefreshToken) {
+          throw new Error("Sua sess?o expirou. Entre novamente.");
+        }
 
-      await saveRefreshToken(tokens.refreshToken);
+        const tokens = await refreshSession(storedRefreshToken);
 
-      updateAccessToken(tokens.accessToken);
+        issuedTokens = tokens;
 
-      return tokens.accessToken;
-    } catch (error) {
-      await deleteRefreshToken().catch(() => undefined);
+        assertCurrentGeneration(generation);
 
-      clearAuthenticationState();
+        await saveSessionTokens(generation, tokens);
 
-      throw normalizeAuthError(error);
-    }
-  }, [clearAuthenticationState, updateAccessToken]);
+        assertCurrentGeneration(generation);
+
+        updateAccessToken(tokens.accessToken);
+
+        return tokens.accessToken;
+      } catch (error) {
+        const currentGeneration = isCurrentGeneration(generation);
+
+        if (currentGeneration) {
+          await clearCurrentSession(generation);
+        }
+
+        // Revoke credentials received by a failed or stale refresh.
+        // Never modify storage belonging to a newer generation.
+        if (issuedTokens) {
+          await revokeRemoteSession(
+            issuedTokens.refreshToken,
+            issuedTokens.accessToken,
+          );
+        }
+
+        if (!currentGeneration) {
+          throw new Error("Sua sess?o expirou. Entre novamente.");
+        }
+
+        throw normalizeAuthError(error);
+      }
+    },
+    [
+      assertCurrentGeneration,
+      clearCurrentSession,
+      isCurrentGeneration,
+      readSessionToken,
+      saveSessionTokens,
+      updateAccessToken,
+    ],
+  );
 
   const refreshAccessToken = useCallback(async (): Promise<string> => {
+    if (!accessTokenRef.current) {
+      throw new Error("Sua sess?o expirou. Entre novamente.");
+    }
+
     if (refreshPromiseRef.current) {
       return refreshPromiseRef.current;
     }
 
-    const refreshPromise = performAccessTokenRefresh();
+    const generation = generationRef.current;
+    const refreshPromise = performAccessTokenRefresh(generation);
 
     refreshPromiseRef.current = refreshPromise;
 
     try {
-      return await refreshPromise;
+      const token = await refreshPromise;
+
+      assertCurrentGeneration(generation);
+
+      return token;
     } finally {
       if (refreshPromiseRef.current === refreshPromise) {
         refreshPromiseRef.current = null;
       }
     }
-  }, [performAccessTokenRefresh]);
+  }, [assertCurrentGeneration, performAccessTokenRefresh]);
 
   const runAuthenticatedRequest = useCallback(
     async function runAuthenticatedRequest<T>(
       request: (accessToken: string) => Promise<T>,
     ): Promise<T> {
+      const generation = generationRef.current;
       const requestAccessToken = accessTokenRef.current;
 
       if (!requestAccessToken) {
-        throw new Error("Sua sessão expirou. Entre novamente.");
+        throw new Error("Sua sess?o expirou. Entre novamente.");
+      }
+
+      async function execute(token: string): Promise<T> {
+        assertCurrentGeneration(generation);
+
+        const result = await request(token);
+
+        assertCurrentGeneration(generation);
+
+        return result;
       }
 
       try {
-        return await request(requestAccessToken);
+        return await execute(requestAccessToken);
       } catch (error) {
+        assertCurrentGeneration(generation);
+
         if (
           !(error instanceof ApiClientError) ||
           error.code !== "invalid_access_token"
@@ -254,53 +478,71 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const latestAccessToken = accessTokenRef.current;
 
-        if (latestAccessToken && latestAccessToken !== requestAccessToken) {
-          return request(latestAccessToken);
-        }
+        const retryToken =
+          latestAccessToken && latestAccessToken !== requestAccessToken
+            ? latestAccessToken
+            : await refreshAccessToken();
 
-        const refreshedAccessToken = await refreshAccessToken();
+        assertCurrentGeneration(generation);
 
         try {
-          return await request(refreshedAccessToken);
+          return await execute(retryToken);
         } catch (retryError) {
+          assertCurrentGeneration(generation);
+
           if (
             retryError instanceof ApiClientError &&
             retryError.code === "invalid_access_token"
           ) {
-            await deleteRefreshToken().catch(() => undefined);
-            clearAuthenticationState();
+            await clearCurrentSession(generation);
           }
 
           throw retryError;
         }
       }
     },
-    [clearAuthenticationState, refreshAccessToken],
+    [assertCurrentGeneration, clearCurrentSession, refreshAccessToken],
   );
 
   async function logout(): Promise<void> {
     const currentAccessToken = accessTokenRef.current;
 
+    invalidateGeneration();
     clearAuthenticationState();
+    setLoading(false);
 
-    let backendLogoutSucceeded = false;
+    // Capture and delete within one queue operation. A later login
+    // cannot persist its credentials between these two storage actions.
+    const { refreshToken, localDeletionSucceeded } = await enqueueStorage(
+      async () => {
+        let refreshToken: string | null = null;
+        let localDeletionSucceeded = false;
 
-    try {
-      if (currentAccessToken) {
-        await logoutSession(currentAccessToken);
+        try {
+          refreshToken = await getRefreshToken();
+        } catch {
+          // The bearer token remains available as a fallback.
+        }
 
-        backendLogoutSucceeded = true;
-      }
-    } catch {
-      backendLogoutSucceeded = false;
-    }
+        try {
+          await deleteRefreshToken();
 
-    try {
-      await deleteRefreshToken();
-    } catch {
-      if (!backendLogoutSucceeded) {
-        throw new Error("Não foi possível encerrar a sessão com segurança.");
-      }
+          localDeletionSucceeded = true;
+        } catch {
+          // Remote revocation may still invalidate the stored credential.
+        }
+
+        return { refreshToken, localDeletionSucceeded };
+      },
+    );
+
+    const backendLogoutSucceeded = await revokeRemoteSession(
+      refreshToken,
+      currentAccessToken,
+    );
+
+    if (!localDeletionSucceeded && !backendLogoutSucceeded) {
+      throw new Error("N?o foi poss?vel encerrar a sess?o com seguran?a.");
     }
   }
 

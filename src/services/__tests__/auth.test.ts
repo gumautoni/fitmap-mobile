@@ -3,6 +3,7 @@ import {
   getCurrentUser,
   loginAccount,
   logoutSession,
+  logoutSessionByRefreshToken,
   refreshSession,
   registerAccount,
 } from "../auth";
@@ -158,6 +159,18 @@ describe("auth service", () => {
       headers: {
         Authorization: "Bearer current-access-token",
       },
+    });
+  });
+
+  it("revokes a backend session using its refresh token", async () => {
+    mockedPost.mockResolvedValue(null);
+
+    await logoutSessionByRefreshToken("refresh-token");
+
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+
+    expect(mockedPost).toHaveBeenCalledWith("/auth/logout/refresh", {
+      refresh_token: "refresh-token",
     });
   });
 });

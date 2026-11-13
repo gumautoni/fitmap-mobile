@@ -121,3 +121,11 @@ export async function logoutSession(accessToken: string): Promise<void> {
     headers: buildAuthorizationHeaders(accessToken),
   });
 }
+
+export async function logoutSessionByRefreshToken(
+  refreshToken: string,
+): Promise<void> {
+  await apiClient.post<null>("/auth/logout/refresh", {
+    refresh_token: refreshToken,
+  });
+}

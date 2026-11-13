@@ -54,6 +54,26 @@ The mobile application stores refresh tokens using Expo SecureStore and maintain
 
 Legacy AsyncStorage authentication records are removed during session restoration and are not used as the active authentication mechanism.
 
+Session lifecycle hardening includes:
+
+- generation-based isolation of asynchronous authentication operations;
+- serialized SecureStore reads, writes and credential deletion;
+- shared refresh operations within the same authenticated session;
+- rejection of obsolete authentication responses and request retries;
+- refresh-token-based logout, including expired access credentials;
+- best-effort remote revocation of discarded authentication credentials.
+
+The generation identifier is a local concurrency mechanism, not a
+replacement for backend authorization.
+
+Remote revocation remains dependent on server connectivity. Successful
+local logout does not independently prove that the remote session has
+been revoked.
+
+If both local credential deletion and remote revocation fail, logout
+reports a security-related failure. Physical-device behavior and
+exceptional AuthProvider remounts require additional validation.
+
 ### User profile
 
 Authenticated users can access and update persistent profile information.
@@ -433,6 +453,7 @@ POST /auth/login
 POST /auth/refresh
 GET  /auth/me
 POST /auth/logout
+POST /auth/logout/refresh
 ```
 
 ### Profile
@@ -968,11 +989,53 @@ These are automated-test results, **not proof of end-to-end delivery on a physic
 The cleanup that removes tests exclusive to the legacy UI requires a new validation
 checkpoint; see [Testing strategy](docs/testing.md).
 
+
+### Validation checkpoint - security hardening (2026-11-13)
+
+The SEC-06 candidate was validated locally against the SEC-05 base
+commit `e4df93d`:
+
+- backend: **1,117 passing pytest tests**;
+- mobile: **441 passing Jest tests across 36 suites**;
+- combined automated baseline: **1,558 passing tests**;
+- backend lockfile, Ruff and strict Pyright checks: approved;
+- mobile TypeScript, ESLint and Prettier checks: approved;
+- PostgreSQL concurrency regression tests: approved;
+- database migrations and dependency manifests: unchanged.
+
+SEC-06 contributes 11 backend and 28 mobile regression tests,
+including 27 AuthProvider lifecycle tests and one additional
+mobile authentication service test.
+
+The backend suite uses the isolated PostgreSQL test database.
+Mobile lifecycle tests use controlled asynchronous operations and
+mocked authentication services and secure storage.
+
+These results establish an automated validation checkpoint, not
+a physical-device or deployed-infrastructure acceptance test.
+
 ## Continuous Integration
 
 Pull Requests targeting `main` are validated through GitHub Actions.
 
 The CI pipeline includes four principal validation areas.
+
+The active `FIT Map - CI Quality Gate` branch ruleset
+(GitHub ruleset ID `27206968`) requires all four GitHub Actions
+status checks before merging into the default branch:
+
+- Backend validation;
+- Mobile validation;
+- Backend container validation;
+- Secret scanning.
+
+The ruleset requires branches to be up to date before merging and
+has no configured bypass actors. The existing main branch protection
+ruleset remains active.
+
+Repository administrators can still modify protection settings.
+Changes to CI workflows, scanner rules and security exceptions
+require careful review.
 
 ### Mobile
 

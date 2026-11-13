@@ -494,7 +494,61 @@ POST /auth/login
 POST /auth/refresh
 GET  /auth/me
 POST /auth/logout
+POST /auth/logout/refresh
 ```
+
+
+#### Session revocation and refresh concurrency
+
+The existing `POST /api/v1/auth/logout` endpoint requires a valid
+bearer access token and revokes its associated session.
+
+The additional endpoint `POST /api/v1/auth/logout/refresh`
+accepts a JSON body containing `refresh_token` and does not
+require a valid access token.
+
+Its behavior is:
+
+- resolve the session from the hash of the presented refresh token;
+- revoke the associated session and its refresh-token family;
+- preserve other sessions belonging to the same account;
+- return HTTP 204 for known, unknown or previously revoked tokens
+  when the payload is valid and processing succeeds;
+- return HTTP 422 for invalid payloads;
+- never issue replacement credentials.
+
+A previously consumed refresh token remains usable for revocation
+only. It cannot authorize protected requests or obtain replacement
+credentials.
+
+The authentication no-store middleware covers the new endpoint.
+A uniform HTTP response does not imply constant-time processing
+or immunity to all timing side channels.
+
+Rotation and revocation use the same session-first lock order:
+
+1. Resolve the session association through the refresh-token hash.
+2. Acquire a PostgreSQL row lock on the authentication session.
+3. Re-read the refresh token after obtaining the session lock,
+   when performing a rotation.
+4. Validate the latest persisted session and token state.
+5. Rotate or revoke credentials within the current transaction.
+
+Locked ORM queries refresh existing identity-map state to avoid
+making decisions from stale objects.
+
+The SEC-06 regression suite reproduced PostgreSQL deadlock
+SQLSTATE `40P01` before this correction and verified the corrected
+behavior with controlled concurrent transactions.
+
+Concurrent replay of a consumed refresh token revokes the entire
+session, including any replacement credentials.
+
+The regression tests cover the investigated lock orderings.
+They do not establish that every future database operation is
+free of deadlocks.
+
+No schema migration was required for this change.
 
 Profile endpoints:
 
@@ -816,6 +870,9 @@ Tests must never be redirected to a database containing valuable application dat
 The automated backend suite validates behavior across:
 
 - authentication and session management;
+- refresh-token-based logout and token-family revocation;
+- concurrent rotation, logout and replay detection;
+- stale ORM authentication-state regression tests;
 - user profile persistence;
 - user isolation and authorization;
 - database integration and migrations;

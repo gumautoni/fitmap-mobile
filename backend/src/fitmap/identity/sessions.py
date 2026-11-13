@@ -100,15 +100,46 @@ def rotate_refresh_token(
     settings: Settings,
     rotated_at: datetime | None = None,
 ) -> RefreshRotationResult:
-    now = rotated_at or datetime.now(UTC)
     token_hash = hash_refresh_token(refresh_token)
 
+    # Resolve the immutable session association without locking the token.
+    session_id = db_session.scalar(
+        select(AuthRefreshToken.session_id).where(
+            AuthRefreshToken.token_hash == token_hash,
+        )
+    )
+
+    if session_id is None:
+        return RefreshRotationResult(
+            status=RefreshRotationStatus.INVALID,
+        )
+
+    # Rotation and revocation must lock the session before its tokens.
+    # Taking a token lock first creates a deadlock with session revocation.
+    auth_session = db_session.scalar(
+        select(AuthSession)
+        .where(
+            AuthSession.id == session_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+    if auth_session is None:
+        return RefreshRotationResult(
+            status=RefreshRotationStatus.INVALID,
+        )
+
+    # Re-read the token after acquiring the session lock.
+    # Another transaction may have consumed or revoked it while we waited.
     current_token = db_session.scalar(
         select(AuthRefreshToken)
         .where(
             AuthRefreshToken.token_hash == token_hash,
+            AuthRefreshToken.session_id == session_id,
         )
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
 
     if current_token is None:
@@ -116,18 +147,7 @@ def rotate_refresh_token(
             status=RefreshRotationStatus.INVALID,
         )
 
-    auth_session = db_session.scalar(
-        select(AuthSession)
-        .where(
-            AuthSession.id == current_token.session_id,
-        )
-        .with_for_update()
-    )
-
-    if auth_session is None:
-        return RefreshRotationResult(
-            status=RefreshRotationStatus.INVALID,
-        )
+    now = rotated_at or datetime.now(UTC)
 
     if current_token.consumed_at is not None or current_token.revoked_at is not None:
         _revoke_session(
@@ -206,18 +226,19 @@ def revoke_session(
     session_id: UUID,
     revoked_at: datetime | None = None,
 ) -> bool:
-    now = revoked_at or datetime.now(UTC)
-
     auth_session = db_session.scalar(
         select(AuthSession)
         .where(
             AuthSession.id == session_id,
         )
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
 
     if auth_session is None:
         return False
+
+    now = revoked_at or datetime.now(UTC)
 
     _revoke_session(
         db_session=db_session,
@@ -225,6 +246,35 @@ def revoke_session(
         revoked_at=now,
     )
     return True
+
+
+def revoke_session_by_refresh_token(
+    *,
+    db_session: Session,
+    refresh_token: str,
+    revoked_at: datetime | None = None,
+) -> bool:
+    """Revoke the session associated with a presented refresh token.
+
+    Consumed tokens remain valid proof for revocation only. They cannot
+    authenticate requests or issue new credentials through this operation.
+    """
+    token_hash = hash_refresh_token(refresh_token)
+
+    session_id = db_session.scalar(
+        select(AuthRefreshToken.session_id).where(
+            AuthRefreshToken.token_hash == token_hash,
+        )
+    )
+
+    if session_id is None:
+        return False
+
+    return revoke_session(
+        db_session=db_session,
+        session_id=session_id,
+        revoked_at=revoked_at,
+    )
 
 
 def is_session_active(
