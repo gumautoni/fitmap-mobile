@@ -682,7 +682,52 @@ EXPO_PUBLIC_API_URL=http://YOUR_LOCAL_IP:8000/api/v1
 
 When using a physical device, replace `YOUR_LOCAL_IP` with the development computer's reachable local IP address.
 
+For local development, typical API base URLs include:
+
+| Environment | Example |
+| --- | --- |
+| Physical device on the local network | `http://192.168.1.10:8000/api/v1` |
+| Android emulator | `http://10.0.2.2:8000/api/v1` |
+| Local simulator or web development | `http://localhost:8000/api/v1` |
+| Production | `https://api.example.com/api/v1` |
+
+These addresses are examples. Use the backend address reachable from the corresponding environment.
+
+HTTP is permitted only in React Native development bundles.
+Production bundles require HTTPS, including when the development indicator is unavailable.
+
+The API base URL is validated before application services use it.
+Supported configuration uses DNS hostnames or canonical IPv4 addresses,
+an optional port, and a simple API path.
+Trailing slashes are normalized.
+
+URLs containing embedded credentials, query strings, fragments,
+ambiguous addresses, invalid ports or path traversal are rejected.
+Literal IPv6 addresses and percent-encoded base paths are not currently supported.
+
 Values prefixed with `EXPO_PUBLIC_` are public client configuration and must never contain secrets.
+
+#### Production transport security
+
+Before creating a production bundle, configure `EXPO_PUBLIC_API_URL`
+with the actual HTTPS backend address.
+
+The deployment must provide:
+
+- a valid TLS certificate matching the backend hostname;
+- a trusted certificate chain;
+- secure TLS termination;
+- no HTTPS-to-HTTP redirects for authenticated API or private media requests.
+
+The application validates its configured initial API base URL.
+This does not replace native transport security policies, certificate
+validation or deployment-level redirect controls.
+
+Do not distribute development bundles or use them to bypass production
+transport requirements.
+
+The local Expo Go workflow remains supported with a reachable HTTP
+development backend.
 
 ### 4. Install backend dependencies
 
@@ -1006,6 +1051,13 @@ EXPO_PUBLIC_API_URL
 ```
 
 Public environment variables must not contain database passwords, JWT secrets, provider keys, access keys or other private credentials.
+
+Production API URLs must use HTTPS. HTTP is allowed only in development
+bundles. The same validated API base URL is used for JSON requests,
+private progress-photo uploads and authenticated photo retrieval.
+
+Production TLS and redirect behavior must be validated against the
+deployed infrastructure before distribution.
 
 Authentication refresh tokens are persisted using Expo SecureStore.
 
