@@ -255,6 +255,56 @@ The actual local values must be configured according to the environment.
 - Provider credentials remain exclusively in backend configuration.
 - Authentication and resource ownership are enforced server-side.
 
+### Secret management and repository scanning
+
+Real credentials must remain outside tracked source files, examples,
+container images and documentation.
+
+Backend credentials include database passwords, JWT signing secrets,
+authentication rate-limit secrets, password-recovery and email-verification
+secrets, email-provider keys, outbox encryption keys, gym-provider API keys
+and private media-storage credentials.
+
+Use independent credentials for each environment and security purpose.
+Example values and local S3Mock defaults must never be used as production
+credentials.
+
+The repository uses Gitleaks with default rules and a FitMap-specific
+environment credential rule. Reviewed exceptions are restricted by file,
+variable and matched value rather than excluding entire files or test
+directories.
+
+The scanner validates both the proposed snapshot and commits introduced
+by a Pull Request. This includes credentials committed and removed before
+the final revision.
+
+Scanner reports are temporary. CI emits finding counts instead of
+credential values or raw reports.
+
+For local validation of a clean checked-out revision, run the repository
+scanner with explicit full base and head commit hashes:
+
+```text
+python scripts/security/scan_secrets.py --base BASE_SHA --head HEAD_SHA
+```
+
+Run this command from the repository root with Python 3.13 and Docker
+available. Replace the arguments with actual commit hashes.
+
+A successful scan returns exit code 0. Detected findings return exit
+code 42. Scanner or validation failures return a nonzero exit code.
+
+Do not publish raw scanner reports or credential values.
+
+If a real credential is discovered, treat it as potentially compromised.
+Revoke or rotate it through its provider, assess its usage and exposure,
+and determine whether coordinated history remediation is necessary.
+
+Deleting a credential from the latest revision does not invalidate it
+or remove it from Git history.
+
+See the repository README for the SEC-05 audit scope and residual risks.
+
 ## PostgreSQL
 
 Start the local development database:
