@@ -3,6 +3,7 @@
 import argparse
 import io
 import json
+import os
 import re
 import subprocess
 import tarfile
@@ -18,6 +19,25 @@ IMAGE = (
 )
 
 
+def failure_category(result):
+    """Classify operational failures without returning raw diagnostics."""
+    diagnostics = (result.stdout + result.stderr).decode(errors="replace").lower()
+
+    categories = (
+        ("permission denied", "filesystem permission failure"),
+        ("operation not permitted", "container permission failure"),
+        ("dubious ownership", "Git ownership validation failure"),
+        ("read-only file system", "read-only filesystem failure"),
+        ("no such file or directory", "required path unavailable"),
+    )
+
+    for marker, category in categories:
+        if marker in diagnostics:
+            return category
+
+    return "unclassified operational failure"
+
+
 def run(args, label, cwd=ROOT, allowed=(0,)):
     result = subprocess.run(
         args,
@@ -26,7 +46,10 @@ def run(args, label, cwd=ROOT, allowed=(0,)):
     )
 
     if result.returncode not in allowed:
-        raise RuntimeError(f"{label}: exit code {result.returncode}. Raw output suppressed.")
+        category = failure_category(result)
+        raise RuntimeError(
+            f"{label}: exit code {result.returncode}. Category: {category}. Raw output suppressed."
+        )
 
     return result
 
@@ -39,6 +62,19 @@ def git(*args, cwd=ROOT):
     ).stdout
 
 
+def container_identity_args():
+    """Use the workspace owner's identity on POSIX hosts."""
+    if os.name != "posix":
+        return []
+
+    return [
+        "--user",
+        f"{os.getuid()}:{os.getgid()}",
+        "--env",
+        "HOME=/tmp",
+    ]
+
+
 def scan(workspace, name, mode, source, base, head):
     report = workspace / "reports" / f"{name}.json"
 
@@ -46,6 +82,7 @@ def scan(workspace, name, mode, source, base, head):
         "docker",
         "run",
         "--rm",
+        *container_identity_args(),
         "--network",
         "none",
         "--read-only",
