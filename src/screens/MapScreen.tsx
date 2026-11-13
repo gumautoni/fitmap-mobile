@@ -46,7 +46,14 @@ import {
   type GymProviderName,
 } from "../services/gyms";
 import { useAppTheme } from "../theme/ThemeProvider";
-import { calculateDistanceKm } from "../utils/distance";
+import {
+  DEFAULT_GYM_RESULT_FILTERS,
+  filterGymResults,
+  getGymDistanceKm,
+  hasValidGymCoordinates,
+  type GymDistanceFilter,
+  type GymResultFilters,
+} from "../utils/gymResultFilters";
 
 const INITIAL_REGION: Region = {
   latitude: -22.4708,
@@ -59,6 +66,33 @@ const RESULT_REGION_DELTA = 0.05;
 const NEARBY_RADIUS_METERS = 5_000;
 const SELECTED_RADIUS_METERS = 10_000;
 const SUGGESTION_DELAY_MS = 350;
+
+const DISTANCE_FILTER_OPTIONS: readonly {
+  value: GymDistanceFilter;
+  label: string;
+  accessibilityLabel: string;
+}[] = [
+  {
+    value: null,
+    label: "Todas",
+    accessibilityLabel: "Todas as distâncias",
+  },
+  {
+    value: 1,
+    label: "Até 1 km",
+    accessibilityLabel: "Até 1 km",
+  },
+  {
+    value: 3,
+    label: "Até 3 km",
+    accessibilityLabel: "Até 3 km",
+  },
+  {
+    value: 5,
+    label: "Até 5 km",
+    accessibilityLabel: "Até 5 km",
+  },
+];
 
 interface UserCoordinates {
   latitude: number;
@@ -77,7 +111,7 @@ function gymIdentityKey(
 }
 
 function getGymRegion(gym: GymSearchResult): Region | null {
-  if (!gym.coordinates) {
+  if (!hasValidGymCoordinates(gym.coordinates)) {
     return null;
   }
 
@@ -165,6 +199,9 @@ export default function MapScreen({ navigation }: Props) {
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [gyms, setGyms] = useState<GymSearchResult[]>([]);
+  const [gymFilters, setGymFilters] = useState<GymResultFilters>(
+    DEFAULT_GYM_RESULT_FILTERS,
+  );
   const [loadingAction, setLoadingAction] = useState<LoadingAction>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchedPlace, setSearchedPlace] = useState("");
@@ -234,25 +271,32 @@ export default function MapScreen({ navigation }: Props) {
     };
   }, [query, showSuggestions, loading]);
 
+  const canFilterByDistance = hasValidGymCoordinates(userCoordinates);
+
+  const visibleGyms = useMemo(
+    () => filterGymResults(gyms, gymFilters, userCoordinates),
+    [gyms, gymFilters, userCoordinates],
+  );
+
   const mappableGyms = useMemo(
-    () => gyms.filter((gym) => gym.coordinates !== null),
-    [gyms],
+    () => visibleGyms.filter((gym) => hasValidGymCoordinates(gym.coordinates)),
+    [visibleGyms],
   );
 
   const selectedGym =
-    gyms.find(
+    visibleGyms.find(
       (gym) => gymIdentityKey(gym.providerName, gym.id) === selectedGymKey,
     ) ?? null;
 
-  const selectedGymDistanceKm =
-    selectedGym?.coordinates && userCoordinates
-      ? calculateDistanceKm(
-          userCoordinates.latitude,
-          userCoordinates.longitude,
-          selectedGym.coordinates.latitude,
-          selectedGym.coordinates.longitude,
-        )
-      : null;
+  const selectedGymDistanceKm = getGymDistanceKm(
+    userCoordinates,
+    selectedGym?.coordinates ?? null,
+  );
+
+  const showResultFilters = hasSearched && gyms.length > 0 && !loading;
+
+  const hasActiveFilters =
+    gymFilters.nameQuery.length > 0 || gymFilters.maxDistanceKm !== null;
 
   const favoriteGymKeys = useMemo(
     () =>
@@ -306,12 +350,35 @@ export default function MapScreen({ navigation }: Props) {
     }, [loadFavorites]),
   );
 
+  function applyResultFilters(nextFilters: GymResultFilters): void {
+    setGymFilters(nextFilters);
+
+    if (
+      selectedGymKey !== null &&
+      !filterGymResults(gyms, nextFilters, userCoordinates).some(
+        (gym) => gymIdentityKey(gym.providerName, gym.id) === selectedGymKey,
+      )
+    ) {
+      setSelectedGymKey(null);
+    }
+  }
+
+  function clearDeviceLocation(): void {
+    setUserCoordinates(null);
+
+    setGymFilters((current) =>
+      current.maxDistanceKm === null
+        ? current
+        : { ...current, maxDistanceKm: null },
+    );
+  }
+
   function focusSearchResults(
     results: GymSearchResult[],
     fallbackCoordinates?: UserCoordinates,
   ): void {
-    const firstGymWithCoordinates = results.find(
-      (gym) => gym.coordinates !== null,
+    const firstGymWithCoordinates = results.find((gym) =>
+      hasValidGymCoordinates(gym.coordinates),
     );
 
     if (firstGymWithCoordinates) {
@@ -324,7 +391,7 @@ export default function MapScreen({ navigation }: Props) {
       return;
     }
 
-    if (fallbackCoordinates) {
+    if (fallbackCoordinates && hasValidGymCoordinates(fallbackCoordinates)) {
       mapRef.current?.animateToRegion(
         getCoordinatesRegion(fallbackCoordinates),
         800,
@@ -347,6 +414,7 @@ export default function MapScreen({ navigation }: Props) {
       setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
+      setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
       setSelectedGymKey(null);
 
       const results = await searchGymsByLocation(normalizedQuery);
@@ -378,6 +446,7 @@ export default function MapScreen({ navigation }: Props) {
       setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
+      setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
       setSelectedGymKey(null);
 
       const results = await searchNearbyGymsWithFallback(
@@ -413,6 +482,7 @@ export default function MapScreen({ navigation }: Props) {
       const permission = await Location.requestForegroundPermissionsAsync();
 
       if (permission.status !== "granted") {
+        clearDeviceLocation();
         setErrorMessage(
           "Permissão de localização negada. Você ainda pode pesquisar academias por cidade, bairro ou região.",
         );
@@ -428,8 +498,13 @@ export default function MapScreen({ navigation }: Props) {
         longitude: currentLocation.coords.longitude,
       };
 
+      if (!hasValidGymCoordinates(currentCoordinates)) {
+        throw new Error("Invalid device coordinates.");
+      }
+
       setUserCoordinates(currentCoordinates);
     } catch {
+      clearDeviceLocation();
       setErrorMessage(
         "Não foi possível obter sua localização atual. Verifique se a localização do aparelho está ativada e tente novamente.",
       );
@@ -441,6 +516,7 @@ export default function MapScreen({ navigation }: Props) {
     try {
       setLoadingAction("location");
       setGyms([]);
+      setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
       setSelectedGymKey(null);
       setQuery("");
       setSearchedPlace("Sua localização atual");
@@ -516,9 +592,9 @@ export default function MapScreen({ navigation }: Props) {
     }
 
     if (hasSearched) {
-      return gyms.length === 1
+      return visibleGyms.length === 1
         ? "1 academia encontrada"
-        : `${gyms.length} academias encontradas`;
+        : `${visibleGyms.length} academias encontradas`;
     }
 
     return "Seu próximo treino pode começar aqui";
@@ -831,7 +907,7 @@ export default function MapScreen({ navigation }: Props) {
 
       <View style={styles.mapCard}>
         <MapView ref={mapRef} style={styles.map} initialRegion={INITIAL_REGION}>
-          {userCoordinates ? (
+          {hasValidGymCoordinates(userCoordinates) ? (
             <Marker
               coordinate={userCoordinates}
               title="Sua localização"
@@ -850,7 +926,7 @@ export default function MapScreen({ navigation }: Props) {
           ) : null}
 
           {mappableGyms.map((gym) => {
-            if (!gym.coordinates) {
+            if (!hasValidGymCoordinates(gym.coordinates)) {
               return null;
             }
 
@@ -905,7 +981,7 @@ export default function MapScreen({ navigation }: Props) {
           <Text style={styles.mapBadgeText}>Mapa FitMap</Text>
         </View>
 
-        {selectedGym?.coordinates ? (
+        {selectedGym && hasValidGymCoordinates(selectedGym.coordinates) ? (
           <View style={styles.selectedMapPreview}>
             <View style={styles.selectedMapPreviewCopy}>
               <Text style={styles.selectedMapPreviewLabel}>
@@ -963,14 +1039,20 @@ export default function MapScreen({ navigation }: Props) {
             )}
           </View>
 
-          {hasSearched && gyms.length > 0 && !errorMessage ? (
+          {showResultFilters ? (
             <View style={styles.resultsCount}>
-              <Text style={styles.resultsCountValue}>{gyms.length}</Text>
+              <Text
+                testID="gym-results-count"
+                accessibilityLiveRegion="polite"
+                style={styles.resultsCountValue}
+              >
+                {visibleGyms.length}
+              </Text>
             </View>
           ) : null}
         </View>
 
-        {hasSearched && gyms.length > 0 && !errorMessage ? (
+        {showResultFilters ? (
           <View style={styles.resultsMetaRow}>
             <View style={styles.metaPill}>
               <MapPin
@@ -982,7 +1064,7 @@ export default function MapScreen({ navigation }: Props) {
               <Text style={styles.metaText}>{mappableGyms.length} no mapa</Text>
             </View>
 
-            {userCoordinates ? (
+            {canFilterByDistance && mappableGyms.length > 0 ? (
               <View style={styles.metaPill}>
                 <Navigation
                   size={13}
@@ -997,7 +1079,105 @@ export default function MapScreen({ navigation }: Props) {
         ) : null}
       </View>
 
-      {gyms.length > 0 ? (
+      {showResultFilters ? (
+        <View style={styles.filtersCard}>
+          <View style={styles.filtersHeader}>
+            <Text style={styles.filtersTitle}>Filtrar resultados</Text>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Limpar filtros"
+              accessibilityState={{ disabled: !hasActiveFilters }}
+              disabled={!hasActiveFilters}
+              onPress={() => applyResultFilters(DEFAULT_GYM_RESULT_FILTERS)}
+              style={({ pressed }) => [
+                styles.clearFiltersButton,
+                !hasActiveFilters && styles.filterDisabled,
+                pressed && hasActiveFilters && styles.filterPressed,
+              ]}
+            >
+              <Text style={styles.clearFiltersText}>Limpar</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.filterInputShell}>
+            <Search
+              size={18}
+              strokeWidth={2.2}
+              color={theme.colors.textSecondary}
+            />
+
+            <TextInput
+              accessibilityLabel="Filtrar por nome da academia"
+              placeholder="Nome da academia"
+              placeholderTextColor={theme.colors.textSecondary}
+              value={gymFilters.nameQuery}
+              onChangeText={(value) =>
+                applyResultFilters({
+                  ...gymFilters,
+                  nameQuery: value,
+                })
+              }
+              style={styles.filterInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+            />
+          </View>
+
+          <Text style={styles.filterDistanceLabel}>Distância máxima</Text>
+
+          <View style={styles.distanceFiltersRow}>
+            {DISTANCE_FILTER_OPTIONS.map((option) => {
+              const isSelected = gymFilters.maxDistanceKm === option.value;
+
+              const isDisabled = option.value !== null && !canFilterByDistance;
+
+              return (
+                <Pressable
+                  key={option.value ?? "all"}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.accessibilityLabel}
+                  accessibilityState={{
+                    selected: isSelected,
+                    disabled: isDisabled,
+                  }}
+                  disabled={isDisabled}
+                  onPress={() =>
+                    applyResultFilters({
+                      ...gymFilters,
+                      maxDistanceKm: option.value,
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.distanceFilterChip,
+                    isSelected && styles.distanceFilterChipSelected,
+                    isDisabled && styles.filterDisabled,
+                    pressed && !isDisabled && styles.filterPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.distanceFilterText,
+                      isSelected && styles.distanceFilterTextSelected,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={styles.filterHint}>
+            {canFilterByDistance
+              ? "Distância em linha reta da sua localização."
+              : "Use sua localização para filtrar por distância."}
+          </Text>
+        </View>
+      ) : null}
+
+      {visibleGyms.length > 0 ? (
         <View style={styles.listSectionHeader}>
           <Text style={styles.listSectionEyebrow}>RESULTADOS</Text>
 
@@ -1012,7 +1192,7 @@ export default function MapScreen({ navigation }: Props) {
       <ScreenGradient theme={theme} />
       <FlatList<GymSearchResult>
         style={styles.container}
-        data={gyms}
+        data={visibleGyms}
         keyExtractor={(item) => gymIdentityKey(item.providerName, item.id)}
         ListHeaderComponent={listHeader}
         keyboardShouldPersistTaps="handled"
@@ -1025,15 +1205,12 @@ export default function MapScreen({ navigation }: Props) {
             gymIdentityKey(item.providerName, item.id),
           );
 
-          const distanceKm =
-            userCoordinates && item.coordinates
-              ? calculateDistanceKm(
-                  userCoordinates.latitude,
-                  userCoordinates.longitude,
-                  item.coordinates.latitude,
-                  item.coordinates.longitude,
-                )
-              : null;
+          const hasCoordinates = hasValidGymCoordinates(item.coordinates);
+
+          const distanceKm = getGymDistanceKm(
+            userCoordinates,
+            item.coordinates,
+          );
 
           return (
             <Pressable
@@ -1125,18 +1302,18 @@ export default function MapScreen({ navigation }: Props) {
                 <View
                   style={[
                     styles.locationStatus,
-                    !item.coordinates && styles.locationStatusMuted,
+                    !hasCoordinates && styles.locationStatusMuted,
                   ]}
                 >
                   <View
                     style={[
                       styles.locationStatusDot,
-                      !item.coordinates && styles.locationStatusDotMuted,
+                      !hasCoordinates && styles.locationStatusDotMuted,
                     ]}
                   />
 
                   <Text style={styles.locationStatusText}>
-                    {item.coordinates
+                    {hasCoordinates
                       ? "Disponível no mapa"
                       : "Localização não informada"}
                   </Text>
@@ -1188,7 +1365,7 @@ export default function MapScreen({ navigation }: Props) {
                   Estamos consultando as opções disponíveis.
                 </Text>
               </>
-            ) : hasSearched && !errorMessage ? (
+            ) : hasSearched && (gyms.length > 0 || !errorMessage) ? (
               <>
                 <View style={styles.emptyIcon}>
                   <Search
@@ -1199,11 +1376,15 @@ export default function MapScreen({ navigation }: Props) {
                 </View>
 
                 <Text style={styles.emptyTitle}>
-                  Nenhuma academia encontrada
+                  {gyms.length > 0
+                    ? "Nenhuma academia corresponde aos filtros"
+                    : "Nenhuma academia encontrada"}
                 </Text>
 
                 <Text style={styles.emptyText}>
-                  Tente pesquisar outra cidade, bairro ou região.
+                  {gyms.length > 0
+                    ? "Ajuste ou limpe os filtros para ver mais resultados."
+                    : "Tente pesquisar outra cidade, bairro ou região."}
                 </Text>
               </>
             ) : !hasSearched ? (
@@ -1903,6 +2084,124 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       color: theme.colors.textSecondary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.caption,
+    },
+
+    filtersCard: {
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radii.xl,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      padding: theme.spacing.lg,
+      marginBottom: theme.spacing.xl,
+      gap: theme.spacing.sm,
+    },
+
+    filtersHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: theme.spacing.md,
+    },
+
+    filtersTitle: {
+      flex: 1,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.body,
+    },
+
+    clearFiltersButton: {
+      minHeight: 48,
+      minWidth: 48,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.radii.md,
+    },
+
+    clearFiltersText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+    },
+
+    filterInputShell: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      backgroundColor: theme.colors.surfaceSecondary,
+      borderRadius: theme.radii.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      paddingHorizontal: theme.spacing.md,
+    },
+
+    filterInput: {
+      flex: 1,
+      minHeight: 48,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.body,
+      paddingVertical: theme.spacing.sm,
+    },
+
+    filterDistanceLabel: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      marginTop: theme.spacing.sm,
+    },
+
+    distanceFiltersRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+    },
+
+    distanceFilterChip: {
+      minHeight: 48,
+      minWidth: 48,
+      borderRadius: theme.radii.full,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surfaceSecondary,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    distanceFilterChipSelected: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primarySoft,
+    },
+
+    distanceFilterText: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+    },
+
+    distanceFilterTextSelected: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+    },
+
+    filterDisabled: {
+      opacity: 0.55,
+    },
+
+    filterPressed: {
+      opacity: 0.8,
+    },
+
+    filterHint: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.caption,
+      lineHeight: theme.typography.lineHeight.small,
     },
 
     listSectionHeader: {
