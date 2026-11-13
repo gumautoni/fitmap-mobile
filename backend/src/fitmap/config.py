@@ -1,11 +1,62 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import EmailStr, SecretStr
+from pydantic import EmailStr, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+_MIN_JWT_SECRET_BYTES = 32
+
+_JWT_PLACEHOLDER_PREFIXES = (
+    "replace-with-",
+    "change-me",
+    "changeme",
+    "your-secret",
+    "your-jwt-secret",
+    "example-",
+    "placeholder-",
+    "default-secret",
+    "insecure-",
+)
+
+_JWT_TEST_ONLY_PREFIXES = (
+    "fitmap-test-only-",
+    "ci-test-only-",
+    "test-only-",
+)
+
+
+def _validate_jwt_secret_value(
+    value: str,
+    *,
+    is_test: bool,
+) -> None:
+    if len(value.encode("utf-8")) < _MIN_JWT_SECRET_BYTES:
+        raise ValueError("JWT signing secret must contain at least 32 UTF-8 bytes.")
+
+    if not value.isprintable() or any(char.isspace() for char in value):
+        raise ValueError("JWT signing secret must not contain whitespace or control characters.")
+
+    normalized = value.casefold()
+
+    if normalized.startswith(_JWT_PLACEHOLDER_PREFIXES):
+        raise ValueError("JWT signing secret must not use an example placeholder.")
+
+    # Reject complete repetitions of a shorter string.
+    # This is a weak-pattern check, not an entropy measurement.
+    if normalized in (normalized + normalized)[1:-1]:
+        raise ValueError("JWT signing secret must not use a repeated pattern.")
+
+    if not is_test and (
+        normalized.startswith(_JWT_TEST_ONLY_PREFIXES)
+        or "not-for-production" in normalized
+        or "only-for-tests" in normalized
+    ):
+        raise ValueError(
+            "Test-only JWT signing secrets are forbidden outside the test environment."
+        )
 
 
 class Settings(BaseSettings):
@@ -14,6 +65,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         env_prefix="FITMAP_",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     environment: Literal["development", "test", "staging", "production"] = "development"
@@ -55,6 +107,30 @@ class Settings(BaseSettings):
     email_worker_enabled: bool = False
     email_trial_enabled: bool = False
     email_trial_recipient: EmailStr | None = None
+
+    @model_validator(mode="after")
+    def _validate_jwt_secret_policy(self) -> Self:
+        jwt_secret = self.auth_jwt_secret.get_secret_value()
+
+        _validate_jwt_secret_value(
+            jwt_secret,
+            is_test=self.environment == "test",
+        )
+
+        independent_secrets = (
+            self.auth_rate_limit_secret,
+            self.auth_recovery_code_secret,
+            self.auth_email_verification_secret,
+            self.email_outbox_encryption_key,
+        )
+
+        for secret in independent_secrets:
+            if secret is not None and secret.get_secret_value() == jwt_secret:
+                raise ValueError(
+                    "JWT signing secret must be independent from other cryptographic secrets."
+                )
+
+        return self
 
 
 @lru_cache
