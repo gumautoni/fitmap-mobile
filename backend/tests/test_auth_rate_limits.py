@@ -212,8 +212,9 @@ def test_separate_secret_is_required_and_must_not_equal_jwt(
     new_buckets: Callable[[], list[AuthRateLimitBucket]],
     test_settings: Settings,
 ) -> None:
+    missing = test_settings.model_copy(update={"auth_rate_limit_secret": None})
     with pytest.raises(RateLimitConfigurationError, match="dedicated"):
-        charge(db_session, test_settings)
+        charge(db_session, missing)
     bad = test_settings.model_copy(update={"auth_rate_limit_secret": test_settings.auth_jwt_secret})
     with pytest.raises(RateLimitConfigurationError, match="independent"):
         charge(db_session, bad)
@@ -286,3 +287,123 @@ def test_atomic_postgresql_upsert_under_parallel_transactions(
                 connection.execute(
                     delete(AuthRateLimitBucket).where(AuthRateLimitBucket.key_hash.in_(new_keys))
                 )
+
+
+@pytest.mark.parametrize(
+    ("action", "maximum", "window"),
+    [
+        ("login", 5, timedelta(minutes=15)),
+        ("register", 3, timedelta(hours=1)),
+    ],
+)
+def test_login_and_register_identity_limits(
+    db_session: Session,
+    limiter_settings: Settings,
+    action: RateLimitAction,
+    maximum: int,
+    window: timedelta,
+) -> None:
+    for index in range(maximum):
+        assert charge(
+            db_session,
+            limiter_settings,
+            action=action,
+            ip=f"198.51.100.{index + 1}",
+            identifier="person@example.com",
+        )
+
+    decision = consume_auth_rate_limit(
+        db_session=db_session,
+        settings=limiter_settings,
+        action=action,
+        client_ip="198.51.100.99",
+        identifier="PERSON@EXAMPLE.COM",
+        now=NOW,
+    )
+
+    assert not decision.allowed
+    assert decision.retry_after_seconds == int(window.total_seconds())
+
+    assert charge(
+        db_session,
+        limiter_settings,
+        action=action,
+        ip="198.51.100.100",
+        identifier="person@example.com",
+        now=NOW + window,
+    )
+
+
+@pytest.mark.parametrize(
+    ("action", "maximum", "window"),
+    [
+        ("login", 30, timedelta(minutes=15)),
+        ("register", 10, timedelta(hours=1)),
+    ],
+)
+def test_login_and_register_network_limits(
+    db_session: Session,
+    limiter_settings: Settings,
+    action: RateLimitAction,
+    maximum: int,
+    window: timedelta,
+) -> None:
+    for index in range(maximum):
+        assert charge(
+            db_session,
+            limiter_settings,
+            action=action,
+            ip="203.0.113.10",
+            identifier=f"person-{index}@example.com",
+        )
+
+    decision = consume_auth_rate_limit(
+        db_session=db_session,
+        settings=limiter_settings,
+        action=action,
+        client_ip="203.0.113.10",
+        identifier="another-person@example.com",
+        now=NOW,
+    )
+
+    assert not decision.allowed
+    assert decision.retry_after_seconds == int(window.total_seconds())
+
+    assert charge(
+        db_session,
+        limiter_settings,
+        action=action,
+        ip="203.0.113.10",
+        identifier="new-person@example.com",
+        now=NOW + window,
+    )
+
+
+def test_login_and_register_use_independent_buckets(
+    db_session: Session,
+    limiter_settings: Settings,
+) -> None:
+    for _ in range(5):
+        assert charge(
+            db_session,
+            limiter_settings,
+            action="login",
+        )
+
+    assert not charge(
+        db_session,
+        limiter_settings,
+        action="login",
+    )
+
+    assert charge(
+        db_session,
+        limiter_settings,
+        action="register",
+    )
+
+    assert not charge(
+        db_session,
+        limiter_settings,
+        action="login",
+    )

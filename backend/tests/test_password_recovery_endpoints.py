@@ -116,10 +116,14 @@ def reset_payload(email: str, code: str, password: str = NEW_PASSWORD) -> dict[s
     }
 
 
+@pytest.mark.usefixtures("cleanup_auth_rate_limit_buckets")
 def test_disabled_by_default(test_settings: Settings, database_engine: Engine) -> None:
     email = f"disabled-recovery-{uuid4()}@example.com"
     try:
-        with TestClient(create_app(test_settings)) as api_client:
+        with TestClient(
+            create_app(test_settings),
+            client=("198.51.100.30", 50000),
+        ) as api_client:
             registered = api_client.post(
                 "/api/v1/auth/register",
                 json={"name": "Disabled", "email": email, "password": OLD_PASSWORD},

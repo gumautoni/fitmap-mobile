@@ -1,7 +1,7 @@
-"""PostgreSQL-backed, atomic rate limits for future security-sensitive endpoints.
+"""PostgreSQL-backed, atomic rate limits for authentication endpoints.
 
 The caller must commit EVEN ON DENIAL: a rollback erases the throttling event.
-No route currently invokes this module. Never use untrusted X-Forwarded-For.
+Never use untrusted X-Forwarded-For.
 """
 
 import hmac
@@ -22,6 +22,8 @@ from fitmap.identity.accounts import normalize_email
 from fitmap.security.rate_limit_models import AuthRateLimitBucket
 
 RateLimitAction = Literal[
+    "login",
+    "register",
     "password_recovery_request",
     "password_recovery_reset",
     "email_verification_issue",
@@ -37,6 +39,8 @@ class _Rule:
 
 # Independent guards: network floods and distributed attacks against an identity.
 _RULES: dict[RateLimitAction, tuple[_Rule, _Rule]] = {
+    "login": (_Rule(30, timedelta(minutes=15)), _Rule(5, timedelta(minutes=15))),
+    "register": (_Rule(10, timedelta(hours=1)), _Rule(3, timedelta(hours=1))),
     "password_recovery_request": (_Rule(8, timedelta(minutes=15)), _Rule(3, timedelta(hours=1))),
     "password_recovery_reset": (_Rule(20, timedelta(minutes=15)), _Rule(5, timedelta(minutes=15))),
     "email_verification_issue": (_Rule(8, timedelta(minutes=15)), _Rule(3, timedelta(hours=1))),
@@ -62,6 +66,10 @@ def _rate_key(settings: Settings) -> bytes:
     if configured is None or len(configured.get_secret_value().encode()) < 32:
         raise RateLimitConfigurationError("A dedicated 32+ byte rate-limit secret is required.")
     value = configured.get_secret_value()
+
+    if not value.strip() or value.strip().casefold().startswith("replace-with-"):
+        raise RateLimitConfigurationError("A valid independent rate-limit secret is required.")
+
     other = [settings.auth_jwt_secret.get_secret_value()]
     for candidate in (
         settings.auth_recovery_code_secret,
@@ -142,7 +150,7 @@ def consume_auth_rate_limit(
     """Charge network and identity buckets in a SINGLE caller-managed transaction.
 
     For verification actions `identifier` is the server-authenticated user UUID.
-    For recovery actions it is an email, whether or not the account exists.
+    For login, registration and recovery it is an email, regardless of account existence.
     The HTTP boundary must derive the client IP from a trusted ASGI peer/proxy
     and commit the transaction also when allowed=False. Fail closed on DB errors.
     """
