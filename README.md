@@ -1113,6 +1113,27 @@ rotation is performed.
 See [backend environment configuration](backend/README.md#jwt-signing-secret)
 for generation and operational security guidance.
 
+Authentication failures use generic responses for unknown accounts,
+incorrect passwords and inactive accounts.
+
+The backend initializes a dummy password hash during application
+construction to reduce first-request timing differences for unknown
+accounts.
+
+Authentication responses produced within the authentication cache
+middleware chain include `Cache-Control: no-store`, protecting
+tokens and account data against storage by compliant HTTP caches.
+
+Login and registration are protected by persistent rate limits.
+
+The current registration contract intentionally preserves HTTP 409
+for duplicate accounts. Account enumeration through this distinction
+remains a documented residual risk that must be reviewed before
+commercial distribution.
+
+See [account enumeration resistance](backend/README.md#account-enumeration-resistance)
+for the current protections and operational limitations.
+
 ## Documentation
 
 Detailed technical documentation is maintained under [docs/](docs/README.md).

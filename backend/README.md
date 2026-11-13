@@ -147,6 +147,78 @@ Schedule periodic maintenance to prune expired rate-limit buckets.
 Application-level limits complement, but do not replace, ingress-level
 abuse protection and monitoring.
 
+### Account enumeration resistance
+
+Authentication failures use a uniform HTTP 401 response with the
+`invalid_credentials` error code for unknown accounts, incorrect passwords
+and inactive accounts.
+
+Unknown accounts are processed using a dummy password hash generated
+with the same password hashing policy used for registered accounts.
+The dummy hash is initialized during application construction and
+cached within the process.
+
+This avoids an additional password-hashing operation during the first
+request involving an unknown account. It does not guarantee identical
+response times or eliminate every timing side channel.
+
+Login and registration rate limits apply independently of account
+existence and complement the generic authentication failure responses.
+
+#### Registration contract and residual risk
+
+Successful registration returns HTTP 201 and issues an authenticated
+session. Duplicate registration returns HTTP 409 with the
+`account_already_exists` error code.
+
+This behavior is intentionally preserved for compatibility with the
+current mobile application and its immediate-registration flow.
+
+The distinction between successful registration and duplicate registration
+allows account existence to be inferred. Rate limiting reduces abuse
+but does not eliminate this enumeration channel.
+
+Before public commercial distribution, review the registration workflow
+and evaluate an email-ownership verification flow that avoids exposing
+account existence before ownership is established.
+
+#### Password recovery and email verification
+
+Password recovery requests use a uniform HTTP 202 response for known,
+unknown, ineligible and rate-limited account identities when the feature
+is available.
+
+Internal database and outbox operations may still introduce observable
+timing differences.
+
+Password recovery and email verification remain disabled by default.
+Review timing side channels, abuse controls and operational email
+delivery before enabling these features in a deployed environment.
+
+### Authentication response caching
+
+The authentication route group uses a centralized ASGI middleware
+that sets `Cache-Control: no-store` on responses produced within its
+middleware chain.
+
+The policy covers successful authentication responses and handled
+errors, including registration, login, token refresh, account identity,
+logout, password recovery and email verification.
+
+The middleware respects the configured API prefix and does not modify
+unrelated route groups. Existing HTTP status codes, response bodies
+and rate-limit headers remain unchanged.
+
+The directive instructs compliant HTTP caches not to store these
+responses. It does not replace HTTPS, secure client-side token storage
+or operational privacy controls.
+
+Unhandled errors generated outside the middleware chain and responses
+produced by external proxies require separate validation.
+
+Validate the deployed proxy configuration and any ASGI root-path
+configuration before production distribution.
+
 Gym discovery uses server-side provider adapters. Geoapify supports text search and nearby discovery, while TomTom provides an optional nearby-discovery and details integration:
 
 ```text
