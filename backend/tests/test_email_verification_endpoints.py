@@ -94,12 +94,16 @@ def read_code(database_engine: Engine, user_id: str, settings: Settings) -> str:
         return code
 
 
+@pytest.mark.usefixtures("cleanup_auth_rate_limit_buckets")
 def test_disabled_by_default_even_with_valid_login(
     database_engine: Engine, test_settings: Settings
 ) -> None:
     email = f"disabled-verification-{uuid4()}@example.com"
     try:
-        with TestClient(create_app(test_settings)) as api_client:
+        with TestClient(
+            create_app(test_settings),
+            client=("198.51.100.21", 50000),
+        ) as api_client:
             registered = api_client.post(
                 "/api/v1/auth/register",
                 json={"name": "Disabled Test", "email": email, "password": "SafePassword1!"},

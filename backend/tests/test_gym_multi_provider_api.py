@@ -1,5 +1,6 @@
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, delete, select
@@ -291,6 +292,7 @@ def test_provider_identity_mismatch_is_rejected(
     assert response.status_code == 502
 
 
+@pytest.mark.usefixtures("cleanup_auth_rate_limit_buckets")
 def test_tomtom_identity_favorites_and_reviews(
     test_settings: Settings,
     database_engine: Engine,
@@ -309,7 +311,10 @@ def test_tomtom_identity_favorites_and_reviews(
     app = create_test_app(test_settings, geoapify, tomtom)
 
     try:
-        with TestClient(app) as client:
+        with TestClient(
+            app,
+            client=("198.51.100.40", 50000),
+        ) as client:
             registration = client.post(
                 f"{API_PREFIX}/auth/register",
                 json={

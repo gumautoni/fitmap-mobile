@@ -72,7 +72,31 @@ FITMAP_DB_USER=fitmap
 FITMAP_DB_PASSWORD=<local-password>
 ```
 
-Authentication requires a backend-managed JWT secret.
+Authentication requires a backend-managed JWT secret and an
+independent HMAC rate-limit secret.
+
+Configure `FITMAP_AUTH_RATE_LIMIT_SECRET` with a cryptographically random
+value of at least 32 bytes. Do not reuse JWT, recovery, verification or
+outbox encryption secrets. Never use example placeholders.
+
+Login and registration fail closed with HTTP 503 when rate limiting
+cannot operate safely.
+
+| Action | Per IP | Per email |
+| --- | --- | --- |
+| Login | 30 per 15 minutes | 5 per 15 minutes |
+| Registration | 10 per hour | 3 per hour |
+
+Requests exceeding either limit return HTTP 429 with `Retry-After`.
+Counters are persisted before authentication, including denied attempts.
+
+Use a persistent secret shared by API workers in the same environment.
+When deploying behind a reverse proxy, configure trusted proxy addresses
+explicitly. Never trust arbitrary forwarded IP headers.
+
+Schedule periodic maintenance to prune expired rate-limit buckets.
+Application-level limits complement, but do not replace, ingress-level
+abuse protection and monitoring.
 
 Gym discovery uses server-side provider adapters. Geoapify supports text search and nearby discovery, while TomTom provides an optional nearby-discovery and details integration:
 

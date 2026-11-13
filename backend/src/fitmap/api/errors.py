@@ -15,11 +15,19 @@ class ErrorResponse(BaseModel):
 
 
 class ApiError(Exception):
-    def __init__(self, *, status_code: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        code: str,
+        message: str,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
+        self.headers = headers
 
 
 def register_exception_handlers(application: FastAPI) -> None:
@@ -34,6 +42,7 @@ def register_exception_handlers(application: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content=payload.model_dump(),
+            headers=exc.headers,
         )
 
     @application.exception_handler(RequestValidationError)

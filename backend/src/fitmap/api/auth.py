@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Response, status
+import logging
+
+from fastapi import APIRouter, Request, Response, status
 from psycopg.errors import UniqueViolation
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from fitmap.api.dependencies import (
     CurrentIdentityDependency,
@@ -8,6 +10,7 @@ from fitmap.api.dependencies import (
     SettingsDependency,
 )
 from fitmap.api.errors import ApiError
+from fitmap.config import Settings
 from fitmap.identity.authentication import (
     AccountAlreadyExistsError,
     AuthenticationResult,
@@ -28,6 +31,13 @@ from fitmap.identity.sessions import (
     revoke_session,
     rotate_refresh_token,
 )
+from fitmap.security.rate_limits import (
+    RateLimitAction,
+    RateLimitConfigurationError,
+    consume_auth_rate_limit,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/auth",
@@ -42,9 +52,18 @@ router = APIRouter(
 )
 def register(
     payload: RegisterRequest,
+    request: Request,
     db_session: DatabaseSessionDependency,
     settings: SettingsDependency,
 ) -> AuthResponse:
+    _enforce_auth_rate_limit(
+        request=request,
+        db_session=db_session,
+        settings=settings,
+        action="register",
+        email=str(payload.email),
+    )
+
     try:
         result = register_user(
             db_session=db_session,
@@ -74,9 +93,18 @@ def register(
 )
 def login(
     payload: LoginRequest,
+    request: Request,
     db_session: DatabaseSessionDependency,
     settings: SettingsDependency,
 ) -> AuthResponse:
+    _enforce_auth_rate_limit(
+        request=request,
+        db_session=db_session,
+        settings=settings,
+        action="login",
+        email=str(payload.email),
+    )
+
     result = login_user(
         db_session=db_session,
         settings=settings,
@@ -164,6 +192,57 @@ def logout(
     return Response(
         status_code=status.HTTP_204_NO_CONTENT,
     )
+
+
+def _rate_limit_unavailable() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        code="auth_rate_limit_unavailable",
+        message="Authentication is temporarily unavailable.",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _enforce_auth_rate_limit(
+    *,
+    request: Request,
+    db_session: DatabaseSessionDependency,
+    settings: Settings,
+    action: RateLimitAction,
+    email: str,
+) -> None:
+    peer = request.client
+    if peer is None:
+        raise _rate_limit_unavailable()
+
+    try:
+        # The limiter validates the ASGI peer as a canonical IP.
+        # Never derive it directly from client-supplied headers.
+        decision = consume_auth_rate_limit(
+            db_session=db_session,
+            settings=settings,
+            action=action,
+            client_ip=peer.host,
+            identifier=email,
+        )
+
+        # Persist both allowed and denied attempts before authentication.
+        # Later authentication rollbacks cannot erase these counters.
+        db_session.commit()
+    except (RateLimitConfigurationError, ValueError, SQLAlchemyError):
+        logger.warning("Authentication rate limiter unavailable.")
+        raise _rate_limit_unavailable() from None
+
+    if not decision.allowed:
+        raise ApiError(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            code="rate_limit_exceeded",
+            message="Too many attempts. Try again later.",
+            headers={
+                "Retry-After": str(decision.retry_after_seconds),
+                "Cache-Control": "no-store",
+            },
+        )
 
 
 def _build_auth_response(
