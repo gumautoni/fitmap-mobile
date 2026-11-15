@@ -516,6 +516,257 @@ Não constitui evidência de validação completa no Android,
 em builds nativos ou em todas as configurações de
 acessibilidade.
 
+## Observações durante a execução do treino
+
+A implementação da FUNC-07 atende ao requisito funcional
+`FR-SESSION-009`, permitindo registrar observações gerais
+de uma sessão de treino e observações individuais da
+execução de cada exercício.
+
+### Comportamento
+
+As observações estão disponíveis na tela de execução
+de uma sessão ativa.
+
+O usuário pode:
+
+* registrar uma observação geral do treino;
+* registrar observações independentes por exercício;
+* editar observações anteriormente persistidas;
+* excluir uma observação, limpando o campo e salvando;
+* descartar alterações locais sem atualizar o servidor.
+
+As orientações provenientes do planejamento permanecem
+separadas das observações registradas durante a execução.
+
+O salvamento é explícito e utiliza o controle
+Salvar observação.
+
+Uma alteração somente é considerada persistida
+após a confirmação do conteúdo pelo backend.
+
+O controle de salvamento permanece desabilitado
+quando não existem alterações efetivas.
+
+Durante a digitação, o texto original é preservado.
+A normalização remove espaços nas extremidades antes
+do envio, mantendo o conteúdo interno, inclusive
+quebras de linha.
+
+Textos vazios ou constituídos exclusivamente por
+espaços reconhecidos pela normalização são enviados
+como `null`.
+
+### Gerenciamento dos rascunhos
+
+Os rascunhos são mantidos separadamente do estado
+persistido retornado pelo servidor.
+
+Cada conjunto de rascunhos pertence a uma sessão
+específica, com uma observação geral e alterações
+independentes identificadas por exercício.
+
+O registro ou a remoção de séries, a conclusão ou
+reabertura de exercícios e outras atualizações da
+sessão não devem descartar observações pendentes.
+
+Após um salvamento bem-sucedido, somente o rascunho
+correspondente ao conteúdo confirmado é removido.
+Os demais rascunhos permanecem disponíveis.
+
+Falhas de comunicação e respostas incompatíveis com
+a observação enviada preservam o texto para nova
+tentativa.
+
+O descarte de alterações restaura o conteúdo
+persistido sem realizar uma requisição à API.
+
+A troca da sessão elimina os rascunhos pertencentes
+à sessão anterior. Identificadores de exercícios
+inexistentes ou removidos não são reaproveitados.
+
+### Proteção de navegação e concorrência
+
+A tela utiliza `usePreventRemove`, do React Navigation,
+para impedir a saída enquanto existirem alterações
+não salvas nas observações.
+
+A finalização e o cancelamento do treino também
+são bloqueados nessas condições.
+
+O usuário recebe uma orientação para salvar ou
+descartar as alterações antes de prosseguir.
+
+As operações de atualização da sessão compartilham
+um bloqueio síncrono de requisições e estados de
+carregamento da interface.
+
+Durante uma operação pendente, os controles de
+edição, salvamento, descarte e demais mutações
+da sessão permanecem indisponíveis.
+
+O objetivo é impedir operações concorrentes
+originadas pela mesma tela e preservar a consistência
+entre os rascunhos locais e as respostas recebidas.
+
+### Organização técnica
+
+A lógica dos rascunhos está isolada em
+`src/utils/workoutNoteDrafts.ts`.
+
+O módulo é responsável por:
+
+* normalização compatível com `str.strip()` do Python;
+* leitura do conteúdo persistido ou do rascunho local;
+* atualização imutável dos rascunhos;
+* identificação de alterações não salvas;
+* reconciliação com as respostas do servidor;
+* isolamento entre sessões e exercícios.
+
+A construção dos registros de rascunhos utiliza
+`Object.fromEntries()` para tratar os identificadores
+como propriedades próprias, evitando interferência
+de propriedades herdadas do JavaScript.
+
+O componente reutilizável
+`src/components/WorkoutNoteEditor.tsx`
+centraliza os campos de texto, os estados de
+salvamento e os controles de salvar e descartar.
+
+A integração está implementada em
+`src/screens/WorkoutSessionScreen.tsx`.
+
+Os componentes reutilizam os tokens de tema
+existentes e oferecem suporte aos temas claro
+e escuro.
+
+### Comunicação com o backend
+
+A funcionalidade reutiliza os métodos autenticados
+existentes em `src/services/trainingSessions.ts`:
+
+* `updateWorkoutSession`;
+* `updateExerciseExecution`.
+
+Os contratos HTTP utilizados são:
+
+* `PATCH /api/v1/training/sessions/{session_id}`;
+* `PATCH /api/v1/training/sessions/{session_id}/exercises/{execution_id}`.
+
+O corpo da requisição contém o campo `notes`,
+com uma string normalizada ou `null`.
+
+O salvamento de uma observação individual não
+envia o campo `completed`, preservando o estado
+de conclusão do exercício.
+
+As respostas são verificadas quanto ao identificador
+da sessão, à existência do exercício correspondente
+e ao conteúdo efetivamente confirmado.
+
+O backend existente realiza a validação da
+autenticação, da propriedade da sessão e do estado
+ativo antes de permitir alterações.
+
+Sessões encerradas não podem receber novas
+alterações nas observações.
+
+O histórico de treino preserva as observações
+persistidas, utilizando a apresentação existente
+em `src/screens/WorkoutHistoryDetailsScreen.tsx`.
+
+Não foram necessários novos endpoints, alterações
+nos modelos de produção, migrations, dependências
+ou modificações nos contratos de comunicação.
+
+### Validação
+
+A implementação foi desenvolvida utilizando testes
+unitários e de integração nas fases Red e Green,
+seguidas de testes complementares de robustez.
+
+Evidências da validação local da FUNC-07:
+
+* 28 novos testes unitários mobile;
+* 20 novos testes de integração mobile;
+* 6 novos testes de integração backend;
+* 54 novos testes automatizados no total;
+* 528 testes mobile da baseline preservados;
+* 1117 testes backend da baseline preservados;
+* 576 testes mobile aprovados em 39 suítes;
+* 1123 testes backend aprovados;
+* 1699 testes automatizados aprovados na regressão;
+* TypeScript, ESLint, Prettier, Ruff e Pyright aprovados;
+* integridade dos lockfiles e dependências validada.
+
+Os testes backend foram executados em PostgreSQL
+isolado, na porta 5434, sem utilizar o banco de
+desenvolvimento do aplicativo.
+
+A cobertura inclui persistência, atualização,
+exclusão, normalização, recuperação no histórico,
+isolamento entre usuários, rejeição de requisições
+inválidas e proteção de sessões encerradas.
+
+A regressão completa apresentou um aviso conhecido
+de depreciação da integração Starlette/AnyIO.
+
+Também ocorreu um aviso React `act` na suíte
+`MapGymPreview.test.tsx`, relacionado à atualização
+assíncrona da `VirtualizedList`.
+
+Esse aviso é intermitente, já havia sido observado
+anteriormente e não representa uma falha dos testes
+da FUNC-07. Sua causa não foi considerada resolvida.
+
+### Validação física
+
+A validação realizada no iPhone via Expo Go
+confirmou 14 cenários:
+
+* apresentação dos campos gerais e individuais;
+* registro e salvamento da observação geral;
+* registro e salvamento da observação individual;
+* edição de observações persistidas;
+* exclusão explícita de observações;
+* preservação de rascunhos independentes;
+* preservação durante o registro de séries;
+* preservação durante a conclusão de exercícios;
+* descarte de alterações;
+* proteção pela seta e pelo gesto lateral de retorno;
+* bloqueio de finalização e cancelamento;
+* persistência das observações ao retomar a sessão;
+* apresentação das observações no histórico;
+* teclado, acentuação e temas claro e escuro.
+
+### Limitações
+
+Os rascunhos não salvos permanecem exclusivamente
+em memória. Não são persistidos em armazenamento
+local e podem ser perdidos no encerramento forçado
+do aplicativo.
+
+A funcionalidade não implementa salvamento
+automático nem sincronização offline.
+
+O contrato atual das observações não define
+um limite específico de caracteres. Esse aspecto
+permanece sujeito à avaliação de limites de entrada
+e segurança.
+
+O bloqueio de operações da interface não constitui
+um mecanismo de controle de versões para edições
+simultâneas realizadas em dispositivos diferentes.
+
+A proteção de navegação não impede desmontagens
+externas da tela, encerramentos forçados ou a
+expiração da sessão de autenticação.
+
+A validação física foi realizada no iPhone via
+Expo Go. Não constitui evidência de validação
+completa no Android, em builds nativos ou em
+todas as configurações de acessibilidade.
+
 ## Autenticação
 
 O FitMap utiliza autenticação gerenciada pelo backend FastAPI e persistida em PostgreSQL.

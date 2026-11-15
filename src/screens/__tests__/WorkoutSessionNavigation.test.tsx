@@ -5,15 +5,18 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react-native";
+import { usePreventRemove } from "@react-navigation/native";
 import type { ComponentProps, ContextType } from "react";
 import { AccessibilityInfo, Alert } from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
+  addSetExecution,
   cancelWorkoutSession,
   finishWorkoutSession,
   getActiveWorkoutSession,
   updateExerciseExecution,
+  updateWorkoutSession,
   type WorkoutSession,
 } from "../../services/trainingSessions";
 import WorkoutSessionScreen from "../WorkoutSessionScreen";
@@ -47,6 +50,10 @@ jest.mock("lucide-react-native", () => ({
   X: () => null,
 }));
 
+jest.mock("@react-navigation/native", () => ({
+  usePreventRemove: jest.fn(),
+}));
+
 jest.mock("../../services/trainingSessions", () => ({
   getActiveWorkoutSession: jest.fn(),
   startWorkoutSession: jest.fn(),
@@ -56,12 +63,16 @@ jest.mock("../../services/trainingSessions", () => ({
   addSetExecution: jest.fn(),
   removeSetExecution: jest.fn(),
   updateExerciseExecution: jest.fn(),
+  updateWorkoutSession: jest.fn(),
 }));
 
 const mockedActive = getActiveWorkoutSession as jest.Mock;
 const mockedUpdate = updateExerciseExecution as jest.Mock;
 const mockedFinish = finishWorkoutSession as jest.Mock;
 const mockedCancel = cancelWorkoutSession as jest.Mock;
+const mockedSessionUpdate = updateWorkoutSession as jest.Mock;
+const mockedAdd = addSetExecution as jest.Mock;
+const mockedPreventRemove = jest.mocked(usePreventRemove);
 
 const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
 
@@ -435,6 +446,674 @@ describe("WorkoutSessionScreen - navegacao apos encerramento", () => {
       await waitFor(() => {
         expectProgress(1, 2, 50);
       });
+    });
+  });
+
+  describe("execution notes", () => {
+    const sessionLabel = "Observa\u00e7\u00e3o do treino";
+    const exerciseLabel =
+      "Observa\u00e7\u00e3o do exerc\u00edcio Exercicio de teste";
+    const secondLabel =
+      "Observa\u00e7\u00e3o do exerc\u00edcio Segundo exercicio";
+
+    const saveSessionLabel = "Salvar observa\u00e7\u00e3o do treino";
+    const saveExerciseLabel =
+      "Salvar observa\u00e7\u00e3o do exerc\u00edcio Exercicio de teste";
+    const saveSecondLabel =
+      "Salvar observa\u00e7\u00e3o do exerc\u00edcio Segundo exercicio";
+
+    const discardSessionLabel =
+      "Descartar altera\u00e7\u00f5es da observa\u00e7\u00e3o do treino";
+    const discardExerciseLabel =
+      "Descartar altera\u00e7\u00f5es da observa\u00e7\u00e3o do exerc\u00edcio Exercicio de teste";
+
+    const unsavedTitle = "Observa\u00e7\u00f5es n\u00e3o salvas";
+    const saveErrorTitle =
+      "N\u00e3o foi poss\u00edvel salvar a observa\u00e7\u00e3o";
+
+    const notedSession: WorkoutSession = {
+      ...session,
+      notes: "Saved workout note",
+      exercises: [
+        {
+          ...session.exercises[0],
+          plannedNotes: "Planned technique",
+          notes: "Saved exercise note",
+        },
+        {
+          ...session.exercises[0],
+          id: "exercise-test-456",
+          exerciseId: "catalog-exercise-456",
+          exerciseName: "Segundo exercicio",
+          position: 2,
+          plannedNotes: null,
+          notes: null,
+          isCompleted: false,
+          completedAt: null,
+        },
+      ],
+    };
+
+    function withSessionNote(notes: string | null): WorkoutSession {
+      return {
+        ...notedSession,
+        notes,
+      };
+    }
+
+    function withExerciseNote(notes: string | null): WorkoutSession {
+      return {
+        ...notedSession,
+        exercises: [
+          {
+            ...notedSession.exercises[0],
+            notes,
+          },
+          notedSession.exercises[1],
+        ],
+      };
+    }
+
+    function noteValue(label: string): string {
+      return screen.getByLabelText(label).props.value;
+    }
+
+    async function typeNote(label: string, value: string): Promise<void> {
+      await fireEvent.changeText(screen.getByLabelText(label), value);
+    }
+
+    async function pressNoteAction(label: string): Promise<void> {
+      await fireEvent.press(screen.getByLabelText(label));
+    }
+
+    beforeEach(() => {
+      mockedActive.mockResolvedValue(notedSession);
+      mockedSessionUpdate.mockReset();
+      mockedUpdate.mockReset();
+      mockedAdd.mockReset();
+    });
+
+    it("notes: loads persisted notes separately from planned instructions", async () => {
+      await renderSession();
+
+      expect(noteValue(sessionLabel)).toBe("Saved workout note");
+      expect(noteValue(exerciseLabel)).toBe("Saved exercise note");
+      expect(noteValue(secondLabel)).toBe("");
+
+      expect(screen.getByText("Planned technique")).toBeTruthy();
+
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+      expect(screen.getByLabelText(saveExerciseLabel)).toBeDisabled();
+      expect(screen.getByLabelText(saveSecondLabel)).toBeDisabled();
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+    });
+
+    it("notes: preserves raw input without making equivalent whitespace dirty", async () => {
+      await renderSession();
+
+      await typeNote(sessionLabel, "  Saved workout note  ");
+
+      expect(noteValue(sessionLabel)).toBe("  Saved workout note  ");
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+
+      await typeNote(secondLabel, " \n\t ");
+
+      expect(screen.getByLabelText(saveSecondLabel)).toBeDisabled();
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+    });
+
+    it("notes: saves normalized session notes and acknowledges the server response", async () => {
+      mockedSessionUpdate.mockResolvedValue(
+        withSessionNote("New workout note"),
+      );
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "  New workout note  ");
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+
+      await pressNoteAction(saveSessionLabel);
+
+      expect(mockedSessionUpdate).toHaveBeenCalledWith(
+        "test-access-token",
+        notedSession.id,
+        { notes: "New workout note" },
+      );
+
+      await waitFor(() => {
+        expect(noteValue(sessionLabel)).toBe("New workout note");
+        expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+      });
+
+      expect(mockedUpdate).not.toHaveBeenCalled();
+      expect(noteValue(exerciseLabel)).toBe("Saved exercise note");
+    });
+
+    it("notes: saves exercise notes without changing completion or other drafts", async () => {
+      mockedUpdate.mockResolvedValue(withExerciseNote("New exercise note"));
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Unsaved workout");
+      await typeNote(secondLabel, "Unsaved second exercise");
+      await typeNote(exerciseLabel, " New exercise note ");
+
+      await pressNoteAction(saveExerciseLabel);
+
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        "test-access-token",
+        notedSession.id,
+        notedSession.exercises[0].id,
+        { notes: "New exercise note" },
+      );
+
+      await waitFor(() => {
+        expect(noteValue(exerciseLabel)).toBe("New exercise note");
+        expect(screen.getByLabelText(saveExerciseLabel)).toBeDisabled();
+      });
+
+      expect(noteValue(sessionLabel)).toBe("Unsaved workout");
+      expect(noteValue(secondLabel)).toBe("Unsaved second exercise");
+
+      expect(
+        screen.getByLabelText("Reabrir exerc\u00edcio Exercicio de teste"),
+      ).toBeTruthy();
+
+      expect(screen.getByText("Planned technique")).toBeTruthy();
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+    });
+
+    it("notes: clears persisted session notes using an explicit null payload", async () => {
+      mockedSessionUpdate.mockResolvedValue(withSessionNote(null));
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "");
+
+      expect(screen.getByLabelText(saveSessionLabel)).not.toBeDisabled();
+
+      await pressNoteAction(saveSessionLabel);
+
+      expect(mockedSessionUpdate).toHaveBeenCalledWith(
+        "test-access-token",
+        notedSession.id,
+        { notes: null },
+      );
+
+      await waitFor(() => {
+        expect(noteValue(sessionLabel)).toBe("");
+        expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+      });
+    });
+
+    it("notes: clears persisted exercise notes using an explicit null payload", async () => {
+      mockedUpdate.mockResolvedValue(withExerciseNote(null));
+
+      await renderSession();
+
+      await typeNote(exerciseLabel, "   ");
+
+      await pressNoteAction(saveExerciseLabel);
+
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        "test-access-token",
+        notedSession.id,
+        notedSession.exercises[0].id,
+        { notes: null },
+      );
+
+      await waitFor(() => {
+        expect(noteValue(exerciseLabel)).toBe("");
+        expect(screen.getByLabelText(saveExerciseLabel)).toBeDisabled();
+      });
+
+      expect(screen.getByText("Planned technique")).toBeTruthy();
+    });
+
+    it("notes: preserves unsaved drafts when exercise completion changes", async () => {
+      mockedUpdate.mockResolvedValue({
+        ...notedSession,
+        exercises: [
+          {
+            ...notedSession.exercises[0],
+            isCompleted: false,
+            completedAt: null,
+          },
+          notedSession.exercises[1],
+        ],
+      });
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Session draft");
+      await typeNote(exerciseLabel, "Exercise draft");
+
+      await fireEvent.press(
+        screen.getByLabelText("Reabrir exerc\u00edcio Exercicio de teste"),
+      );
+
+      await screen.findByLabelText(
+        "Concluir exerc\u00edcio Exercicio de teste",
+      );
+
+      expect(mockedUpdate).toHaveBeenCalledWith(
+        "test-access-token",
+        notedSession.id,
+        notedSession.exercises[0].id,
+        { completed: false },
+      );
+
+      expect(noteValue(sessionLabel)).toBe("Session draft");
+      expect(noteValue(exerciseLabel)).toBe("Exercise draft");
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+    });
+
+    it("notes: preserves unsaved drafts when a set is registered", async () => {
+      mockedAdd.mockResolvedValue({
+        ...notedSession,
+        updatedAt: "2026-11-04T10:20:00Z",
+      });
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Session draft");
+      await typeNote(secondLabel, "Second exercise draft");
+
+      await fireEvent.press(
+        screen.getByLabelText("Registrar s\u00e9rie de Segundo exercicio"),
+      );
+
+      expect(mockedAdd).toHaveBeenCalledTimes(1);
+
+      await waitFor(() => {
+        expect(
+          screen.getByLabelText("Registrar s\u00e9rie de Segundo exercicio"),
+        ).not.toBeDisabled();
+      });
+
+      expect(noteValue(sessionLabel)).toBe("Session draft");
+      expect(noteValue(secondLabel)).toBe("Second exercise draft");
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+    });
+
+    it("notes: retains failed drafts and allows a successful retry", async () => {
+      mockedSessionUpdate
+        .mockRejectedValueOnce(new Error("The backend could not be reached."))
+        .mockResolvedValueOnce(withSessionNote("Retry note"));
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "  Retry note  ");
+
+      await pressNoteAction(saveSessionLabel);
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          saveErrorTitle,
+          "N\u00e3o foi poss\u00edvel conectar ao servidor.",
+        );
+      });
+
+      expect(noteValue(sessionLabel)).toBe("  Retry note  ");
+      expect(screen.getByLabelText(saveSessionLabel)).not.toBeDisabled();
+
+      await pressNoteAction(saveSessionLabel);
+
+      await waitFor(() => {
+        expect(noteValue(sessionLabel)).toBe("Retry note");
+        expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+      });
+
+      expect(mockedSessionUpdate).toHaveBeenCalledTimes(2);
+    });
+
+    it("notes: retains dirty drafts when the response does not confirm the note", async () => {
+      mockedSessionUpdate.mockResolvedValue(notedSession);
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Expected saved note");
+
+      await pressNoteAction(saveSessionLabel);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(saveSessionLabel)).not.toBeDisabled();
+      });
+
+      expect(noteValue(sessionLabel)).toBe("Expected saved note");
+
+      expect(alertSpy).toHaveBeenCalledWith(saveErrorTitle, expect.any(String));
+
+      expect(mockedSessionUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it("notes: prevents conflicting operations while a save is pending", async () => {
+      let resolveSave = (_value: WorkoutSession): void => {
+        throw new Error("Save not initialized.");
+      };
+
+      mockedSessionUpdate.mockImplementationOnce(
+        () =>
+          new Promise<WorkoutSession>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Pending save");
+
+      await pressNoteAction(saveSessionLabel);
+
+      expect(mockedSessionUpdate).toHaveBeenCalledTimes(1);
+
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+      expect(screen.getByLabelText("Finalizar treino")).toBeDisabled();
+      expect(screen.getByLabelText("Cancelar treino")).toBeDisabled();
+
+      expect(
+        screen.getByLabelText("Registrar s\u00e9rie de Segundo exercicio"),
+      ).toBeDisabled();
+
+      expect(
+        screen.getByLabelText("Reabrir exerc\u00edcio Exercicio de teste"),
+      ).toBeDisabled();
+
+      expect(screen.getByLabelText(sessionLabel).props.editable).toBe(false);
+      expect(screen.getByLabelText(exerciseLabel).props.editable).toBe(false);
+      expect(screen.getByLabelText(secondLabel).props.editable).toBe(false);
+
+      await act(async () => {
+        resolveSave(withSessionNote("Pending save"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Finalizar treino")).not.toBeDisabled();
+        expect(screen.getByLabelText(sessionLabel).props.editable).toBe(true);
+      });
+
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+      expect(mockedFinish).not.toHaveBeenCalled();
+      expect(mockedCancel).not.toHaveBeenCalled();
+      expect(mockedAdd).not.toHaveBeenCalled();
+    });
+
+    it("notes: discards individual changes without updating the server", async () => {
+      await renderSession();
+
+      await typeNote(sessionLabel, "Discard session draft");
+      await typeNote(exerciseLabel, "Discard exercise draft");
+
+      await pressNoteAction(discardSessionLabel);
+
+      expect(noteValue(sessionLabel)).toBe("Saved workout note");
+      expect(noteValue(exerciseLabel)).toBe("Discard exercise draft");
+
+      await pressNoteAction(discardExerciseLabel);
+
+      expect(noteValue(exerciseLabel)).toBe("Saved exercise note");
+
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+      expect(screen.getByLabelText(saveExerciseLabel)).toBeDisabled();
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+    });
+
+    it("notes: blocks finishing while unsaved changes exist", async () => {
+      await renderSession();
+
+      await typeNote(sessionLabel, "Unsaved note");
+
+      await fireEvent.press(screen.getByLabelText("Finalizar treino"));
+
+      expect(alertSpy).toHaveBeenCalledWith(unsavedTitle, expect.any(String));
+
+      expect(mockedFinish).not.toHaveBeenCalled();
+      expect(noteValue(sessionLabel)).toBe("Unsaved note");
+
+      await pressNoteAction(discardSessionLabel);
+
+      await fireEvent.press(screen.getByLabelText("Finalizar treino"));
+
+      await confirmAlert("Finalizar treino", "Finalizar");
+
+      expect(mockedFinish).toHaveBeenCalledTimes(1);
+    });
+
+    it("notes: blocks cancelling while unsaved exercise changes exist", async () => {
+      await renderSession();
+
+      await typeNote(exerciseLabel, "Unsaved exercise");
+
+      await fireEvent.press(screen.getByLabelText("Cancelar treino"));
+
+      expect(alertSpy).toHaveBeenCalledWith(unsavedTitle, expect.any(String));
+
+      expect(mockedCancel).not.toHaveBeenCalled();
+      expect(noteValue(exerciseLabel)).toBe("Unsaved exercise");
+
+      await pressNoteAction(discardExerciseLabel);
+
+      await fireEvent.press(screen.getByLabelText("Cancelar treino"));
+
+      await confirmAlert("Cancelar treino", "Cancelar treino");
+
+      expect(mockedCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it("notes: activates the navigation guard only while drafts remain unsaved", async () => {
+      await renderSession();
+
+      expect(mockedPreventRemove).toHaveBeenLastCalledWith(
+        false,
+        expect.any(Function),
+      );
+
+      await typeNote(sessionLabel, "Unsaved navigation note");
+
+      expect(mockedPreventRemove).toHaveBeenLastCalledWith(
+        true,
+        expect.any(Function),
+      );
+
+      const calls = mockedPreventRemove.mock.calls;
+      const preventRemoveCallback = calls[calls.length - 1][1];
+
+      await act(async () => {
+        preventRemoveCallback({
+          data: {
+            action: { type: "GO_BACK" },
+          },
+        });
+      });
+
+      expect(alertSpy).toHaveBeenCalledWith(unsavedTitle, expect.any(String));
+
+      expect(noteValue(sessionLabel)).toBe("Unsaved navigation note");
+
+      await pressNoteAction(discardSessionLabel);
+
+      expect(mockedPreventRemove).toHaveBeenLastCalledWith(
+        false,
+        expect.any(Function),
+      );
+
+      expect(navigation.popTo).not.toHaveBeenCalled();
+    });
+
+    it("notes: robustness: rejects a save response belonging to another session", async () => {
+      mockedSessionUpdate.mockResolvedValue({
+        ...withSessionNote("Submitted note"),
+        id: "different-session",
+        workoutName: "Different workout",
+      });
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Submitted note");
+      await pressNoteAction(saveSessionLabel);
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          saveErrorTitle,
+          expect.any(String),
+        );
+      });
+
+      expect(noteValue(sessionLabel)).toBe("Submitted note");
+
+      expect(screen.getByLabelText(saveSessionLabel)).not.toBeDisabled();
+
+      expect(screen.queryByText("Different workout")).toBeNull();
+
+      expect(noteValue(exerciseLabel)).toBe("Saved exercise note");
+    });
+
+    it("notes: robustness: rejects a response missing the saved exercise", async () => {
+      mockedUpdate.mockResolvedValue({
+        ...notedSession,
+        exercises: [notedSession.exercises[1]],
+      });
+
+      await renderSession();
+
+      await typeNote(exerciseLabel, "Unconfirmed exercise note");
+
+      await pressNoteAction(saveExerciseLabel);
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          saveErrorTitle,
+          expect.any(String),
+        );
+      });
+
+      expect(noteValue(exerciseLabel)).toBe("Unconfirmed exercise note");
+
+      expect(screen.getByLabelText(saveExerciseLabel)).not.toBeDisabled();
+
+      expect(noteValue(sessionLabel)).toBe("Saved workout note");
+
+      expect(noteValue(secondLabel)).toBe("");
+    });
+
+    it("notes: robustness: prevents another note save during a pending save", async () => {
+      let resolveSave = (_value: WorkoutSession): void => {
+        throw new Error("Save not initialized.");
+      };
+
+      mockedSessionUpdate.mockImplementationOnce(
+        () =>
+          new Promise<WorkoutSession>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Pending session save");
+      await typeNote(exerciseLabel, "Independent exercise draft");
+
+      await pressNoteAction(saveSessionLabel);
+
+      expect(screen.getByLabelText(saveExerciseLabel)).toBeDisabled();
+
+      await pressNoteAction(saveExerciseLabel);
+
+      expect(mockedSessionUpdate).toHaveBeenCalledTimes(1);
+      expect(mockedUpdate).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveSave(withSessionNote("Pending session save"));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(saveExerciseLabel)).not.toBeDisabled();
+      });
+
+      expect(noteValue(exerciseLabel)).toBe("Independent exercise draft");
+
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+    });
+
+    it("notes: robustness: prevents note saves during a pending set operation", async () => {
+      let resolveSet = (_value: WorkoutSession): void => {
+        throw new Error("Set operation not initialized.");
+      };
+
+      mockedAdd.mockImplementationOnce(
+        () =>
+          new Promise<WorkoutSession>((resolve) => {
+            resolveSet = resolve;
+          }),
+      );
+
+      await renderSession();
+
+      await typeNote(sessionLabel, "Preserved workout draft");
+      await typeNote(exerciseLabel, "Preserved exercise draft");
+
+      await fireEvent.press(
+        screen.getByLabelText("Registrar s\u00e9rie de Segundo exercicio"),
+      );
+
+      expect(mockedAdd).toHaveBeenCalledTimes(1);
+
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+
+      expect(screen.getByLabelText(saveExerciseLabel)).toBeDisabled();
+
+      expect(screen.getByLabelText(sessionLabel).props.editable).toBe(false);
+
+      await pressNoteAction(saveSessionLabel);
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveSet(notedSession);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(saveSessionLabel)).not.toBeDisabled();
+      });
+
+      expect(noteValue(sessionLabel)).toBe("Preserved workout draft");
+
+      expect(noteValue(exerciseLabel)).toBe("Preserved exercise draft");
+
+      expect(mockedUpdate).not.toHaveBeenCalled();
+    });
+
+    it("notes: robustness: discards equivalent raw whitespace without an API request", async () => {
+      await renderSession();
+
+      await typeNote(sessionLabel, "  Saved workout note  ");
+
+      expect(screen.getByLabelText(saveSessionLabel)).toBeDisabled();
+
+      expect(screen.getByLabelText(discardSessionLabel)).not.toBeDisabled();
+
+      await pressNoteAction(discardSessionLabel);
+
+      expect(noteValue(sessionLabel)).toBe("Saved workout note");
+
+      expect(screen.queryByLabelText(discardSessionLabel)).toBeNull();
+
+      expect(mockedSessionUpdate).not.toHaveBeenCalled();
+
+      expect(mockedPreventRemove).toHaveBeenLastCalledWith(
+        false,
+        expect.any(Function),
+      );
     });
   });
 });
