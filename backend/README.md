@@ -941,6 +941,7 @@ GET  /progress/exercises/performance
 
 POST /progress/photos
 GET  /progress/photos
+GET  /progress/photos/page
 GET  /progress/photos/{progress_photo_id}/content
 ```
 
@@ -1349,6 +1350,288 @@ docker compose stop api
 ```
 
 Do not remove database or private-media volumes as part of routine application development.
+
+## Bounded history and progress collections (PERF-03)
+
+PERF-03 addresses NFR-PERF-003 and follows the measurement-first
+approach defined by NFR-PERF-006.
+
+Large workout-history and progress-photo collections support
+cursor-based pagination. Existing clients retain access to the
+original unpaginated endpoints.
+
+### API contract
+
+Authenticated endpoints under `/api/v1`:
+
+| Collection | Paginated endpoint | Legacy endpoint |
+| --- | --- | --- |
+| Completed workouts | `GET /training/history/page` | `GET /training/history` |
+| Progress photos | `GET /progress/photos/page` | `GET /progress/photos` |
+
+Both paginated endpoints accept:
+
+- `limit`: defaults to 50; valid range is 1 through 100;
+- `cursor`: optional UUID identifying the previous page's last item.
+
+The response envelope is:
+
+```json
+{
+  "items": [],
+  "next_cursor": null
+}
+```
+
+The items retain the existing collection DTOs.
+A non-null `next_cursor` indicates that another page is available.
+A null cursor indicates that the collection traversal is complete.
+
+The workout-history endpoint additionally accepts:
+
+- `completed_from`: inclusive lower timestamp boundary;
+- `completed_before`: exclusive upper timestamp boundary.
+
+These values must contain timezone information.
+When both are provided, the lower boundary must precede the
+upper boundary.
+
+Example request for a calendar month in UTC-03:00:
+
+```text
+GET /api/v1/training/history/page?limit=50&completed_from=2026-11-01T03:00:00Z&completed_before=2026-12-01T03:00:00Z
+```
+
+Invalid query parameters receive HTTP 422 with the existing
+`request_validation_error` contract.
+
+A malformed, unknown, foreign-owned or otherwise ineligible
+pagination cursor receives HTTP 422 with
+`invalid_pagination_cursor`.
+
+A cursor must identify an item in the requested collection,
+including the applicable owner, status and date-range conditions.
+Cursor errors do not disclose another user's records.
+
+Both paginated responses use `Cache-Control: private, no-store`.
+Progress-photo metadata does not expose private storage keys.
+Image binaries continue to use the authenticated content endpoint.
+
+### Query strategy and ordering
+
+Pagination uses keyset comparisons rather than OFFSET.
+
+Workout history is ordered by:
+
+1. `completed_at DESC`;
+2. `started_at DESC`;
+3. `id DESC`.
+
+Only completed sessions with a completion timestamp are eligible.
+
+Progress photos are ordered by:
+
+1. `recorded_at DESC`;
+2. `id DESC`.
+
+The unique identifier provides a deterministic tie-breaker.
+
+An initial request uses a single collection query.
+A subsequent request resolves the cursor anchor before retrieving
+the next page.
+
+The collection query fetches at most `limit + 1` rows to determine
+whether another page exists. There is no additional COUNT query.
+
+Ownership and the requested date boundaries are enforced in the
+database queries.
+
+### PostgreSQL indexes
+
+Alembic revision:
+
+```text
+f03a7b2c9d81
+```
+
+Parent revision: `d36a1f5e29b0`.
+
+The migration adds two non-unique indexes:
+
+- `ix_workout_sessions_user_completed_order`;
+- `ix_progress_photos_user_recorded_order`.
+
+The workout-history index covers:
+
+```text
+user_id, completed_at DESC, started_at DESC, id DESC
+```
+
+Its partial predicate is:
+
+```sql
+status = 'completed' AND completed_at IS NOT NULL
+```
+
+The progress-photo index covers:
+
+```text
+user_id, recorded_at DESC, id DESC
+```
+
+SQLAlchemy metadata declares the same indexes.
+Existing indexes are retained.
+
+Upgrade, downgrade and re-upgrade were validated on isolated
+PostgreSQL infrastructure. Alembic metadata alignment was verified.
+
+The migration was also applied to the local development database
+for physical validation without modifying the existing records.
+
+### Paired collection benchmark
+
+The benchmark used synthetic records and real backend handlers.
+The measurements compare the legacy full response with the first
+page of the corresponding collection.
+
+JSON sizes are serialized response sizes in bytes.
+Handler times are local medians from five repeated measurements.
+They exclude real mobile-network latency and image binary retrieval.
+
+| Collection | Records | Legacy bytes | Page bytes | Legacy ms | Page ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| History | 0 | 2 | 31 | 1.198 | 1.440 |
+| History | 50 | 14091 | 14120 | 1.576 | 1.699 |
+| History | 250 | 70641 | 14214 | 3.877 | 1.594 |
+| History | 1000 | 282891 | 14214 | 10.907 | 2.154 |
+| Photos | 0 | 2 | 31 | 0.911 | 0.958 |
+| Photos | 50 | 8901 | 8930 | 1.926 | 1.461 |
+| Photos | 250 | 44501 | 8964 | 2.964 | 1.391 |
+| Photos | 1000 | 178001 | 8964 | 10.291 | 2.161 |
+
+For 1,000 records, the initial response size decreases by
+approximately 94.98% for workout history and 94.96% for photos.
+
+The page envelope adds a small overhead for empty and small
+collections. Traversing every page can transfer slightly more
+total JSON than the original unpaginated response.
+
+The benchmark confirmed 40 equivalent first-page comparisons and
+8 complete traversals across the tested collection sizes.
+
+At 1,000 records, complete traversal requires 20 pages and
+39 collection/anchor queries. The optimization targets bounded
+initial and incremental loading, not fewer queries when the entire
+collection is explicitly requested.
+
+### Index experiment
+
+A separate PostgreSQL experiment used temporary tables,
+synthetic data, fresh planner statistics and
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`.
+
+The experiment compared equivalent queries with and without the
+candidate indexes. The original public tables and indexes were
+preserved.
+
+Selected results for users with 10,000 records:
+
+| Scenario | Before ms | After ms | Before buffers | After buffers |
+| --- | ---: | ---: | ---: | ---: |
+| History: first page | 2.761 | 0.036 | 201 | 3 |
+| History: deep page | 0.886 | 0.058 | 204 | 10 |
+| History: bounded range | 0.664 | 0.031 | 201 | 3 |
+| Photos: first page | 2.328 | 0.043 | 274 | 7 |
+| Photos: deep page | 0.809 | 0.057 | 277 | 8 |
+
+Times represent combined local anchor/page execution medians.
+Buffers represent combined shared and local buffer accesses.
+
+The candidate ordered indexes were selected without forcing the
+planner, and the tested page queries no longer required a sort.
+
+Ten equivalent query-result comparisons were confirmed.
+
+These SQL measurements are separate from the paired handler
+benchmark. They are not production latency measurements.
+
+### Automated validation
+
+The implementation adds 31 backend tests in:
+
+```text
+tests/test_perf03_pagination.py
+```
+
+Coverage includes:
+
+- legacy contract compatibility;
+- authentication and ownership isolation;
+- default and maximum page sizes;
+- empty collections and complete traversal;
+- stable ordering and timestamp ties;
+- cursor validation and cross-collection rejection;
+- insertion of newer records between page requests;
+- inclusive and exclusive date boundaries;
+- cursor eligibility within the requested range.
+
+The targeted backend regression passed 55 tests.
+
+The complete PERF-03 branch regression passed:
+
+- 1,123 existing backend tests;
+- 31 new backend tests;
+- 1,154 backend tests in total;
+- 675 mobile tests;
+- 1,829 automated tests across both applications.
+
+The backend tests used the isolated PostgreSQL database on port
+5434. The regression reported the known Starlette/AnyIO
+deprecation warning.
+
+Ruff lint, Ruff formatting, Pyright and lockfile validation passed.
+Local Windows Pyright execution required explicit selection of
+the backend virtual-environment interpreter. No typing rules
+or dependency configuration were changed.
+
+### Physical validation and cleanup
+
+On November 16, 2026, the developer confirmed all 17 physical
+validation scenarios on an iPhone using Expo Go and the local API.
+
+A dedicated synthetic account contained 65 completed workout
+records and 55 valid synthetic PNG images in private local
+object storage. One additional image was uploaded through the
+mobile application.
+
+The account, its 65 workout records and all 56 associated
+image objects were removed after validation.
+
+The original development user, five workout-session records
+and three progress photos were preserved.
+The contents of the original private images were verified.
+The migration and both pagination indexes remain applied.
+
+### Limitations and operational considerations
+
+- Legacy collection endpoints remain unbounded for compatibility.
+- Cursor traversal does not provide a historical database snapshot.
+- Concurrent changes or deleted anchors may require a restart.
+- Clients must not interpret an incomplete page traversal as a
+  complete collection.
+- Cursor pagination does not reduce the size of individual image
+  binaries.
+- The mobile calendar traverses the entire visible date range
+  before presenting complete activity summaries.
+- The mobile history can still request the full legacy collection
+  when filters require complete results.
+- Indexes introduce storage and write-maintenance overhead.
+- Planner behavior depends on data distribution, statistics and
+  execution context, including generic prepared plans.
+- These measurements do not establish a production latency SLA.
+- The indexes are created using the regular Alembic migration
+  strategy. Production deployment must account for index-build
+  locking and table size.
 
 ## System endpoints
 

@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import literal, select, tuple_
 from sqlalchemy.orm import Session
 
 from fitmap.media.storage import (
@@ -11,6 +11,10 @@ from fitmap.media.storage import (
     build_progress_photo_storage_key,
 )
 from fitmap.media.validation import validate_progress_photo
+from fitmap.pagination import (
+    InvalidPaginationCursorError,
+    validate_page_limit,
+)
 from fitmap.progress.models import ProgressPhoto
 from fitmap.training.models import WorkoutSession
 
@@ -114,6 +118,54 @@ def list_progress_photos(
     )
 
     return list(db_session.scalars(statement).all())
+
+
+def list_progress_photos_page(
+    *,
+    db_session: Session,
+    user_id: UUID,
+    limit: int,
+    cursor: UUID | None = None,
+) -> tuple[list[ProgressPhoto], UUID | None]:
+    validate_page_limit(limit)
+
+    statement = select(ProgressPhoto).where(
+        ProgressPhoto.user_id == user_id,
+    )
+
+    if cursor is not None:
+        anchor = db_session.scalar(
+            statement.where(
+                ProgressPhoto.id == cursor,
+            )
+        )
+
+        if anchor is None:
+            raise InvalidPaginationCursorError("Invalid pagination cursor.")
+
+        statement = statement.where(
+            tuple_(
+                ProgressPhoto.recorded_at,
+                ProgressPhoto.id,
+            )
+            < tuple_(
+                literal(anchor.recorded_at),
+                literal(anchor.id),
+            )
+        )
+
+    statement = statement.order_by(
+        ProgressPhoto.recorded_at.desc(),
+        ProgressPhoto.id.desc(),
+    ).limit(limit + 1)
+
+    rows = list(db_session.scalars(statement).all())
+
+    items = rows[:limit]
+
+    next_cursor = items[-1].id if len(rows) > limit else None
+
+    return items, next_cursor
 
 
 def get_owned_progress_photo(

@@ -77,6 +77,14 @@ class ProgressPhoto(Base):
     )
 
 
+Index(
+    "ix_progress_photos_user_recorded_order",
+    ProgressPhoto.user_id,
+    ProgressPhoto.recorded_at.desc(),
+    ProgressPhoto.id.desc(),
+)
+
+
 class BodyMetricRecord(Base):
     __tablename__ = "body_metric_records"
     __table_args__ = (

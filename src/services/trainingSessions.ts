@@ -1,4 +1,11 @@
 import { apiClient } from "./apiClient";
+import {
+  buildPageQuery,
+  normalizePage,
+  type Page,
+  type PageApiResponse,
+  type PageOptions,
+} from "./pagination";
 import type { LoadUnit } from "./training";
 
 export type WorkoutSessionStatus = "active" | "completed" | "cancelled";
@@ -477,4 +484,27 @@ export async function getWorkoutHistory(
   );
 
   return response.map(normalizeWorkoutHistoryItem);
+}
+
+export interface HistoryPageOptions extends PageOptions {
+  completedFrom?: string;
+  completedBefore?: string;
+}
+
+export async function getWorkoutHistoryPage(
+  accessToken: string,
+  options: HistoryPageOptions = {},
+): Promise<Page<WorkoutHistoryItem>> {
+  const query = buildPageQuery(options, {
+    completed_from: options.completedFrom,
+    completed_before: options.completedBefore,
+  });
+
+  const response = await apiClient.get<
+    PageApiResponse<WorkoutHistoryApiResponse>
+  >(`/training/history/page?${query}`, {
+    headers: buildAuthorizationHeaders(accessToken),
+  });
+
+  return normalizePage(response, normalizeWorkoutHistoryItem);
 }
