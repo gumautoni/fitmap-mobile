@@ -199,10 +199,45 @@ def list_favorite_gyms(
 
     favorites = db_session.scalars(statement).all()
 
+    if not favorites:
+        return []
+
+    gym_ids = {favorite.gym_id for favorite in favorites}
+
+    gyms_by_id = {
+        gym.id: gym for gym in db_session.scalars(select(Gym).where(Gym.id.in_(gym_ids))).all()
+    }
+
+    external_references = db_session.scalars(
+        select(GymExternalReference)
+        .where(
+            GymExternalReference.gym_id.in_(gym_ids),
+        )
+        .order_by(
+            GymExternalReference.gym_id.asc(),
+            GymExternalReference.created_at.asc(),
+            GymExternalReference.id.asc(),
+        )
+    ).all()
+
+    first_reference_by_gym: dict[
+        UUID,
+        GymExternalReference,
+    ] = {}
+
+    for external_reference in external_references:
+        first_reference_by_gym.setdefault(
+            external_reference.gym_id,
+            external_reference,
+        )
+
     return [
-        _build_favorite_gym_view(
-            db_session=db_session,
+        _build_favorite_gym_view_from_models(
             favorite=favorite,
+            gym=gyms_by_id.get(favorite.gym_id),
+            external_reference=first_reference_by_gym.get(
+                favorite.gym_id,
+            ),
         )
         for favorite in favorites
     ]
@@ -255,6 +290,24 @@ def _build_favorite_gym_view(
             GymExternalReference.id.asc(),
         )
     )
+
+    return _build_favorite_gym_view_from_models(
+        favorite=favorite,
+        gym=gym,
+        external_reference=external_reference,
+    )
+
+
+def _build_favorite_gym_view_from_models(
+    *,
+    favorite: FavoriteGym,
+    gym: Gym | None,
+    external_reference: GymExternalReference | None,
+) -> FavoriteGymView:
+    if gym is None:
+        raise RuntimeError(
+            "Favorite gym points to a missing gym.",
+        )
 
     if external_reference is None:
         raise RuntimeError(
