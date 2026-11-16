@@ -30,6 +30,11 @@ Documents the mobile dependency security baseline, remediation
 decisions, scoped overrides, validation evidence and residual
 development dependency risks.
 
+### `dependency-audit.md`
+
+Documents automated dependency auditing, CI blocking policy,
+security remediation evidence and operational limitations.
+
 ### `testing.md`
 
 Documents the automated testing strategy, local validation commands, test isolation requirements and the relationship between local testing and CI.
