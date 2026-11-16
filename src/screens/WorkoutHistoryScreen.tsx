@@ -5,14 +5,16 @@ import {
   ChevronRight,
   Dumbbell,
   RefreshCw,
+  Search,
 } from "lucide-react-native";
-import { useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useContext, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -25,8 +27,41 @@ import {
   type WorkoutHistoryItem,
 } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
+import {
+  DEFAULT_WORKOUT_HISTORY_FILTERS,
+  filterWorkoutHistory,
+  type WorkoutHistoryFilters,
+  type WorkoutHistoryPeriod,
+} from "../utils/workoutHistoryFilters";
 
 type WorkoutHistoryScreenProps = AppStackScreenProps<"HistoricoTreinos">;
+
+const HISTORY_PERIOD_OPTIONS: readonly {
+  value: WorkoutHistoryPeriod;
+  label: string;
+  accessibilityLabel: string;
+}[] = [
+  {
+    value: null,
+    label: "Todos",
+    accessibilityLabel: "Todos os períodos",
+  },
+  {
+    value: 7,
+    label: "7 dias",
+    accessibilityLabel: "Últimos 7 dias",
+  },
+  {
+    value: 30,
+    label: "30 dias",
+    accessibilityLabel: "Últimos 30 dias",
+  },
+  {
+    value: 90,
+    label: "90 dias",
+    accessibilityLabel: "Últimos 90 dias",
+  },
+];
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
@@ -117,7 +152,29 @@ export default function WorkoutHistoryScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [filters, setFilters] = useState<WorkoutHistoryFilters>(
+    DEFAULT_WORKOUT_HISTORY_FILTERS,
+  );
+
+  const requestGeneration = useRef(0);
+  const focusedRef = useRef(false);
+
+  const visibleHistory = filterWorkoutHistory(history, filters, new Date());
+
+  const canClearFilters =
+    filters.nameQuery.length > 0 || filters.periodDays !== null;
+
+  function clearFilters(): void {
+    setFilters(DEFAULT_WORKOUT_HISTORY_FILTERS);
+  }
+
   const loadHistory = useCallback(async (): Promise<void> => {
+    if (!focusedRef.current) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
     setLoading(true);
     setError(null);
 
@@ -126,42 +183,35 @@ export default function WorkoutHistoryScreen({
         getWorkoutHistory(accessToken),
       );
 
-      setHistory(loadedHistory);
-    } catch (loadError) {
-      setError(getErrorMessage(loadError));
+      if (generation === requestGeneration.current) {
+        setHistory(loadedHistory);
+      }
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        setError(getErrorMessage(loadError));
+      }
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) {
+        setLoading(false);
+      }
     }
   }, [runAuthenticatedRequest]);
 
+  function retryHistory(): void {
+    void loadHistory();
+  }
+
   useFocusEffect(
     useCallback(() => {
-      let active = true;
+      focusedRef.current = true;
 
-      setLoading(true);
-      setError(null);
-
-      runAuthenticatedRequest((accessToken) => getWorkoutHistory(accessToken))
-        .then((loadedHistory) => {
-          if (active) {
-            setHistory(loadedHistory);
-          }
-        })
-        .catch((loadError: unknown) => {
-          if (active) {
-            setError(getErrorMessage(loadError));
-          }
-        })
-        .finally(() => {
-          if (active) {
-            setLoading(false);
-          }
-        });
+      void loadHistory();
 
       return () => {
-        active = false;
+        focusedRef.current = false;
+        requestGeneration.current += 1;
       };
-    }, [runAuthenticatedRequest]),
+    }, [loadHistory]),
   );
 
   if (loading && history.length === 0) {
@@ -201,9 +251,7 @@ export default function WorkoutHistoryScreen({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tentar carregar histórico novamente"
-            onPress={() => {
-              void loadHistory();
-            }}
+            onPress={retryHistory}
             style={({ pressed }) => [
               styles.retryButton,
               pressed && styles.buttonPressed,
@@ -228,6 +276,7 @@ export default function WorkoutHistoryScreen({
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>EXECUÇÕES CONCLUÍDAS</Text>
@@ -248,8 +297,132 @@ export default function WorkoutHistoryScreen({
               color={theme.colors.danger}
             />
 
-            <Text style={styles.inlineErrorText}>{error}</Text>
+            <View style={styles.inlineErrorCopy}>
+              <Text style={styles.inlineErrorText}>{error}</Text>
+
+              <Text style={styles.refreshStatus}>
+                Exibindo os dados carregados anteriormente.
+              </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Tentar carregar histórico novamente"
+                onPress={retryHistory}
+                style={({ pressed }) => [
+                  styles.clearButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.clearButtonText}>Tentar novamente</Text>
+              </Pressable>
+            </View>
           </View>
+        ) : null}
+
+        {loading && history.length > 0 ? (
+          <Text style={styles.refreshStatus} accessibilityLiveRegion="polite">
+            Atualizando histórico...
+          </Text>
+        ) : null}
+
+        {history.length > 0 ? (
+          <>
+            <View style={styles.filterCard}>
+              <View style={styles.filterHeader}>
+                <Text style={styles.filterTitle}>Filtrar histórico</Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Limpar filtros do histórico"
+                  accessibilityState={{ disabled: !canClearFilters }}
+                  disabled={!canClearFilters}
+                  onPress={clearFilters}
+                  style={({ pressed }) => [
+                    styles.clearButton,
+                    !canClearFilters && styles.clearButtonDisabled,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={styles.clearButtonText}>Limpar filtros</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.filterLabel}>Nome do treino</Text>
+
+              <View style={styles.searchField}>
+                <Search
+                  size={19}
+                  strokeWidth={2}
+                  color={theme.colors.textSecondary}
+                />
+
+                <TextInput
+                  accessibilityLabel="Buscar histórico pelo nome do treino"
+                  value={filters.nameQuery}
+                  onChangeText={(nameQuery) =>
+                    setFilters((current) => ({
+                      ...current,
+                      nameQuery,
+                    }))
+                  }
+                  placeholder="Buscar pelo nome do treino"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  style={styles.searchInput}
+                />
+              </View>
+
+              <Text style={styles.filterLabel}>Período</Text>
+
+              <View style={styles.periodOptions}>
+                {HISTORY_PERIOD_OPTIONS.map((option) => {
+                  const selected = filters.periodDays === option.value;
+
+                  return (
+                    <Pressable
+                      key={option.label}
+                      accessibilityRole="button"
+                      accessibilityLabel={option.accessibilityLabel}
+                      accessibilityState={{ selected }}
+                      onPress={() =>
+                        setFilters((current) => ({
+                          ...current,
+                          periodDays: option.value,
+                        }))
+                      }
+                      style={({ pressed }) => [
+                        styles.periodButton,
+                        selected && styles.periodButtonSelected,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.periodButtonText,
+                          selected && styles.periodButtonTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <Text
+              testID="workout-history-results-count"
+              accessibilityLiveRegion="polite"
+              style={styles.resultsCount}
+            >
+              {visibleHistory.length}{" "}
+              {visibleHistory.length === 1
+                ? "treino encontrado"
+                : "treinos encontrados"}
+            </Text>
+          </>
         ) : null}
 
         {history.length === 0 ? (
@@ -269,9 +442,26 @@ export default function WorkoutHistoryScreen({
               dados registrados durante a execução.
             </Text>
           </View>
+        ) : visibleHistory.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <Search
+                size={30}
+                strokeWidth={1.9}
+                color={theme.colors.primary}
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>Nenhum treino encontrado</Text>
+
+            <Text style={styles.emptyText}>
+              Nenhum treino corresponde aos filtros selecionados. Experimente
+              alterar ou limpar os filtros.
+            </Text>
+          </View>
         ) : (
           <View style={styles.list}>
-            {history.map((item) => {
+            {visibleHistory.map((item) => {
               const duration = formatDuration(item.startedAt, item.completedAt);
 
               return (
@@ -437,9 +627,137 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       backgroundColor: theme.colors.surface,
     },
 
-    inlineErrorText: {
+    inlineErrorCopy: {
       flex: 1,
+    },
+
+    inlineErrorText: {
       color: theme.colors.danger,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    refreshStatus: {
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.sm,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    filterCard: {
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+      padding: theme.spacing.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.xl,
+      backgroundColor: theme.colors.surface,
+    },
+
+    filterHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+    },
+
+    filterTitle: {
+      flexShrink: 1,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.cardTitle,
+      lineHeight: theme.typography.lineHeight.body,
+    },
+
+    clearButton: {
+      minHeight: 48,
+      alignSelf: "flex-start",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.sm,
+    },
+
+    clearButtonDisabled: {
+      opacity: 0.45,
+    },
+
+    clearButtonText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    filterLabel: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    searchField: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    searchInput: {
+      flex: 1,
+      minHeight: 48,
+      paddingVertical: theme.spacing.sm,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.body,
+    },
+
+    periodOptions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+    },
+
+    periodButton: {
+      minHeight: 48,
+      flexShrink: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    periodButtonSelected: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary,
+    },
+
+    periodButtonText: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+      textAlign: "center",
+    },
+
+    periodButtonTextSelected: {
+      color: theme.colors.textOnPrimary,
+    },
+
+    resultsCount: {
+      marginBottom: theme.spacing.md,
+      color: theme.colors.textSecondary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.small,
       lineHeight: theme.typography.lineHeight.small,
