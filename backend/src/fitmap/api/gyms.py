@@ -3,13 +3,14 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 import httpx2
-from fastapi import APIRouter, Depends, Path, Query, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
 from fitmap.api.dependencies import (
     CurrentIdentityDependency,
     DatabaseSessionDependency,
 )
 from fitmap.api.errors import ApiError
+from fitmap.gyms.cache import LocationPlaceIdCache
 from fitmap.gyms.config import (
     get_gym_provider_settings,
     get_tomtom_provider_settings,
@@ -49,13 +50,25 @@ router = APIRouter(
 )
 
 
-async def get_gym_provider() -> AsyncIterator[GymProvider]:
+async def get_gym_provider(
+    request: Request,
+) -> AsyncIterator[GymProvider]:
     settings = get_gym_provider_settings()
+
+    location_cache = getattr(
+        request.app.state,
+        "gym_location_cache",
+        None,
+    )
+
+    if not isinstance(location_cache, LocationPlaceIdCache):
+        raise RuntimeError("Application gym location cache is not configured.")
 
     async with httpx2.AsyncClient() as client:
         geoapify = create_geoapify_gym_provider(
             settings=settings,
             client=client,
+            location_cache=location_cache,
         )
         tomtom = create_tomtom_gym_provider(
             settings=get_tomtom_provider_settings(),

@@ -5,6 +5,7 @@ from fitmap.api.errors import register_exception_handlers
 from fitmap.api.router import api_router
 from fitmap.api.system import router as system_router
 from fitmap.config import Settings, get_settings
+from fitmap.gyms.cache import LocationPlaceIdCache
 from fitmap.identity.accounts import initialize_authentication_password_hash
 
 
@@ -18,6 +19,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version="0.1.0",
     )
     application.state.settings = app_settings
+    application.state.gym_location_cache = LocationPlaceIdCache()
 
     application.add_middleware(
         AuthenticationNoStoreMiddleware,
