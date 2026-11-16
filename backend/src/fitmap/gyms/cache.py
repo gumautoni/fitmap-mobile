@@ -1,6 +1,10 @@
+from collections import OrderedDict
+from threading import Lock
 from time import monotonic
 
 from fitmap.gyms.providers import Coordinates
+
+_MAX_ENTRIES = 256
 
 
 class LocationPlaceIdCache:
@@ -10,7 +14,11 @@ class LocationPlaceIdCache:
         ttl_seconds: float = 300.0,
     ) -> None:
         self._ttl_seconds = ttl_seconds
-        self._entries: dict[str, tuple[str, Coordinates | None, float]] = {}
+        self._entries: OrderedDict[
+            str,
+            tuple[str, Coordinates | None, float],
+        ] = OrderedDict()
+        self._lock = Lock()
 
     def get(self, query: str) -> str | None:
         location = self.get_location(query)
@@ -21,18 +29,22 @@ class LocationPlaceIdCache:
         query: str,
     ) -> tuple[str, Coordinates | None] | None:
         key = self._normalize_key(query)
-        entry = self._entries.get(key)
 
-        if entry is None:
-            return None
+        with self._lock:
+            entry = self._entries.get(key)
 
-        place_id, coordinates, expires_at = entry
+            if entry is None:
+                return None
 
-        if monotonic() >= expires_at:
-            del self._entries[key]
-            return None
+            place_id, coordinates, expires_at = entry
 
-        return place_id, coordinates
+            if monotonic() >= expires_at:
+                del self._entries[key]
+                return None
+
+            self._entries.move_to_end(key)
+
+            return place_id, coordinates
 
     def set(self, query: str, place_id: str) -> None:
         self.set_location(query, place_id, coordinates=None)
@@ -46,11 +58,17 @@ class LocationPlaceIdCache:
     ) -> None:
         key = self._normalize_key(query)
 
-        self._entries[key] = (
-            place_id,
-            coordinates,
-            monotonic() + self._ttl_seconds,
-        )
+        with self._lock:
+            self._entries[key] = (
+                place_id,
+                coordinates,
+                monotonic() + self._ttl_seconds,
+            )
+
+            self._entries.move_to_end(key)
+
+            if len(self._entries) > _MAX_ENTRIES:
+                self._entries.popitem(last=False)
 
     @staticmethod
     def _normalize_key(query: str) -> str:

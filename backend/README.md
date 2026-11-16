@@ -579,7 +579,7 @@ GET /gyms/nearby
 GET /gyms/{external_id}
 ```
 
-Nearby discovery and gym details accept optional `provider_name=geoapify|tomtom`. Geoapify is the default when the parameter is omitted. Text-based search remains Geoapify-only.
+Nearby discovery and gym details accept optional `provider_name=geoapify|tomtom`. Geoapify is the default when the parameter is omitted. Text-based search uses Geoapify for locality geocoding and may use TomTom for gym discovery when configured.
 
 Favorite gym endpoints:
 
@@ -609,6 +609,296 @@ Favorite operations enforce:
 The mobile application preserves provider identity across search results, map selection, details, favorites and reviews. Its nearby-discovery flow requests TomTom first and falls back to Geoapify for empty or recoverable failure responses.
 
 Gym ratings and reviews are implemented through separate endpoints using the persistent internal FitMap gym UUID, resolved from a provider-aware external identity.
+
+#### Shared location cache (PERF-02)
+
+PERF-02 reduces unnecessary repeated external requests during
+text-based gym discovery without changing the public API contract
+or gym-search response semantics.
+
+This optimization addresses NFR-PERF-002 and NFR-AVAIL-004
+through a bounded, application-owned locality cache.
+
+##### Original behavior
+
+The Geoapify adapter already supported caching locality identifiers
+and coordinates with a five-minute time-to-live.
+
+However, the gym-provider dependency created a new provider instance
+for every HTTP request. Each provider received its own location cache.
+
+Consequently, equivalent searches issued through separate HTTP
+requests repeated the locality geocoding call.
+
+The initial baseline reproduced this behavior:
+
+- five equivalent searches using one provider instance:
+  one geocoding call and five Places calls;
+- five equivalent HTTP requests using the original dependency:
+  five geocoding calls and five Places calls.
+
+##### Cache ownership and architecture
+
+The cache is now initialized by the FastAPI application factory.
+
+Each application instance owns a separate `LocationPlaceIdCache`.
+
+The gym-provider dependency retrieves the application-owned cache
+and passes it through the Geoapify provider factory.
+
+The HTTP clients and provider instances continue to follow
+their existing request-scoped lifecycle.
+
+Implementation files:
+
+```text
+backend/src/fitmap/gyms/cache.py
+backend/src/fitmap/gyms/factory.py
+backend/src/fitmap/api/gyms.py
+backend/src/fitmap/main.py
+```
+
+The cache implementation uses Python standard-library components:
+
+- `OrderedDict` for tracking entry recency;
+- `Lock` for protecting compound cache operations;
+- `monotonic` for expiration measurements independent of
+  wall-clock adjustments.
+
+No additional dependency, distributed cache service, database
+migration or infrastructure component was introduced.
+
+##### Cache policy
+
+| Property | Implementation |
+| --- | --- |
+| Ownership | One cache per FastAPI application instance |
+| Cached value | Locality place identifier and optional coordinates |
+| Key normalization | Strip surrounding whitespace and apply casefold |
+| Default TTL | 300 seconds |
+| Maximum capacity | 256 entries |
+| Eviction | Least recently used |
+| Expiration | At or after the original expiration deadline |
+| Read behavior | Update recency without extending TTL |
+| Persistence | In-memory only |
+| Synchronization | Lock-protected cache operations |
+
+The TTL controls whether a cached entry can be returned.
+
+An expired entry is removed when accessed and may also be removed
+through capacity-based eviction. There is no background cleanup
+scheduler.
+
+The cache is bounded even when locality queries are continually
+changing.
+
+A successful read updates the entry's recency but does not renew
+its expiration deadline.
+
+Localities without a resolved place identifier and geocoding
+failures are not cached.
+
+##### Preserved discovery behavior
+
+For the text-search endpoint:
+
+```text
+GET /api/v1/gyms/search
+```
+
+A cache hit reuses the locality identifier and coordinates while
+the provider continues to request current gym-discovery results.
+
+A cache miss or expired entry triggers the existing Geoapify
+geocoding flow.
+
+The optional TomTom discovery flow continues to use the resolved
+coordinates and the original discovery radius.
+
+When TomTom is configured, its successful nonempty results retain
+their existing precedence. The existing Geoapify fallback and
+error-handling behavior remain unchanged.
+
+The optimization does not cache:
+
+- complete gym-search result collections;
+- GPS-based nearby-search results;
+- gym details;
+- location-autocomplete responses;
+- favorites, reviews, account data or workout data;
+- external provider errors.
+
+Provider credentials are not stored in cache entries.
+
+The cache contains normalized locality queries, so it remains
+process-local and nonpersistent. No new cache-content logging
+or diagnostic endpoint was introduced.
+
+No public endpoint, response schema or mobile contract was changed.
+
+##### Automated validation
+
+The new regression suite is implemented in:
+
+```text
+backend/tests/test_perf02_provider_cache.py
+```
+
+It uses real FastAPI application instances and real provider
+adapters with `httpx2.MockTransport` responses.
+
+A manual clock verifies expiration boundaries without real
+five-minute delays.
+
+The suite covers 11 cases:
+
+1. Reuse across five equivalent HTTP requests.
+2. Independent caching of distinct localities.
+3. Expiration at the TTL boundary.
+4. Isolation between application instances.
+5. Missing localities are not cached.
+6. Geocoding failures are not cached.
+7. Gym-discovery results remain fresh on cache hits.
+8. TomTom and Geoapify fallback behavior is preserved.
+9. Nearby searches remain uncached.
+10. Capacity limits and LRU eviction.
+11. Cache reads do not extend the original TTL.
+
+The Red phase produced six expected failures and five passing
+tests against the original implementation.
+
+The Green phase passed all 11 new tests and 74 existing tests
+covering the related provider and discovery behavior.
+
+##### Controlled comparative benchmark
+
+The benchmark was executed on 2026-11-16 using the original
+source from commit `bd9da30c77b084a5559eca805a2f22bb68b3b337`
+and the validated PERF-02 implementation.
+
+Both versions were executed in independent Python processes.
+
+The original source was extracted from Git into a temporary
+directory, while the optimized version was loaded from the
+approved working tree.
+
+The scenarios reused identical synthetic provider responses,
+HTTP inputs and controlled clock values.
+
+The primary metric is the number of external provider calls,
+rather than elapsed time measured against simulated services.
+
+| Scenario | Geocoding before | Geocoding after | Places before/after | TomTom before/after | Total before | Total after | Total reduction |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 5 equivalent searches | 5 | 1 | 5/5 | 0/0 | 10 | 6 | 40.00% |
+| 5 distinct localities | 5 | 5 | 5/5 | 0/0 | 10 | 10 | 0.00% |
+| 5 searches in 2 localities | 5 | 2 | 5/5 | 0/0 | 10 | 7 | 30.00% |
+| 4 searches across TTL boundary | 4 | 2 | 4/4 | 0/0 | 8 | 6 | 25.00% |
+| 3 searches with TomTom fallback | 3 | 1 | 3/3 | 3/3 | 9 | 7 | 22.22% |
+| 5 searches with TomTom | 5 | 1 | 5/5 | 5/5 | 15 | 11 | 26.67% |
+| 50 equivalent searches | 50 | 1 | 50/50 | 0/0 | 100 | 51 | 49.00% |
+| 2 nearby searches | 0 | 0 | 2/2 | 0/0 | 2 | 2 | 0.00% |
+
+For five equivalent searches with TomTom disabled, geocoding
+calls decreased by 80% and total external calls decreased by 40%.
+
+For 50 equivalent searches within the TTL, geocoding calls
+decreased by 98% and total external calls decreased by 49%.
+
+These reductions apply specifically to the measured scenarios.
+
+All eight scenarios respected their expected call counts.
+
+All 79 HTTP response comparisons matched between the original
+and optimized implementations.
+
+The benchmark also verified:
+
+- TTL expiration behavior;
+- distinct locality separation;
+- the TomTom, Geoapify, TomTom fallback sequence;
+- unchanged nearby-search behavior;
+- unchanged HTTP client creation counts.
+
+No real external provider request, database query or migration
+was required by the benchmark.
+
+The temporary original source directory was removed after
+the comparison.
+
+##### Regression evidence
+
+| Check | Result |
+| --- | --- |
+| Red phase | 5 passed, 6 expected failures |
+| Green phase | 85 passed |
+| New PERF-02 regression cases | 11 passed |
+| Comparative benchmark | 8 scenarios, 79 equivalent HTTP responses |
+| Full backend regression | 1,134 passed |
+| Ruff lint | Passed |
+| Ruff formatting | 193 files correctly formatted |
+| Pyright strict | 0 errors, 0 warnings |
+| Dependency lockfile | Passed |
+
+The full backend regression includes 1,123 existing test cases
+and 11 new PERF-02 test cases.
+
+The local full-suite execution completed in 69.48 seconds.
+
+A pre-existing Starlette/AnyIO deprecation warning was reported.
+No test was skipped or suppressed.
+
+The validation was performed on the independent PERF-02 branch.
+The PERF-01 regression cases are not included in this count
+and must be covered during integrated regression validation.
+
+##### Reproducing automated validation
+
+Run the following commands from the backend directory with the
+isolated PostgreSQL test service available:
+
+```bash
+uv run pytest tests/test_perf02_provider_cache.py -v
+uv run pytest tests/test_gym_provider_cache.py tests/test_geoapify_provider_cache.py tests/test_gym_provider_factory.py tests/test_gym_search_endpoint.py tests/test_gym_text_search_fallback.py tests/test_perf02_provider_cache.py
+uv run pytest
+uv run ruff check src tests alembic
+uv run ruff format --check src tests alembic
+uv run pyright
+uv lock --check
+```
+
+The pytest suite must use the dedicated `fitmap_test` database.
+
+The tests use simulated provider responses and must not be
+redirected to live provider credentials for these scenarios.
+
+##### Limitations and follow-up
+
+The cache is local to a FastAPI application instance. It is
+not shared across backend worker processes or deployment replicas.
+
+Cache contents are lost when the application instance is restarted.
+
+The lock protects the internal cache structure but is not held
+during external network requests.
+
+Concurrent requests for the same uncached locality may still
+perform duplicate geocoding calls. In-flight request deduplication
+is outside the current implementation.
+
+The capacity and TTL are bounded implementation defaults,
+not guarantees of an optimal production cache-hit ratio.
+
+The benchmark demonstrates call-count reduction under controlled
+synthetic workloads. It does not establish production latency,
+provider availability, billing or quota savings.
+
+Actual benefits depend on search repetition, locality diversity,
+request timing, deployment topology and provider configuration.
+
+Further cache expansion, distributed caching or request
+deduplication should be justified by representative measurements.
+
 
 ### Training
 
