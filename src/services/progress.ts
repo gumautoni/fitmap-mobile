@@ -2,6 +2,13 @@ import { File, UploadType } from "expo-file-system";
 
 import { environment } from "../config/environment";
 import { ApiClientError, apiClient } from "./apiClient";
+import {
+  buildPageQuery,
+  normalizePage,
+  type Page,
+  type PageApiResponse,
+  type PageOptions,
+} from "./pagination";
 
 const PHOTO_UPLOAD_TIMEOUT_MS = 30_000;
 
@@ -287,4 +294,20 @@ export function getProgressPhotoSource(
       Authorization: `Bearer ${accessToken}`,
     },
   };
+}
+
+export async function getProgressPhotosPage(
+  accessToken: string,
+  options: PageOptions = {},
+): Promise<Page<ProgressPhoto>> {
+  const query = buildPageQuery(options);
+
+  const response = await apiClient.get<PageApiResponse<ProgressPhotoResponse>>(
+    `/progress/photos/page?${query}`,
+    {
+      headers: buildAuthorizationHeaders(accessToken),
+    },
+  );
+
+  return normalizePage(response, normalizeProgressPhoto);
 }

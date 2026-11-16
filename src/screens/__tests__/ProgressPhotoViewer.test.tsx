@@ -4,7 +4,7 @@ import type { ContextType } from "react";
 import { AuthContext } from "../../context/AuthContext";
 import {
   getExercisePerformance,
-  getProgressPhotos,
+  getProgressPhotosPage,
   getProgressStatistics,
   uploadProgressPhoto,
   type ProgressPhoto,
@@ -84,7 +84,7 @@ jest.mock("lucide-react-native", () => {
 jest.mock("../../services/progress", () => ({
   getProgressStatistics: jest.fn(),
   getExercisePerformance: jest.fn(),
-  getProgressPhotos: jest.fn(),
+  getProgressPhotosPage: jest.fn(),
   uploadProgressPhoto: jest.fn(),
   getProgressPhotoSource: (token: string, id: string) => ({
     uri: `https://example.test/progress/photos/${id}/content`,
@@ -96,7 +96,7 @@ jest.mock("../../services/progress", () => ({
 
 const mockedStatistics = getProgressStatistics as jest.Mock;
 const mockedPerformance = getExercisePerformance as jest.Mock;
-const mockedPhotos = getProgressPhotos as jest.Mock;
+const mockedPhotos = getProgressPhotosPage as jest.Mock;
 const mockedUpload = uploadProgressPhoto as jest.Mock;
 
 const photo: ProgressPhoto = {
@@ -138,7 +138,10 @@ describe("ProgressScreen - visualizador de fotos", () => {
     });
 
     mockedPerformance.mockResolvedValue([]);
-    mockedPhotos.mockResolvedValue([photo]);
+    mockedPhotos.mockResolvedValue({
+      items: [photo],
+      nextCursor: null,
+    });
   });
 
   async function openPhoto() {

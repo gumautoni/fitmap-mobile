@@ -24,6 +24,7 @@ import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
   getWorkoutHistory,
+  getWorkoutHistoryPage,
   type WorkoutHistoryItem,
 } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
@@ -132,6 +133,34 @@ function formatDuration(startedAt: string, completedAt: string): string | null {
   return `${hours} h ${minutes} min`;
 }
 
+type HistoryRequestKind = "refresh" | "more" | "full" | null;
+
+interface HistoryPageError {
+  message: string;
+  restart: boolean;
+}
+
+function hasActiveFilters(filters: WorkoutHistoryFilters): boolean {
+  return filters.nameQuery.trim().length > 0 || filters.periodDays !== null;
+}
+
+function appendUniqueHistory(
+  current: WorkoutHistoryItem[],
+  incoming: WorkoutHistoryItem[],
+): WorkoutHistoryItem[] {
+  const seen = new Set(current.map((item) => item.id));
+  const merged = [...current];
+
+  for (const item of incoming) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      merged.push(item);
+    }
+  }
+
+  return merged;
+}
+
 export default function WorkoutHistoryScreen({
   navigation,
 }: WorkoutHistoryScreenProps) {
@@ -156,17 +185,66 @@ export default function WorkoutHistoryScreen({
     DEFAULT_WORKOUT_HISTORY_FILTERS,
   );
 
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [moreError, setMoreError] = useState<HistoryPageError | null>(null);
+  const [fullLoading, setFullLoading] = useState(false);
+  const [fullError, setFullError] = useState<string | null>(null);
+
   const requestGeneration = useRef(0);
   const focusedRef = useRef(false);
+  const requestKindRef = useRef<HistoryRequestKind>(null);
+  const cursorRef = useRef<string | null>(null);
+  const filtersRef = useRef(DEFAULT_WORKOUT_HISTORY_FILTERS);
 
   const visibleHistory = filterWorkoutHistory(history, filters, new Date());
+
+  const filtersNeedFullHistory =
+    hasActiveFilters(filters) && nextCursor !== null;
 
   const canClearFilters =
     filters.nameQuery.length > 0 || filters.periodDays !== null;
 
-  function clearFilters(): void {
-    setFilters(DEFAULT_WORKOUT_HISTORY_FILTERS);
-  }
+  const loadCompleteHistory = useCallback(async (): Promise<void> => {
+    if (
+      !focusedRef.current ||
+      cursorRef.current === null ||
+      requestKindRef.current === "refresh" ||
+      requestKindRef.current === "full"
+    ) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
+    requestKindRef.current = "full";
+
+    setMoreLoading(false);
+    setMoreError(null);
+    setFullLoading(true);
+    setFullError(null);
+
+    try {
+      const items = await runAuthenticatedRequest((accessToken) =>
+        getWorkoutHistory(accessToken),
+      );
+
+      if (generation === requestGeneration.current) {
+        cursorRef.current = null;
+        setNextCursor(null);
+        setHistory(items);
+      }
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        setFullError(getErrorMessage(loadError));
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
+        setFullLoading(false);
+      }
+    }
+  }, [runAuthenticatedRequest]);
 
   const loadHistory = useCallback(async (): Promise<void> => {
     if (!focusedRef.current) {
@@ -175,16 +253,27 @@ export default function WorkoutHistoryScreen({
 
     const generation = ++requestGeneration.current;
 
+    requestKindRef.current = "refresh";
+
     setLoading(true);
     setError(null);
+    setMoreLoading(false);
+    setMoreError(null);
+    setFullLoading(false);
+    setFullError(null);
+
+    let succeeded = false;
 
     try {
-      const loadedHistory = await runAuthenticatedRequest((accessToken) =>
-        getWorkoutHistory(accessToken),
+      const page = await runAuthenticatedRequest((accessToken) =>
+        getWorkoutHistoryPage(accessToken),
       );
 
       if (generation === requestGeneration.current) {
-        setHistory(loadedHistory);
+        cursorRef.current = page.nextCursor;
+        setNextCursor(page.nextCursor);
+        setHistory(page.items);
+        succeeded = true;
       }
     } catch (loadError: unknown) {
       if (generation === requestGeneration.current) {
@@ -192,13 +281,105 @@ export default function WorkoutHistoryScreen({
       }
     } finally {
       if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
         setLoading(false);
+
+        if (
+          succeeded &&
+          cursorRef.current !== null &&
+          hasActiveFilters(filtersRef.current)
+        ) {
+          void loadCompleteHistory();
+        }
       }
     }
-  }, [runAuthenticatedRequest]);
+  }, [loadCompleteHistory, runAuthenticatedRequest]);
+
+  async function loadMoreHistory(): Promise<void> {
+    const cursor = cursorRef.current;
+
+    if (
+      !focusedRef.current ||
+      requestKindRef.current !== null ||
+      cursor === null ||
+      hasActiveFilters(filtersRef.current)
+    ) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
+    requestKindRef.current = "more";
+
+    setMoreLoading(true);
+    setMoreError(null);
+
+    try {
+      const page = await runAuthenticatedRequest((accessToken) =>
+        getWorkoutHistoryPage(accessToken, { cursor }),
+      );
+
+      if (generation !== requestGeneration.current) {
+        return;
+      }
+
+      if (page.nextCursor === cursor) {
+        setMoreError({
+          message: "A paginação não avançou. Atualize o histórico.",
+          restart: true,
+        });
+        return;
+      }
+
+      cursorRef.current = page.nextCursor;
+      setNextCursor(page.nextCursor);
+
+      setHistory((current) => appendUniqueHistory(current, page.items));
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        const restart =
+          loadError instanceof ApiClientError &&
+          loadError.code === "invalid_pagination_cursor";
+
+        setMoreError({
+          message: restart
+            ? "O histórico mudou. Atualize para continuar."
+            : getErrorMessage(loadError),
+          restart,
+        });
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
+        setMoreLoading(false);
+      }
+    }
+  }
+
+  function changeFilters(nextFilters: WorkoutHistoryFilters): void {
+    filtersRef.current = nextFilters;
+    setFilters(nextFilters);
+
+    if (hasActiveFilters(nextFilters)) {
+      void loadCompleteHistory();
+    }
+  }
+
+  function clearFilters(): void {
+    changeFilters(DEFAULT_WORKOUT_HISTORY_FILTERS);
+  }
 
   function retryHistory(): void {
     void loadHistory();
+  }
+
+  function retryMoreHistory(): void {
+    if (moreError?.restart) {
+      void loadHistory();
+      return;
+    }
+
+    void loadMoreHistory();
   }
 
   useFocusEffect(
@@ -210,6 +391,7 @@ export default function WorkoutHistoryScreen({
       return () => {
         focusedRef.current = false;
         requestGeneration.current += 1;
+        requestKindRef.current = null;
       };
     }, [loadHistory]),
   );
@@ -360,10 +542,10 @@ export default function WorkoutHistoryScreen({
                   accessibilityLabel="Buscar histórico pelo nome do treino"
                   value={filters.nameQuery}
                   onChangeText={(nameQuery) =>
-                    setFilters((current) => ({
-                      ...current,
+                    changeFilters({
+                      ...filtersRef.current,
                       nameQuery,
-                    }))
+                    })
                   }
                   placeholder="Buscar pelo nome do treino"
                   placeholderTextColor={theme.colors.textSecondary}
@@ -387,10 +569,10 @@ export default function WorkoutHistoryScreen({
                       accessibilityLabel={option.accessibilityLabel}
                       accessibilityState={{ selected }}
                       onPress={() =>
-                        setFilters((current) => ({
-                          ...current,
+                        changeFilters({
+                          ...filtersRef.current,
                           periodDays: option.value,
-                        }))
+                        })
                       }
                       style={({ pressed }) => [
                         styles.periodButton,
@@ -412,20 +594,55 @@ export default function WorkoutHistoryScreen({
               </View>
             </View>
 
-            <Text
-              testID="workout-history-results-count"
-              accessibilityLiveRegion="polite"
-              style={styles.resultsCount}
-            >
-              {visibleHistory.length}{" "}
-              {visibleHistory.length === 1
-                ? "treino encontrado"
-                : "treinos encontrados"}
-            </Text>
+            {!filtersNeedFullHistory ? (
+              <Text
+                testID="workout-history-results-count"
+                accessibilityLiveRegion="polite"
+                style={styles.resultsCount}
+              >
+                {visibleHistory.length}{" "}
+                {nextCursor !== null
+                  ? visibleHistory.length === 1
+                    ? "treino carregado"
+                    : "treinos carregados"
+                  : visibleHistory.length === 1
+                    ? "treino encontrado"
+                    : "treinos encontrados"}
+              </Text>
+            ) : null}
           </>
         ) : null}
 
-        {history.length === 0 ? (
+        {filtersNeedFullHistory ? (
+          <View style={styles.emptyCard}>
+            {loading || fullLoading ? (
+              <>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.emptyText} accessibilityLiveRegion="polite">
+                  Buscando em todo o histórico...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyText}>
+                  {fullError ??
+                    "Carregue o histórico completo para aplicar os filtros."}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tentar buscar histórico completo novamente"
+                  onPress={() => void loadCompleteHistory()}
+                  style={({ pressed }) => [
+                    styles.retryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={styles.retryButtonText}>Tentar novamente</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        ) : history.length === 0 ? (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIcon}>
               <Dumbbell
@@ -511,6 +728,55 @@ export default function WorkoutHistoryScreen({
             })}
           </View>
         )}
+
+        {nextCursor !== null && !filtersNeedFullHistory ? (
+          <View>
+            {moreError ? (
+              <Text
+                style={styles.inlineErrorText}
+                accessibilityLiveRegion="polite"
+              >
+                {moreError.message}
+              </Text>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                moreError
+                  ? "Tentar carregar mais treinos novamente"
+                  : "Carregar mais treinos"
+              }
+              accessibilityState={{
+                disabled: loading || moreLoading || fullLoading,
+                busy: moreLoading,
+              }}
+              disabled={loading || moreLoading || fullLoading}
+              onPress={retryMoreHistory}
+              style={({ pressed }) => [
+                styles.retryButton,
+                (loading || moreLoading || fullLoading) &&
+                  styles.clearButtonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              {moreLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={theme.colors.textOnPrimary}
+                />
+              ) : null}
+
+              <Text style={styles.retryButtonText}>
+                {moreLoading
+                  ? "Carregando mais treinos..."
+                  : moreError
+                    ? "Tentar novamente"
+                    : "Carregar mais treinos"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
