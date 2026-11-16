@@ -313,6 +313,16 @@ class WorkoutSession(Base):
     )
 
 
+Index(
+    "ix_workout_sessions_user_completed_order",
+    WorkoutSession.user_id,
+    WorkoutSession.completed_at.desc(),
+    WorkoutSession.started_at.desc(),
+    WorkoutSession.id.desc(),
+    postgresql_where=text("status = 'completed' AND completed_at IS NOT NULL"),
+)
+
+
 class ExerciseExecution(Base):
     __tablename__ = "exercise_executions"
     __table_args__ = (

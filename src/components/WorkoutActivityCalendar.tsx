@@ -27,9 +27,10 @@ import Svg, { Circle } from "react-native-svg";
 
 import { AuthContext } from "../context/AuthContext";
 import {
-  getWorkoutHistory,
+  getWorkoutHistoryPage,
   type WorkoutHistoryItem,
 } from "../services/trainingSessions";
+import type { Page } from "../services/pagination";
 import { useAppTheme } from "../theme/ThemeProvider";
 import {
   getMonthActivitySummary,
@@ -66,6 +67,44 @@ function formatDay(date: Date): string {
   }).format(date);
 }
 
+const EMPTY_HISTORY: WorkoutHistoryItem[] = [];
+
+interface CalendarBounds {
+  completedFrom: string;
+  completedBefore: string;
+}
+
+interface CalendarLoadState {
+  key: string;
+  status: "loading" | "ready" | "error";
+  items: WorkoutHistoryItem[];
+}
+
+function getCalendarBounds(
+  today: Date,
+  monthTimestamp: number | null,
+): CalendarBounds {
+  const start =
+    monthTimestamp === null ? getWeekDates(today)[0] : new Date(monthTimestamp);
+
+  const end =
+    monthTimestamp === null
+      ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+      : new Date(start.getFullYear(), start.getMonth() + 1, 1);
+
+  return {
+    completedFrom: start.toISOString(),
+    completedBefore: end.toISOString(),
+  };
+}
+
+function calendarRequestKey(
+  bounds: CalendarBounds,
+  retryCounter: number,
+): string {
+  return `${bounds.completedFrom}|${bounds.completedBefore}|${retryCounter}`;
+}
+
 export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
   const auth = useContext(AuthContext);
 
@@ -97,11 +136,24 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
-  const [history, setHistory] = useState<WorkoutHistoryItem[]>([]);
+  const [loadState, setLoadState] = useState<CalendarLoadState | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [retryCounter, setRetryCounter] = useState(0);
+
+  const monthTimestamp = expanded ? visibleMonth.getTime() : null;
+
+  const currentBounds = getCalendarBounds(today, monthTimestamp);
+
+  const rangeKey = calendarRequestKey(currentBounds, retryCounter);
+
+  const currentResult = loadState?.key === rangeKey ? loadState : null;
+
+  const loading = currentResult === null || currentResult.status === "loading";
+
+  const error = currentResult?.status === "error";
+
+  const history =
+    currentResult?.status === "ready" ? currentResult.items : EMPTY_HISTORY;
 
   useEffect(() => {
     let active = true;
@@ -135,34 +187,87 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
     useCallback(() => {
       let active = true;
 
-      setToday(new Date());
-      setLoading(true);
-      setError(false);
+      const now = new Date();
+      const bounds = getCalendarBounds(now, monthTimestamp);
+      const key = calendarRequestKey(bounds, retryCounter);
 
-      runAuthenticatedRequest((token) => getWorkoutHistory(token))
-        .then((items) => {
+      setToday(now);
+
+      setLoadState({
+        key,
+        status: "loading",
+        items: [],
+      });
+
+      async function loadCalendarRange(): Promise<void> {
+        const items: WorkoutHistoryItem[] = [];
+        const seenIds = new Set<string>();
+        const seenCursors = new Set<string>();
+
+        let cursor: string | null = null;
+
+        try {
+          do {
+            if (!active) {
+              return;
+            }
+
+            const options = cursor === null ? bounds : { ...bounds, cursor };
+
+            const page: Page<WorkoutHistoryItem> =
+              await runAuthenticatedRequest((token) =>
+                getWorkoutHistoryPage(token, options),
+              );
+
+            if (!active) {
+              return;
+            }
+
+            if (
+              page.nextCursor !== null &&
+              (seenCursors.has(page.nextCursor) || page.items.length === 0)
+            ) {
+              throw new Error("Calendar pagination did not advance.");
+            }
+
+            for (const item of page.items) {
+              if (!seenIds.has(item.id)) {
+                seenIds.add(item.id);
+                items.push(item);
+              }
+            }
+
+            cursor = page.nextCursor;
+
+            if (cursor !== null) {
+              seenCursors.add(cursor);
+            }
+          } while (cursor !== null);
+
           if (active) {
-            setHistory(items);
+            setLoadState({
+              key,
+              status: "ready",
+              items,
+            });
           }
-        })
-        .catch(() => {
+        } catch {
           if (active) {
-            setHistory([]);
-            setError(true);
+            setLoadState({
+              key,
+              status: "error",
+              items: [],
+            });
           }
-        })
-        .finally(() => {
-          if (active) {
-            setLoading(false);
-          }
-        });
+        }
+      }
+
+      void loadCalendarRange();
 
       return () => {
         active = false;
       };
-      // retryCounter intentionally triggers a new request after retry.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [runAuthenticatedRequest, retryCounter]),
+    }, [monthTimestamp, retryCounter, runAuthenticatedRequest]),
   );
 
   const grouped = useMemo(() => groupCompletedSessions(history), [history]);
@@ -278,9 +383,13 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
         key={key}
         accessibilityRole="button"
         accessibilityLabel={`${formatDay(date)}. ${
-          completed
-            ? `${sessions.length} treino(s) concluído(s)`
-            : "Sem treino concluído registrado"
+          loading
+            ? "Carregando dados de treino"
+            : error
+              ? "Dados de treino indisponíveis"
+              : completed
+                ? `${sessions.length} treino(s) concluído(s)`
+                : "Sem treino concluído registrado"
         }`}
         accessibilityState={{
           selected,
@@ -534,7 +643,9 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
               <Text style={styles.legendText}>Selecionado</Text>
             </View>
 
-            <Text style={styles.legendText}>Sem marcação = sem registro</Text>
+            {!loading && !error ? (
+              <Text style={styles.legendText}>Sem marcação = sem registro</Text>
+            ) : null}
           </View>
 
           {!loading && !error ? (

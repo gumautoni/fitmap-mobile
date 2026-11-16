@@ -16,7 +16,7 @@ import {
   ShieldCheck,
   TrendingUp,
 } from "lucide-react-native";
-import { useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useContext, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -37,7 +37,7 @@ import { AuthContext } from "../context/AuthContext";
 import { ApiClientError } from "../services/apiClient";
 import {
   getExercisePerformance,
-  getProgressPhotos,
+  getProgressPhotosPage,
   getProgressPhotoSource,
   getProgressStatistics,
   uploadProgressPhoto,
@@ -155,6 +155,30 @@ async function normalizeProgressPhoto(
   return normalizedImage.uri;
 }
 
+type PhotoRequestKind = "refresh" | "more" | "restart" | null;
+
+interface PhotoPageError {
+  message: string;
+  restart: boolean;
+}
+
+function mergeUniquePhotos(
+  current: ProgressPhoto[],
+  incoming: ProgressPhoto[],
+): ProgressPhoto[] {
+  const seen = new Set<string>();
+  const result: ProgressPhoto[] = [];
+
+  for (const photo of [...current, ...incoming]) {
+    if (!seen.has(photo.id)) {
+      seen.add(photo.id);
+      result.push(photo);
+    }
+  }
+
+  return result;
+}
+
 export default function ProgressScreen() {
   const auth = useContext(AuthContext);
 
@@ -182,80 +206,196 @@ export default function ProgressScreen() {
   const [error, setError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [pageError, setPageError] = useState<PhotoPageError | null>(null);
+
+  const focusedRef = useRef(false);
+  const focusGeneration = useRef(0);
+  const requestGeneration = useRef(0);
+  const requestKindRef = useRef<PhotoRequestKind>(null);
+  const cursorRef = useRef<string | null>(null);
+  const seenCursors = useRef(new Set<string>());
+  const uploadBusyRef = useRef(false);
+  const uploadsDuringRefresh = useRef<ProgressPhoto[]>([]);
+
   const loadProgress = useCallback(async (): Promise<void> => {
+    if (!focusedRef.current || requestKindRef.current !== null) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
+    requestKindRef.current = "refresh";
+    uploadsDuringRefresh.current = [];
+
     setLoading(true);
     setError(null);
+    setPageLoading(false);
+    setPageError(null);
 
     try {
-      const [loadedStatistics, loadedPerformance, loadedPhotos] =
+      const [loadedStatistics, loadedPerformance, page] =
         await runAuthenticatedRequest((requestAccessToken) =>
           Promise.all([
             getProgressStatistics(requestAccessToken),
             getExercisePerformance(requestAccessToken),
-            getProgressPhotos(requestAccessToken),
+            getProgressPhotosPage(requestAccessToken),
           ]),
         );
 
+      if (generation !== requestGeneration.current) {
+        return;
+      }
+
+      if (page.nextCursor !== null && page.items.length === 0) {
+        throw new Error("A paginação das fotos não avançou.");
+      }
+
       setStatistics(loadedStatistics);
       setPerformance(loadedPerformance);
-      setPhotos(loadedPhotos);
-    } catch (loadError) {
-      setError(getErrorMessage(loadError));
+
+      cursorRef.current = page.nextCursor;
+      seenCursors.current = new Set(
+        page.nextCursor === null ? [] : [page.nextCursor],
+      );
+
+      setNextCursor(page.nextCursor);
+      setPhotos(mergeUniquePhotos(uploadsDuringRefresh.current, page.items));
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        setError(getErrorMessage(loadError));
+      }
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
+        uploadsDuringRefresh.current = [];
+        setLoading(false);
+      }
     }
   }, [runAuthenticatedRequest]);
 
   useFocusEffect(
     useCallback(() => {
-      let active = true;
+      focusedRef.current = true;
 
-      setLoading(true);
-      setError(null);
+      setUploadingPhoto(false);
+      setPhotoError(null);
+      setSelectedPhoto(null);
 
-      runAuthenticatedRequest((requestAccessToken) =>
-        Promise.all([
-          getProgressStatistics(requestAccessToken),
-          getExercisePerformance(requestAccessToken),
-          getProgressPhotos(requestAccessToken),
-        ]),
-      )
-        .then(([loadedStatistics, loadedPerformance, loadedPhotos]) => {
-          if (!active) {
-            return;
-          }
-
-          setStatistics(loadedStatistics);
-          setPerformance(loadedPerformance);
-          setPhotos(loadedPhotos);
-        })
-        .catch((loadError: unknown) => {
-          if (active) {
-            setError(getErrorMessage(loadError));
-          }
-        })
-        .finally(() => {
-          if (active) {
-            setLoading(false);
-          }
-        });
+      void loadProgress();
 
       return () => {
-        active = false;
+        focusedRef.current = false;
+        focusGeneration.current += 1;
+        requestGeneration.current += 1;
+        requestKindRef.current = null;
+        uploadBusyRef.current = false;
+        uploadsDuringRefresh.current = [];
       };
-    }, [runAuthenticatedRequest]),
+    }, [loadProgress]),
   );
+
+  async function loadMorePhotos(restart = false): Promise<void> {
+    const cursor = cursorRef.current;
+
+    if (
+      !focusedRef.current ||
+      requestKindRef.current !== null ||
+      (!restart && cursor === null)
+    ) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
+    requestKindRef.current = restart ? "restart" : "more";
+
+    if (restart) {
+      uploadsDuringRefresh.current = [];
+    }
+
+    setPageLoading(true);
+    setPageError(null);
+
+    try {
+      const page = await runAuthenticatedRequest((accessToken) =>
+        restart
+          ? getProgressPhotosPage(accessToken)
+          : getProgressPhotosPage(accessToken, { cursor }),
+      );
+
+      if (generation !== requestGeneration.current) {
+        return;
+      }
+
+      if (
+        page.nextCursor !== null &&
+        (page.items.length === 0 ||
+          (!restart && seenCursors.current.has(page.nextCursor)))
+      ) {
+        setPageError({
+          message: "A paginação não avançou. Atualize suas fotos.",
+          restart: true,
+        });
+        return;
+      }
+
+      cursorRef.current = page.nextCursor;
+      setNextCursor(page.nextCursor);
+
+      if (restart) {
+        seenCursors.current.clear();
+
+        setPhotos(mergeUniquePhotos(uploadsDuringRefresh.current, page.items));
+      } else {
+        setPhotos((current) => mergeUniquePhotos(current, page.items));
+      }
+
+      if (page.nextCursor !== null) {
+        seenCursors.current.add(page.nextCursor);
+      }
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        const invalidCursor =
+          loadError instanceof ApiClientError &&
+          loadError.code === "invalid_pagination_cursor";
+
+        setPageError({
+          message: invalidCursor
+            ? "Suas fotos mudaram. Atualize a galeria para continuar."
+            : getErrorMessage(loadError),
+          restart: restart || invalidCursor,
+        });
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
+        uploadsDuringRefresh.current = [];
+        setPageLoading(false);
+      }
+    }
+  }
 
   async function handleSaveProgressPhoto(
     asset: ImagePicker.ImagePickerAsset,
   ): Promise<boolean> {
-    if (uploadingPhoto) return false;
+    if (!focusedRef.current || uploadBusyRef.current) {
+      return false;
+    }
 
+    const generation = focusGeneration.current;
+
+    uploadBusyRef.current = true;
     setPhotoError(null);
     setUploadingPhoto(true);
 
     try {
       const normalizedUri = await normalizeProgressPhoto(asset);
+
+      if (generation !== focusGeneration.current) {
+        return false;
+      }
 
       const uploadedPhoto = await runAuthenticatedRequest(
         (requestAccessToken) =>
@@ -267,7 +407,23 @@ export default function ProgressScreen() {
           }),
       );
 
-      setPhotos((currentPhotos) => [uploadedPhoto, ...currentPhotos]);
+      if (generation !== focusGeneration.current) {
+        return false;
+      }
+
+      if (
+        requestKindRef.current === "refresh" ||
+        requestKindRef.current === "restart"
+      ) {
+        uploadsDuringRefresh.current = mergeUniquePhotos(
+          [uploadedPhoto],
+          uploadsDuringRefresh.current,
+        );
+      }
+
+      setPhotos((currentPhotos) =>
+        mergeUniquePhotos([uploadedPhoto], currentPhotos),
+      );
 
       Alert.alert(
         "Foto adicionada",
@@ -276,6 +432,10 @@ export default function ProgressScreen() {
 
       return true;
     } catch (uploadError) {
+      if (generation !== focusGeneration.current) {
+        return false;
+      }
+
       const message = getErrorMessage(uploadError);
 
       setPhotoError(message);
@@ -283,7 +443,10 @@ export default function ProgressScreen() {
 
       return false;
     } finally {
-      setUploadingPhoto(false);
+      if (generation === focusGeneration.current) {
+        uploadBusyRef.current = false;
+        setUploadingPhoto(false);
+      }
     }
   }
 
@@ -378,7 +541,18 @@ export default function ProgressScreen() {
               color={theme.colors.danger}
             />
 
-            <Text style={styles.inlineErrorText}>{error}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inlineErrorText}>{error}</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Tentar carregar progresso novamente"
+                disabled={loading}
+                onPress={() => void loadProgress()}
+                style={styles.retryButton}
+              >
+                <Text style={styles.retryButtonText}>Tentar novamente</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
@@ -568,7 +742,23 @@ export default function ProgressScreen() {
             onSave={handleSaveProgressPhoto}
           />
 
-          {photos.length === 0 ? (
+          {loading && photos.length === 0 ? (
+            <View style={styles.photoEmptyCard}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text
+                style={styles.photoEmptyText}
+                accessibilityLiveRegion="polite"
+              >
+                Atualizando suas fotos...
+              </Text>
+            </View>
+          ) : error && photos.length === 0 ? (
+            <View style={styles.photoEmptyCard}>
+              <Text style={styles.photoEmptyText}>
+                Não foi possível confirmar seus registros visuais.
+              </Text>
+            </View>
+          ) : photos.length === 0 ? (
             <View style={styles.photoEmptyCard}>
               <View style={styles.photoEmptyIcon}>
                 <Images
@@ -634,6 +824,52 @@ export default function ProgressScreen() {
               ))}
             </View>
           )}
+
+          {nextCursor !== null || pageError !== null ? (
+            <View>
+              {pageError ? (
+                <Text
+                  style={styles.inlineErrorText}
+                  accessibilityLiveRegion="polite"
+                >
+                  {pageError.message}
+                </Text>
+              ) : null}
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  pageError
+                    ? "Tentar carregar mais fotos novamente"
+                    : "Carregar mais fotos"
+                }
+                accessibilityState={{
+                  disabled: loading || pageLoading,
+                  busy: pageLoading,
+                }}
+                disabled={loading || pageLoading}
+                onPress={() => void loadMorePhotos(pageError?.restart ?? false)}
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  (pressed || loading || pageLoading) && styles.buttonPressed,
+                ]}
+              >
+                {pageLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.textOnPrimary}
+                  />
+                ) : null}
+                <Text style={styles.retryButtonText}>
+                  {pageLoading
+                    ? "Carregando fotos..."
+                    : pageError
+                      ? "Tentar novamente"
+                      : "Carregar mais fotos"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.performanceSection}>

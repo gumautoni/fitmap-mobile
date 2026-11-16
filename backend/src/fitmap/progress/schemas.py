@@ -54,6 +54,11 @@ class ProgressPhotoResponse(BaseModel):
     created_at: datetime
 
 
+class ProgressPhotoPageResponse(BaseModel):
+    items: list[ProgressPhotoResponse]
+    next_cursor: UUID | None
+
+
 class BodyMetricType(StrEnum):
     WEIGHT = "weight"
     WAIST = "waist"
