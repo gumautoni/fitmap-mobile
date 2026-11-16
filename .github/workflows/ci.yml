@@ -52,6 +52,12 @@ jobs:
         with:
           node-version: "22.15.0"
 
+      - name: Audit production dependencies
+        run: npm audit --package-lock-only --omit=dev --audit-level=info
+
+      - name: Audit all mobile dependencies
+        run: npm audit --package-lock-only --include=dev --audit-level=high
+
       - name: Install dependencies
         run: npm ci
 
@@ -102,7 +108,13 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
-          version: "0.12.18"
+          version: "0.13.6"
+
+      - name: Audit production dependencies
+        run: uv audit --locked --no-dev --python-version 3.13 --python-platform linux --no-python-downloads
+
+      - name: Audit all backend dependencies
+        run: uv audit --locked --python-version 3.13 --python-platform linux --no-python-downloads
 
       - name: Install dependencies
         run: uv sync --frozen --dev
