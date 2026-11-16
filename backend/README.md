@@ -704,6 +704,259 @@ Image binaries are stored separately from PostgreSQL.
 
 Body-measurement tracking and expanded measurable fitness goals remain future work.
 
+## Query performance optimization (PERF-01)
+
+PERF-01 addresses N+1 database access patterns in the favorite-gym
+listing and exercise-performance services.
+
+This optimization is associated with the backend performance
+requirements and follows a measurement-first approach: reproduce the
+problem, establish automated query budgets, implement the optimization,
+and verify behavioral equivalence and regression coverage.
+
+### Affected services
+
+| Service | Endpoint |
+| --- | --- |
+| `list_favorite_gyms` | `GET /api/v1/gyms/favorites` |
+| `list_exercise_performance` | `GET /api/v1/progress/exercises/performance` |
+
+Implementation files:
+
+```text
+backend/src/fitmap/gyms/favorites.py
+backend/src/fitmap/progress/performance.py
+```
+
+### Original database access patterns
+
+The original favorite-gym listing queried the user's favorites and then
+loaded each gym and its external reference individually.
+
+For N distinct favorite gyms in a fresh ORM session, the measured query
+pattern was:
+
+```text
+1 + 2N
+```
+
+The exercise-performance service queried eligible exercise executions
+and their workout sessions, then loaded performed sets separately for
+each eligible execution.
+
+The measured query pattern was:
+
+```text
+1 + N
+```
+
+Here, N represents eligible exercise executions in the benchmark.
+
+The repeated SQL round trips caused query counts to increase with
+collection size, even when the requested result was relatively small.
+
+### Optimized database access patterns
+
+Favorite gyms are now loaded through three bounded batch queries:
+
+1. Retrieve the authenticated user's favorite relationships.
+2. Retrieve the associated gym records in a single batch.
+3. Retrieve the associated external references in a single batch.
+
+The resulting models are indexed by their identifiers in memory.
+
+The earliest external reference remains the selected reference for each
+gym, ordered by creation timestamp and UUID as a deterministic
+tie-breaker.
+
+The favorite response construction is shared between the collection
+and single-favorite flows.
+
+Exercise performance now uses two batch queries:
+
+1. Retrieve eligible exercise executions and completed workout sessions.
+2. Retrieve performed sets associated with those execution identifiers.
+
+Performed sets are grouped by execution identifier before the existing
+performance aggregation is applied.
+
+Both services return immediately when their initial collection is empty,
+avoiding unnecessary secondary queries.
+
+### Behavioral guarantees
+
+The optimization preserves:
+
+- authenticated user isolation;
+- existing service signatures and API response contracts;
+- favorite ordering by creation timestamp and UUID;
+- earliest external-reference selection and deterministic tie-breaking;
+- existing errors for missing gym records or external references;
+- single-favorite loading behavior;
+- chronological exercise-performance ordering;
+- aggregation of repeated exercise executions in the same session;
+- performed-set counts and total repetitions;
+- independent maximum-load calculations for kilograms and pounds;
+- exclusion of active and cancelled workout sessions;
+- exclusion of exercise executions without a catalog exercise reference;
+- exclusion of executions without performed sets;
+- the requirement for at least two recorded workout sessions before
+  exposing an exercise-performance series.
+
+No API contract, database schema, migration, dependency or mobile
+application change was required.
+
+### Automated query budgets
+
+The regression suite is implemented in:
+
+```text
+backend/tests/test_perf01_query_budgets.py
+```
+
+It uses a real isolated PostgreSQL database, synthetic records,
+transaction rollback and SQLAlchemy statement events.
+
+SQL statements are captured only during the domain-service invocation.
+Fixture preparation, authentication and transaction setup are excluded
+from the service query budget.
+
+Fresh ORM sessions prevent identity-map reuse from hiding the original
+N+1 behavior.
+
+The following limits are verified:
+
+| Collection size | Favorite gyms | Exercise performance |
+| ---: | ---: | ---: |
+| 0 | 1 | 1 |
+| 1 | 3 | 2 |
+| 10 | 3 | 2 |
+| 50 | 3 | 2 |
+| 100 | 3 | 2 |
+
+The suite contains 15 test cases:
+
+- five parameterized favorite-gym query-budget cases;
+- five parameterized exercise-performance query-budget cases;
+- three favorite-gym behavioral regression cases;
+- two exercise-performance behavioral regression cases.
+
+The Red phase reproduced six expected query-budget failures with
+nine passing cases. All behavioral tests passed.
+
+The Green phase passed all 15 new cases and all 13 original
+favorite-gym and exercise-performance tests.
+
+### Controlled benchmark
+
+The comparative benchmark was executed on 2026-11-16 using:
+
+- Python 3.13.18;
+- SQLAlchemy 2.0.54;
+- PostgreSQL 18 in the isolated local test environment;
+- original implementations from commit `bd9da30c77b084a5559eca805a2f22bb68b3b337`;
+- optimized implementations from the validated PERF-01 working tree.
+
+Each scenario used identical synthetic records for both implementations.
+
+Each implementation received one warm-up invocation followed by five
+measured invocations. Execution order was alternated to reduce ordering
+bias, and every invocation used a fresh ORM session.
+
+The reported execution times are medians in milliseconds.
+
+#### Favorite-gym listing
+
+| Records | SQL before | SQL after | Before (ms) | After (ms) | SQL reduction |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 1 | 1 | 1.30 | 1.08 | 0.00% |
+| 1 | 3 | 3 | 10.14 | 7.19 | 0.00% |
+| 10 | 21 | 3 | 15.86 | 2.80 | 85.71% |
+| 50 | 101 | 3 | 75.50 | 5.38 | 97.03% |
+| 100 | 201 | 3 | 151.53 | 6.31 | 98.51% |
+
+At 100 records, the query count decreased from 201 to 3, with a
+median service execution time approximately 24 times lower.
+
+#### Exercise performance
+
+| Executions | SQL before | SQL after | Before (ms) | After (ms) | SQL reduction |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 1 | 1 | 1.31 | 1.30 | 0.00% |
+| 1 | 2 | 2 | 3.56 | 3.39 | 0.00% |
+| 10 | 11 | 2 | 8.79 | 2.36 | 81.82% |
+| 50 | 51 | 2 | 37.76 | 3.86 | 96.08% |
+| 100 | 101 | 2 | 88.20 | 6.38 | 98.02% |
+
+At 100 executions, the query count decreased from 101 to 2, with a
+median service execution time approximately 13.8 times lower.
+
+All 50 measured comparisons returned equivalent service responses.
+All five collection sizes respected their expected query budgets.
+
+Synthetic transactions were rolled back, and no synthetic records
+remained in the eight affected database tables.
+
+### Validation evidence
+
+The following checks passed after the optimization:
+
+| Check | Result |
+| --- | --- |
+| Red phase | 9 passed, 6 expected failures |
+| Green phase | 28 passed |
+| Comparative benchmark | 50 equivalent response comparisons |
+| Full backend regression | 1,138 passed |
+| Ruff lint | Passed |
+| Ruff formatting | 193 files correctly formatted |
+| Pyright strict | 0 errors, 0 warnings |
+| Dependency lockfile | Passed |
+
+The full backend regression includes 1,123 previous test cases and
+15 new PERF-01 cases.
+
+The local full-suite execution completed in 79.20 seconds.
+
+A pre-existing Starlette/AnyIO deprecation warning was reported.
+No new dependency, migration or test suppression was introduced.
+
+### Reproducing the automated validation
+
+Run the following commands from the backend directory with the
+isolated PostgreSQL test service available:
+
+```bash
+uv run pytest tests/test_perf01_query_budgets.py -v
+uv run pytest tests/test_perf01_query_budgets.py tests/test_gym_favorites.py tests/test_progress_performance.py
+uv run pytest
+uv run ruff check src tests alembic
+uv run ruff format --check src tests alembic
+uv run pyright
+uv lock --check
+```
+
+These commands must use the dedicated `fitmap_test` database.
+Do not redirect the regression suite to the development or production
+database.
+
+### Measurement limitations and follow-up
+
+The benchmark measures local domain-service execution, not full HTTP
+request latency, mobile rendering time or concurrent production load.
+
+Execution-time improvements are environment-dependent and must not be
+interpreted as production latency guarantees.
+
+The measured query counts remain bounded for the evaluated collection
+sizes. The number of loaded rows, SQL parameters and in-memory
+aggregation costs still depend on collection size.
+
+Large collections may require additional pagination, bounded batches,
+or database-side aggregation based on further measurements.
+
+PERF-03 will evaluate pagination for the targeted historical
+collections without silently truncating existing application behavior.
+
 ## Private media storage
 
 FitMap uses an S3-compatible private object-storage abstraction.
