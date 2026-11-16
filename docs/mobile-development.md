@@ -901,6 +901,501 @@ Expo Go. Não constitui evidência de validação
 completa no Android, em builds nativos ou em
 todas as configurações de acessibilidade.
 
+## Filtros do histórico de treinos
+
+A FUNC-08 atende ao requisito FR-HISTORY-005,
+classificado como Professional, permitindo filtrar
+as sessões concluídas apresentadas no histórico.
+
+### Comportamento
+
+A tela dedicada de histórico disponibiliza:
+
+* pesquisa parcial pelo nome do treino;
+* seleção de todos os períodos;
+* filtro dos últimos 7 dias;
+* filtro dos últimos 30 dias;
+* filtro dos últimos 90 dias;
+* combinação da pesquisa com o período;
+* contador de sessões encontradas;
+* limpeza simultânea dos filtros.
+
+A pesquisa ignora diferenças entre letras
+maiúsculas e minúsculas, acentos e espaços
+nas extremidades do texto pesquisado.
+
+A combinação de filtros exige que todos os
+critérios ativos sejam atendidos.
+
+O nome pesquisado corresponde ao nome histórico
+registrado na sessão, sem incluir observações
+ou identificadores.
+
+A ordem original fornecida pelo backend
+permanece preservada.
+
+A interface diferencia um histórico realmente
+vazio da ausência de resultados correspondentes
+aos filtros selecionados.
+
+Os filtros permanecem selecionados ao acessar
+os detalhes de uma sessão e retornar ao histórico.
+
+### Critérios temporais
+
+A referência temporal utilizada é `completedAt`,
+correspondente à conclusão da sessão.
+
+Os períodos representam dias de calendário locais,
+incluindo o dia atual.
+
+O limite inicial é inclusivo e corresponde
+à meia-noite do primeiro dia do intervalo.
+
+O limite final é exclusivo e corresponde
+à meia-noite do dia seguinte ao dia atual.
+
+Assim, os filtros não representam intervalos
+fixos de 24 horas multiplicados pelo número
+de dias selecionados.
+
+Datas inválidas são excluídas quando existe
+um filtro temporal ativo, mas permanecem na
+listagem quando nenhum período está selecionado.
+
+### Organização técnica
+
+A lógica de filtragem está isolada em
+`src/utils/workoutHistoryFilters.ts`.
+
+O módulo utiliza uma função pura que recebe
+as sessões, os filtros e uma data de referência.
+
+A normalização textual utiliza Unicode NFD
+para permitir pesquisas sem distinção de acentos.
+
+A filtragem não modifica o array original,
+as sessões ou a data de referência.
+
+A integração está implementada em
+`src/screens/WorkoutHistoryScreen.tsx`.
+
+A FUNC-08 preservou o calendário existente.
+A integração paginada posterior é descrita
+na seção PERF-03 deste documento.
+
+A interface reutiliza os tokens de tema existentes,
+incluindo suporte aos temas claro e escuro.
+
+Os controles possuem rótulos de acessibilidade,
+papéis apropriados e indicação da seleção
+dos filtros de período.
+
+### Carregamento e concorrência
+
+A tela invalida requisições anteriores quando
+perde o foco ou é desmontada.
+
+Somente a geração vigente pode publicar resultados
+ou alterar os estados de erro e carregamento.
+
+Os estados de carregamento inicial, atualização,
+paginação incremental e filtragem completa
+são diferenciados na integração da PERF-03.
+
+A interface oferece recuperação explícita após
+falhas de comunicação e cursores inválidos.
+
+### Comunicação com o backend
+
+Na implementação original da FUNC-08, o histórico
+era carregado integralmente por:
+
+* `GET /api/v1/training/history`.
+
+A filtragem era realizada localmente sem novas
+requisições ao alterar os critérios.
+
+A PERF-03 substitui o carregamento inicial por:
+
+* `GET /api/v1/training/history/page`.
+
+A lógica pura de filtragem permanece preservada.
+
+Quando existe um filtro ativo e a coleção ainda
+está incompleta, a tela pode obter o histórico
+integral pelo endpoint legado autenticado.
+
+Após completar a coleção, novas alterações
+dos filtros são realizadas localmente.
+
+O backend permanece responsável pela autenticação,
+pelo isolamento dos usuários e pela seleção
+das sessões concluídas.
+
+### Validação
+
+A implementação foi desenvolvida em etapas
+Red e Green, seguidas de integração da interface
+e testes complementares de concorrência.
+
+Evidências da validação local da FUNC-08:
+
+* 32 novos testes unitários mobile;
+* 21 novos testes de integração mobile;
+* 53 novos testes automatizados no total;
+* 32 testes de filtragem aprovados nos fusos
+  America/Sao_Paulo, UTC e America/New_York;
+* 8 testes existentes do calendário preservados;
+* 61 testes direcionados aprovados;
+* 576 testes mobile da baseline preservados;
+* 1123 testes backend da baseline preservados;
+* 629 testes mobile aprovados em 41 suítes;
+* 1123 testes backend aprovados;
+* 1752 testes automatizados aprovados na regressão;
+* TypeScript, ESLint, Prettier, Ruff e Pyright aprovados;
+* integridade dos lockfiles e dependências validada.
+
+As 96 execuções nos três fusos horários
+correspondem aos mesmos 32 testes unitários,
+sem duplicar a contagem de testes distintos.
+
+Os testes estão organizados em:
+
+* `src/utils/__tests__/workoutHistoryFilters.test.ts`;
+* `src/screens/__tests__/WorkoutHistoryScreen.test.tsx`.
+
+A cobertura inclui pesquisa, normalização,
+intervalos temporais, combinação de filtros,
+imutabilidade, preservação da ordem, estados
+vazios, navegação, retry, atualização e
+proteção contra respostas obsoletas.
+
+Os testes backend foram executados em PostgreSQL
+isolado, na porta 5434, sem utilizar o banco
+de desenvolvimento da aplicação.
+
+A regressão apresentou novamente o aviso
+conhecido de depreciação Starlette/AnyIO
+e o aviso React `act` na suíte
+`MapGymPreview.test.tsx`.
+
+Esses avisos não foram considerados resolvidos
+e não representam falhas dos testes da FUNC-08.
+
+### Validação física
+
+A validação manual realizada no iPhone via Expo Go,
+em 16/11/2026, foi confirmada pelo desenvolvedor
+para os 15 cenários do roteiro:
+
+* apresentação inicial do histórico;
+* pesquisa por nome;
+* pesquisa sem distinção de acentos e maiúsculas;
+* filtro de 7 dias;
+* filtro de 30 dias;
+* filtro de 90 dias;
+* combinação de nome e período;
+* contador de resultados;
+* estado vazio filtrado;
+* limpeza dos filtros;
+* acesso aos detalhes da sessão;
+* preservação dos filtros ao retornar;
+* comportamento do teclado;
+* tema claro;
+* tema escuro.
+
+### Limitações
+
+A filtragem depende de uma coleção completa
+para garantir resultados corretos.
+
+A PERF-03 introduz carregamento inicial limitado,
+mas mantém a consulta integral sob demanda quando
+um filtro é aplicado sobre uma coleção parcial.
+Essa estratégia preserva a semântica dos filtros,
+sem eliminar todos os carregamentos extensos.
+
+A referência temporal é recalculada durante
+as renderizações da tela. Não existe
+um temporizador específico para atualização
+automática dos filtros à meia-noite.
+
+A invalidação de requisições obsoletas
+é lógica e não constitui cancelamento
+do transporte HTTP.
+
+Os filtros permanecem em memória enquanto
+a tela permanece montada. Não existe persistência
+das preferências após o encerramento do aplicativo.
+
+A validação física no iPhone via Expo Go
+não constitui evidência de validação completa
+no Android, em builds nativos ou em todas
+as configurações de acessibilidade.
+
+## Paginação do histórico, calendário e fotos (PERF-03)
+
+A PERF-03 atende ao NFR-PERF-003 e complementa
+as otimizações de desempenho do Ciclo 06.
+
+O objetivo é evitar o carregamento inicial integral
+de coleções extensas, preservando os contratos,
+a privacidade e o comportamento funcional existente.
+
+### Serviços de comunicação
+
+A infraestrutura compartilhada está em:
+
+* `src/services/pagination.ts`;
+* `src/services/trainingSessions.ts`;
+* `src/services/progress.ts`.
+
+O contrato utiliza páginas com `items` e
+`nextCursor`, normalizado a partir de `next_cursor`
+na resposta HTTP.
+
+O limite padrão é 50 registros.
+
+Os serviços utilizam:
+
+* `getWorkoutHistoryPage`;
+* `getProgressPhotosPage`.
+
+Os métodos legados permanecem disponíveis
+para compatibilidade.
+
+As requisições continuam utilizando o fluxo
+autenticado existente.
+
+### Histórico de treinos
+
+A tela `WorkoutHistoryScreen.tsx` carrega inicialmente
+a primeira página do histórico.
+
+O usuário solicita páginas adicionais por um botão
+explícito. Os registros são acrescentados na ordem
+recebida, com eliminação de identificadores duplicados.
+
+O contador diferencia a quantidade carregada
+da quantidade completa de resultados.
+
+Quando o conjunto ainda é parcial e existe
+um filtro ativo, o endpoint legado é consultado
+sob demanda para obter a coleção completa.
+
+A lógica de filtragem da FUNC-08 permanece local.
+A aplicação evita apresentar resultados filtrados
+incompletos como definitivos.
+
+Após obter a coleção completa, alterar ou limpar
+os critérios não exige nova consulta para cada
+mudança do filtro.
+
+Falhas de paginação preservam os dados disponíveis.
+Cursores inválidos ou que não avançam permitem
+reiniciar a consulta.
+
+Gerações de requisição protegem contra respostas
+obsoletas, incluindo mudanças de foco e a
+substituição de uma paginação por uma consulta
+integral do histórico.
+
+### Calendário de atividades
+
+O componente `WorkoutActivityCalendar.tsx`
+utiliza intervalos temporais limitados.
+
+No estado recolhido, consulta a semana atual:
+
+* segunda-feira à meia-noite, inclusive;
+* próxima segunda-feira à meia-noite, exclusive.
+
+No estado expandido, consulta o mês visível:
+
+* primeiro dia do mês, inclusive;
+* primeiro dia do mês seguinte, exclusive.
+
+As fronteiras são calculadas no calendário local
+e convertidas para timestamps ISO antes do envio.
+
+Todas as páginas do intervalo são percorridas
+antes da publicação dos indicadores completos.
+
+O componente elimina duplicações por ID
+e interrompe cursores repetidos ou páginas
+que não avançam.
+
+Mudar o intervalo ou perder o foco invalida
+a resposta anterior e impede a continuação
+da paginação obsoleta.
+
+Uma falha intermediária não publica resumos
+parciais como se representassem o mês completo.
+
+Selecionar um dia já carregado não requer
+nova consulta para o mesmo intervalo.
+
+O retry reinicia o intervalo desde a primeira página.
+
+O agrupamento de sessões, as animações,
+a navegação para detalhes e os temas existentes
+foram preservados.
+
+### Fotos de progresso
+
+A tela `ProgressScreen.tsx` utiliza a primeira página
+das fotos durante o carregamento inicial.
+
+As consultas de estatísticas e desempenho permanecem
+no carregamento inicial da tela.
+
+O botão de carregar mais fotos solicita apenas
+a próxima página da galeria.
+
+A interface impede solicitações simultâneas da
+mesma operação de paginação e elimina duplicações
+por identificador.
+
+Falhas de página preservam as imagens disponíveis.
+Um cursor inválido ou repetido permite reiniciar
+somente a galeria, sem repetir as estatísticas.
+
+A tela protege os resultados das requisições
+por geração e invalidação de foco.
+
+Uploads concluídos durante uma atualização vigente
+são preservados na nova coleção.
+
+Respostas obsoletas de uploads não atualizam
+a interface de uma geração posterior.
+
+A captura de imagens, sua normalização,
+o armazenamento privado e a visualização
+ampliada autenticada permanecem preservados.
+
+A ausência de dados durante uma requisição
+não é apresentada como um estado vazio definitivo.
+
+### Validação automatizada
+
+A implementação acrescenta 46 testes mobile:
+
+| Área | Novos testes |
+| --- | ---: |
+| Serviços de paginação | 10 |
+| Histórico e concorrência | 16 |
+| Calendário | 8 |
+| Fotos de progresso | 12 |
+| Total | 46 |
+
+Os testes foram desenvolvidos por etapas Red e Green.
+Os testes anteriores de filtragem, captura e
+visualização foram preservados.
+
+A fixture do visualizador foi adaptada ao contrato
+paginado, sem modificar suas asserções originais.
+
+Resultados:
+
+* 125 testes direcionados aprovados em 8 suítes;
+* 15 testes de captura e visualização aprovados;
+* 16 testes do calendário aprovados em cada fuso:
+  America/Sao_Paulo, UTC e America/New_York;
+* 675 testes mobile aprovados em 44 suítes;
+* 1.154 testes backend aprovados;
+* 1.829 testes automatizados aprovados;
+* 77 novos testes da PERF-03;
+* TypeScript, ESLint, Prettier, Ruff e Pyright aprovados.
+
+A repetição dos testes em diferentes fusos
+não aumenta a contagem de testes distintos.
+
+Esses totais correspondem à branch da PERF-03
+baseada no checkpoint da FUNC-08, antes da
+integração das demais branches de desempenho.
+
+### Validação física
+
+Em 16/11/2026, o desenvolvedor confirmou
+17 cenários no iPhone via Expo Go.
+
+Histórico de treinos:
+
+* carregamento inicial;
+* filtro de registro fora da primeira página;
+* combinação de filtros;
+* limpeza de filtros;
+* carregamento incremental;
+* detalhes do treino.
+
+Calendário:
+
+* semana atual;
+* mês atual;
+* mês anterior;
+* detalhes pelo calendário.
+
+Fotos de progresso:
+
+* galeria inicial;
+* próxima página;
+* visualizador privado;
+* novo upload.
+
+Validação complementar:
+
+* tema escuro;
+* atualização ao retornar;
+* recuperação de conexão.
+
+A conta exclusiva de validação continha
+65 treinos sintéticos: 55 no mês atual
+e 10 no mês anterior.
+
+A galeria continha 55 imagens sintéticas
+privadas, além de uma imagem enviada
+durante a validação.
+
+A conta de teste, seus treinos e os 56
+objetos privados foram removidos após
+a conclusão dos testes físicos.
+
+Os dados originais foram preservados.
+
+### Limitações
+
+O carregamento incremental não constitui
+virtualização integral das listas.
+
+Os registros já carregados continuam em memória.
+O calendário pode realizar várias requisições
+para completar um intervalo com muitas sessões.
+
+A filtragem de históricos parcialmente carregados
+pode exigir uma resposta integral do endpoint legado.
+
+A invalidação de respostas obsoletas é lógica.
+Ela não cancela necessariamente o transporte HTTP
+nem desfaz uploads já aceitos pelo servidor.
+
+A paginação não proporciona uma visão transacional
+imutável de uma coleção durante alterações concorrentes.
+
+A recuperação de cursores pode reiniciar a coleção.
+
+Não existe cache de meses do calendário nem
+persistência local de todas as páginas carregadas.
+
+A validação em três fusos não constitui cobertura
+exaustiva das transições de horário de verão.
+
+A validação em Expo Go não substitui testes
+em Android, builds nativos ou produção.
+
+Os detalhes do contrato, dos índices e dos
+benchmarks estão em `backend/README.md`.
+
 ## Autenticação
 
 O FitMap utiliza autenticação gerenciada pelo backend FastAPI e persistida em PostgreSQL.

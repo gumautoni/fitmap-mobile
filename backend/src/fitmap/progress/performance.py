@@ -91,6 +91,38 @@ def list_exercise_performance(
 
     execution_rows = db_session.execute(statement).tuples().all()
 
+    if not execution_rows:
+        return []
+
+    exercise_execution_ids = {
+        exercise_execution.id
+        for exercise_execution, workout_session in execution_rows
+        if exercise_execution.exercise_id is not None and workout_session.completed_at is not None
+    }
+
+    sets_by_execution: dict[UUID, list[SetExecution]] = {}
+
+    if exercise_execution_ids:
+        set_statement = (
+            select(SetExecution)
+            .where(
+                SetExecution.exercise_execution_id.in_(
+                    exercise_execution_ids,
+                ),
+            )
+            .order_by(
+                SetExecution.exercise_execution_id.asc(),
+                SetExecution.position.asc(),
+                SetExecution.id.asc(),
+            )
+        )
+
+        for performed_set in db_session.scalars(set_statement).all():
+            sets_by_execution.setdefault(
+                performed_set.exercise_execution_id,
+                [],
+            ).append(performed_set)
+
     mutable_series_by_exercise: dict[
         UUID,
         _MutablePerformanceSeries,
@@ -103,19 +135,9 @@ def list_exercise_performance(
         if exercise_id is None or completed_at is None:
             continue
 
-        set_statement = (
-            select(SetExecution)
-            .where(
-                SetExecution.exercise_execution_id == exercise_execution.id,
-            )
-            .order_by(
-                SetExecution.position.asc(),
-                SetExecution.id.asc(),
-            )
-        )
-
-        performed_sets = list(
-            db_session.scalars(set_statement).all(),
+        performed_sets = sets_by_execution.get(
+            exercise_execution.id,
+            [],
         )
 
         if not performed_sets:

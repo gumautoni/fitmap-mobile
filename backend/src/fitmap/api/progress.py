@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from sqlalchemy.exc import IntegrityError
 
 from fitmap.api.dependencies import (
@@ -23,6 +23,11 @@ from fitmap.media.validation import (
     MAX_IMAGE_SIZE_BYTES,
     InvalidMediaError,
 )
+from fitmap.pagination import (
+    DEFAULT_PAGE_LIMIT,
+    MAX_PAGE_LIMIT,
+    InvalidPaginationCursorError,
+)
 from fitmap.progress.performance import list_exercise_performance
 from fitmap.progress.photos import (
     ProgressPhotoNotFoundError,
@@ -31,12 +36,14 @@ from fitmap.progress.photos import (
     discard_uncommitted_photo,
     get_owned_progress_photo,
     list_progress_photos,
+    list_progress_photos_page,
 )
 from fitmap.progress.schemas import (
     BasicProgressStatisticsResponse,
     ExerciseLoadMaximumResponse,
     ExercisePerformancePointResponse,
     ExercisePerformanceResponse,
+    ProgressPhotoPageResponse,
     ProgressPhotoResponse,
 )
 from fitmap.progress.statistics import get_basic_progress_statistics
@@ -215,6 +222,43 @@ def get_progress_photos(
     )
 
     return [ProgressPhotoResponse.model_validate(photo) for photo in photos]
+
+
+@router.get(
+    "/photos/page",
+    response_model=ProgressPhotoPageResponse,
+)
+def get_progress_photos_page(
+    identity: CurrentIdentityDependency,
+    db_session: DatabaseSessionDependency,
+    response: Response,
+    limit: Annotated[
+        int,
+        Query(ge=1, le=MAX_PAGE_LIMIT),
+    ] = DEFAULT_PAGE_LIMIT,
+    cursor: Annotated[UUID | None, Query()] = None,
+) -> ProgressPhotoPageResponse:
+    try:
+        photos, next_cursor = list_progress_photos_page(
+            db_session=db_session,
+            user_id=identity.user.id,
+            limit=limit,
+            cursor=cursor,
+        )
+
+    except InvalidPaginationCursorError as exc:
+        raise ApiError(
+            status_code=422,
+            code="invalid_pagination_cursor",
+            message="Invalid pagination cursor.",
+        ) from exc
+
+    response.headers["Cache-Control"] = "private, no-store"
+
+    return ProgressPhotoPageResponse(
+        items=[ProgressPhotoResponse.model_validate(photo) for photo in photos],
+        next_cursor=next_cursor,
+    )
 
 
 @router.get(

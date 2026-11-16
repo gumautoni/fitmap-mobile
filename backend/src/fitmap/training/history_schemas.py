@@ -13,3 +13,8 @@ class WorkoutHistorySummaryResponse(BaseModel):
     completed_at: datetime
     created_at: datetime
     updated_at: datetime
+
+
+class WorkoutHistoryPageResponse(BaseModel):
+    items: list[WorkoutHistorySummaryResponse]
+    next_cursor: UUID | None

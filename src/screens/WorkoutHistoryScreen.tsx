@@ -5,14 +5,16 @@ import {
   ChevronRight,
   Dumbbell,
   RefreshCw,
+  Search,
 } from "lucide-react-native";
-import { useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useContext, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,11 +24,45 @@ import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import {
   getWorkoutHistory,
+  getWorkoutHistoryPage,
   type WorkoutHistoryItem,
 } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
+import {
+  DEFAULT_WORKOUT_HISTORY_FILTERS,
+  filterWorkoutHistory,
+  type WorkoutHistoryFilters,
+  type WorkoutHistoryPeriod,
+} from "../utils/workoutHistoryFilters";
 
 type WorkoutHistoryScreenProps = AppStackScreenProps<"HistoricoTreinos">;
+
+const HISTORY_PERIOD_OPTIONS: readonly {
+  value: WorkoutHistoryPeriod;
+  label: string;
+  accessibilityLabel: string;
+}[] = [
+  {
+    value: null,
+    label: "Todos",
+    accessibilityLabel: "Todos os períodos",
+  },
+  {
+    value: 7,
+    label: "7 dias",
+    accessibilityLabel: "Últimos 7 dias",
+  },
+  {
+    value: 30,
+    label: "30 dias",
+    accessibilityLabel: "Últimos 30 dias",
+  },
+  {
+    value: 90,
+    label: "90 dias",
+    accessibilityLabel: "Últimos 90 dias",
+  },
+];
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof ApiClientError) {
@@ -97,6 +133,34 @@ function formatDuration(startedAt: string, completedAt: string): string | null {
   return `${hours} h ${minutes} min`;
 }
 
+type HistoryRequestKind = "refresh" | "more" | "full" | null;
+
+interface HistoryPageError {
+  message: string;
+  restart: boolean;
+}
+
+function hasActiveFilters(filters: WorkoutHistoryFilters): boolean {
+  return filters.nameQuery.trim().length > 0 || filters.periodDays !== null;
+}
+
+function appendUniqueHistory(
+  current: WorkoutHistoryItem[],
+  incoming: WorkoutHistoryItem[],
+): WorkoutHistoryItem[] {
+  const seen = new Set(current.map((item) => item.id));
+  const merged = [...current];
+
+  for (const item of incoming) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      merged.push(item);
+    }
+  }
+
+  return merged;
+}
+
 export default function WorkoutHistoryScreen({
   navigation,
 }: WorkoutHistoryScreenProps) {
@@ -117,51 +181,219 @@ export default function WorkoutHistoryScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadHistory = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
+  const [filters, setFilters] = useState<WorkoutHistoryFilters>(
+    DEFAULT_WORKOUT_HISTORY_FILTERS,
+  );
+
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [moreError, setMoreError] = useState<HistoryPageError | null>(null);
+  const [fullLoading, setFullLoading] = useState(false);
+  const [fullError, setFullError] = useState<string | null>(null);
+
+  const requestGeneration = useRef(0);
+  const focusedRef = useRef(false);
+  const requestKindRef = useRef<HistoryRequestKind>(null);
+  const cursorRef = useRef<string | null>(null);
+  const filtersRef = useRef(DEFAULT_WORKOUT_HISTORY_FILTERS);
+
+  const visibleHistory = filterWorkoutHistory(history, filters, new Date());
+
+  const filtersNeedFullHistory =
+    hasActiveFilters(filters) && nextCursor !== null;
+
+  const canClearFilters =
+    filters.nameQuery.length > 0 || filters.periodDays !== null;
+
+  const loadCompleteHistory = useCallback(async (): Promise<void> => {
+    if (
+      !focusedRef.current ||
+      cursorRef.current === null ||
+      requestKindRef.current === "refresh" ||
+      requestKindRef.current === "full"
+    ) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
+    requestKindRef.current = "full";
+
+    setMoreLoading(false);
+    setMoreError(null);
+    setFullLoading(true);
+    setFullError(null);
 
     try {
-      const loadedHistory = await runAuthenticatedRequest((accessToken) =>
+      const items = await runAuthenticatedRequest((accessToken) =>
         getWorkoutHistory(accessToken),
       );
 
-      setHistory(loadedHistory);
-    } catch (loadError) {
-      setError(getErrorMessage(loadError));
+      if (generation === requestGeneration.current) {
+        cursorRef.current = null;
+        setNextCursor(null);
+        setHistory(items);
+      }
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        setFullError(getErrorMessage(loadError));
+      }
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
+        setFullLoading(false);
+      }
     }
   }, [runAuthenticatedRequest]);
 
+  const loadHistory = useCallback(async (): Promise<void> => {
+    if (!focusedRef.current) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
+    requestKindRef.current = "refresh";
+
+    setLoading(true);
+    setError(null);
+    setMoreLoading(false);
+    setMoreError(null);
+    setFullLoading(false);
+    setFullError(null);
+
+    let succeeded = false;
+
+    try {
+      const page = await runAuthenticatedRequest((accessToken) =>
+        getWorkoutHistoryPage(accessToken),
+      );
+
+      if (generation === requestGeneration.current) {
+        cursorRef.current = page.nextCursor;
+        setNextCursor(page.nextCursor);
+        setHistory(page.items);
+        succeeded = true;
+      }
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        setError(getErrorMessage(loadError));
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
+        setLoading(false);
+
+        if (
+          succeeded &&
+          cursorRef.current !== null &&
+          hasActiveFilters(filtersRef.current)
+        ) {
+          void loadCompleteHistory();
+        }
+      }
+    }
+  }, [loadCompleteHistory, runAuthenticatedRequest]);
+
+  async function loadMoreHistory(): Promise<void> {
+    const cursor = cursorRef.current;
+
+    if (
+      !focusedRef.current ||
+      requestKindRef.current !== null ||
+      cursor === null ||
+      hasActiveFilters(filtersRef.current)
+    ) {
+      return;
+    }
+
+    const generation = ++requestGeneration.current;
+
+    requestKindRef.current = "more";
+
+    setMoreLoading(true);
+    setMoreError(null);
+
+    try {
+      const page = await runAuthenticatedRequest((accessToken) =>
+        getWorkoutHistoryPage(accessToken, { cursor }),
+      );
+
+      if (generation !== requestGeneration.current) {
+        return;
+      }
+
+      if (page.nextCursor === cursor) {
+        setMoreError({
+          message: "A paginação não avançou. Atualize o histórico.",
+          restart: true,
+        });
+        return;
+      }
+
+      cursorRef.current = page.nextCursor;
+      setNextCursor(page.nextCursor);
+
+      setHistory((current) => appendUniqueHistory(current, page.items));
+    } catch (loadError: unknown) {
+      if (generation === requestGeneration.current) {
+        const restart =
+          loadError instanceof ApiClientError &&
+          loadError.code === "invalid_pagination_cursor";
+
+        setMoreError({
+          message: restart
+            ? "O histórico mudou. Atualize para continuar."
+            : getErrorMessage(loadError),
+          restart,
+        });
+      }
+    } finally {
+      if (generation === requestGeneration.current) {
+        requestKindRef.current = null;
+        setMoreLoading(false);
+      }
+    }
+  }
+
+  function changeFilters(nextFilters: WorkoutHistoryFilters): void {
+    filtersRef.current = nextFilters;
+    setFilters(nextFilters);
+
+    if (hasActiveFilters(nextFilters)) {
+      void loadCompleteHistory();
+    }
+  }
+
+  function clearFilters(): void {
+    changeFilters(DEFAULT_WORKOUT_HISTORY_FILTERS);
+  }
+
+  function retryHistory(): void {
+    void loadHistory();
+  }
+
+  function retryMoreHistory(): void {
+    if (moreError?.restart) {
+      void loadHistory();
+      return;
+    }
+
+    void loadMoreHistory();
+  }
+
   useFocusEffect(
     useCallback(() => {
-      let active = true;
+      focusedRef.current = true;
 
-      setLoading(true);
-      setError(null);
-
-      runAuthenticatedRequest((accessToken) => getWorkoutHistory(accessToken))
-        .then((loadedHistory) => {
-          if (active) {
-            setHistory(loadedHistory);
-          }
-        })
-        .catch((loadError: unknown) => {
-          if (active) {
-            setError(getErrorMessage(loadError));
-          }
-        })
-        .finally(() => {
-          if (active) {
-            setLoading(false);
-          }
-        });
+      void loadHistory();
 
       return () => {
-        active = false;
+        focusedRef.current = false;
+        requestGeneration.current += 1;
+        requestKindRef.current = null;
       };
-    }, [runAuthenticatedRequest]),
+    }, [loadHistory]),
   );
 
   if (loading && history.length === 0) {
@@ -201,9 +433,7 @@ export default function WorkoutHistoryScreen({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tentar carregar histórico novamente"
-            onPress={() => {
-              void loadHistory();
-            }}
+            onPress={retryHistory}
             style={({ pressed }) => [
               styles.retryButton,
               pressed && styles.buttonPressed,
@@ -228,6 +458,7 @@ export default function WorkoutHistoryScreen({
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>EXECUÇÕES CONCLUÍDAS</Text>
@@ -248,11 +479,170 @@ export default function WorkoutHistoryScreen({
               color={theme.colors.danger}
             />
 
-            <Text style={styles.inlineErrorText}>{error}</Text>
+            <View style={styles.inlineErrorCopy}>
+              <Text style={styles.inlineErrorText}>{error}</Text>
+
+              <Text style={styles.refreshStatus}>
+                Exibindo os dados carregados anteriormente.
+              </Text>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Tentar carregar histórico novamente"
+                onPress={retryHistory}
+                style={({ pressed }) => [
+                  styles.clearButton,
+                  pressed && styles.buttonPressed,
+                ]}
+              >
+                <Text style={styles.clearButtonText}>Tentar novamente</Text>
+              </Pressable>
+            </View>
           </View>
         ) : null}
 
-        {history.length === 0 ? (
+        {loading && history.length > 0 ? (
+          <Text style={styles.refreshStatus} accessibilityLiveRegion="polite">
+            Atualizando histórico...
+          </Text>
+        ) : null}
+
+        {history.length > 0 ? (
+          <>
+            <View style={styles.filterCard}>
+              <View style={styles.filterHeader}>
+                <Text style={styles.filterTitle}>Filtrar histórico</Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Limpar filtros do histórico"
+                  accessibilityState={{ disabled: !canClearFilters }}
+                  disabled={!canClearFilters}
+                  onPress={clearFilters}
+                  style={({ pressed }) => [
+                    styles.clearButton,
+                    !canClearFilters && styles.clearButtonDisabled,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={styles.clearButtonText}>Limpar filtros</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.filterLabel}>Nome do treino</Text>
+
+              <View style={styles.searchField}>
+                <Search
+                  size={19}
+                  strokeWidth={2}
+                  color={theme.colors.textSecondary}
+                />
+
+                <TextInput
+                  accessibilityLabel="Buscar histórico pelo nome do treino"
+                  value={filters.nameQuery}
+                  onChangeText={(nameQuery) =>
+                    changeFilters({
+                      ...filtersRef.current,
+                      nameQuery,
+                    })
+                  }
+                  placeholder="Buscar pelo nome do treino"
+                  placeholderTextColor={theme.colors.textSecondary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  style={styles.searchInput}
+                />
+              </View>
+
+              <Text style={styles.filterLabel}>Período</Text>
+
+              <View style={styles.periodOptions}>
+                {HISTORY_PERIOD_OPTIONS.map((option) => {
+                  const selected = filters.periodDays === option.value;
+
+                  return (
+                    <Pressable
+                      key={option.label}
+                      accessibilityRole="button"
+                      accessibilityLabel={option.accessibilityLabel}
+                      accessibilityState={{ selected }}
+                      onPress={() =>
+                        changeFilters({
+                          ...filtersRef.current,
+                          periodDays: option.value,
+                        })
+                      }
+                      style={({ pressed }) => [
+                        styles.periodButton,
+                        selected && styles.periodButtonSelected,
+                        pressed && styles.buttonPressed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.periodButtonText,
+                          selected && styles.periodButtonTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {!filtersNeedFullHistory ? (
+              <Text
+                testID="workout-history-results-count"
+                accessibilityLiveRegion="polite"
+                style={styles.resultsCount}
+              >
+                {visibleHistory.length}{" "}
+                {nextCursor !== null
+                  ? visibleHistory.length === 1
+                    ? "treino carregado"
+                    : "treinos carregados"
+                  : visibleHistory.length === 1
+                    ? "treino encontrado"
+                    : "treinos encontrados"}
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+
+        {filtersNeedFullHistory ? (
+          <View style={styles.emptyCard}>
+            {loading || fullLoading ? (
+              <>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={styles.emptyText} accessibilityLiveRegion="polite">
+                  Buscando em todo o histórico...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.emptyText}>
+                  {fullError ??
+                    "Carregue o histórico completo para aplicar os filtros."}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Tentar buscar histórico completo novamente"
+                  onPress={() => void loadCompleteHistory()}
+                  style={({ pressed }) => [
+                    styles.retryButton,
+                    pressed && styles.buttonPressed,
+                  ]}
+                >
+                  <Text style={styles.retryButtonText}>Tentar novamente</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        ) : history.length === 0 ? (
           <View style={styles.emptyCard}>
             <View style={styles.emptyIcon}>
               <Dumbbell
@@ -269,9 +659,26 @@ export default function WorkoutHistoryScreen({
               dados registrados durante a execução.
             </Text>
           </View>
+        ) : visibleHistory.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIcon}>
+              <Search
+                size={30}
+                strokeWidth={1.9}
+                color={theme.colors.primary}
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>Nenhum treino encontrado</Text>
+
+            <Text style={styles.emptyText}>
+              Nenhum treino corresponde aos filtros selecionados. Experimente
+              alterar ou limpar os filtros.
+            </Text>
+          </View>
         ) : (
           <View style={styles.list}>
-            {history.map((item) => {
+            {visibleHistory.map((item) => {
               const duration = formatDuration(item.startedAt, item.completedAt);
 
               return (
@@ -321,6 +728,55 @@ export default function WorkoutHistoryScreen({
             })}
           </View>
         )}
+
+        {nextCursor !== null && !filtersNeedFullHistory ? (
+          <View>
+            {moreError ? (
+              <Text
+                style={styles.inlineErrorText}
+                accessibilityLiveRegion="polite"
+              >
+                {moreError.message}
+              </Text>
+            ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                moreError
+                  ? "Tentar carregar mais treinos novamente"
+                  : "Carregar mais treinos"
+              }
+              accessibilityState={{
+                disabled: loading || moreLoading || fullLoading,
+                busy: moreLoading,
+              }}
+              disabled={loading || moreLoading || fullLoading}
+              onPress={retryMoreHistory}
+              style={({ pressed }) => [
+                styles.retryButton,
+                (loading || moreLoading || fullLoading) &&
+                  styles.clearButtonDisabled,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              {moreLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={theme.colors.textOnPrimary}
+                />
+              ) : null}
+
+              <Text style={styles.retryButtonText}>
+                {moreLoading
+                  ? "Carregando mais treinos..."
+                  : moreError
+                    ? "Tentar novamente"
+                    : "Carregar mais treinos"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -437,9 +893,137 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       backgroundColor: theme.colors.surface,
     },
 
-    inlineErrorText: {
+    inlineErrorCopy: {
       flex: 1,
+    },
+
+    inlineErrorText: {
       color: theme.colors.danger,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    refreshStatus: {
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.sm,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    filterCard: {
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+      padding: theme.spacing.lg,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.xl,
+      backgroundColor: theme.colors.surface,
+    },
+
+    filterHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+    },
+
+    filterTitle: {
+      flexShrink: 1,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.cardTitle,
+      lineHeight: theme.typography.lineHeight.body,
+    },
+
+    clearButton: {
+      minHeight: 48,
+      alignSelf: "flex-start",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.sm,
+    },
+
+    clearButtonDisabled: {
+      opacity: 0.45,
+    },
+
+    clearButtonText: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    filterLabel: {
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+    },
+
+    searchField: {
+      minHeight: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    searchInput: {
+      flex: 1,
+      minHeight: 48,
+      paddingVertical: theme.spacing.sm,
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.regular,
+      fontSize: theme.typography.size.body,
+    },
+
+    periodOptions: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: theme.spacing.sm,
+    },
+
+    periodButton: {
+      minHeight: 48,
+      flexShrink: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.surfaceSecondary,
+    },
+
+    periodButtonSelected: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary,
+    },
+
+    periodButtonText: {
+      color: theme.colors.textPrimary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
+      textAlign: "center",
+    },
+
+    periodButtonTextSelected: {
+      color: theme.colors.textOnPrimary,
+    },
+
+    resultsCount: {
+      marginBottom: theme.spacing.md,
+      color: theme.colors.textSecondary,
       fontFamily: theme.typography.fontFamily.medium,
       fontSize: theme.typography.size.small,
       lineHeight: theme.typography.lineHeight.small,
