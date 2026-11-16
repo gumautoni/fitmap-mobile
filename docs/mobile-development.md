@@ -767,6 +767,245 @@ Expo Go. Não constitui evidência de validação
 completa no Android, em builds nativos ou em
 todas as configurações de acessibilidade.
 
+## Filtros do histórico de treinos
+
+A FUNC-08 atende ao requisito FR-HISTORY-005,
+classificado como Professional, permitindo filtrar
+as sessões concluídas apresentadas no histórico.
+
+### Comportamento
+
+A tela dedicada de histórico disponibiliza:
+
+* pesquisa parcial pelo nome do treino;
+* seleção de todos os períodos;
+* filtro dos últimos 7 dias;
+* filtro dos últimos 30 dias;
+* filtro dos últimos 90 dias;
+* combinação da pesquisa com o período;
+* contador de sessões encontradas;
+* limpeza simultânea dos filtros.
+
+A pesquisa ignora diferenças entre letras
+maiúsculas e minúsculas, acentos e espaços
+nas extremidades do texto pesquisado.
+
+A combinação de filtros exige que todos os
+critérios ativos sejam atendidos.
+
+O nome pesquisado corresponde ao nome histórico
+registrado na sessão, sem incluir observações
+ou identificadores.
+
+A ordem original fornecida pelo backend
+permanece preservada.
+
+A interface diferencia um histórico realmente
+vazio da ausência de resultados correspondentes
+aos filtros selecionados.
+
+Os filtros permanecem selecionados ao acessar
+os detalhes de uma sessão e retornar ao histórico.
+
+### Critérios temporais
+
+A referência temporal utilizada é `completedAt`,
+correspondente à conclusão da sessão.
+
+Os períodos representam dias de calendário locais,
+incluindo o dia atual.
+
+O limite inicial é inclusivo e corresponde
+à meia-noite do primeiro dia do intervalo.
+
+O limite final é exclusivo e corresponde
+à meia-noite do dia seguinte ao dia atual.
+
+Assim, os filtros não representam intervalos
+fixos de 24 horas multiplicados pelo número
+de dias selecionados.
+
+Datas inválidas são excluídas quando existe
+um filtro temporal ativo, mas permanecem na
+listagem quando nenhum período está selecionado.
+
+### Organização técnica
+
+A lógica de filtragem está isolada em
+`src/utils/workoutHistoryFilters.ts`.
+
+O módulo utiliza uma função pura que recebe
+as sessões, os filtros e uma data de referência.
+
+A normalização textual utiliza Unicode NFD
+para permitir pesquisas sem distinção de acentos.
+
+A filtragem não modifica o array original,
+as sessões ou a data de referência.
+
+A integração está implementada em
+`src/screens/WorkoutHistoryScreen.tsx`.
+
+O calendário existente de atividades permanece
+inalterado.
+
+A interface reutiliza os tokens de tema existentes,
+incluindo suporte aos temas claro e escuro.
+
+Os controles possuem rótulos de acessibilidade,
+papéis apropriados e indicação da seleção
+dos filtros de período.
+
+### Carregamento e concorrência
+
+O carregamento do histórico é centralizado
+em uma função reutilizada pelo foco da tela
+e pela tentativa explícita de recarregamento.
+
+A integração utiliza `useFocusEffect`,
+do React Navigation.
+
+Cada requisição recebe um identificador
+incremental de geração.
+
+A perda de foco e a desmontagem da tela
+invalidam as requisições anteriores.
+
+Somente a geração vigente pode atualizar
+o histórico, o erro ou o estado de carregamento.
+
+Respostas obsoletas, bem-sucedidas ou com erro,
+não interferem em requisições posteriores.
+
+Os dados já carregados permanecem disponíveis
+durante atualizações e falhas de recarregamento.
+
+A interface oferece uma tentativa explícita
+de recuperação após falhas de comunicação.
+
+### Comunicação com o backend
+
+A funcionalidade reutiliza `getWorkoutHistory`,
+de `src/services/trainingSessions.ts`, por meio
+do fluxo autenticado existente.
+
+O contrato HTTP utilizado permanece:
+
+* `GET /api/v1/training/history`.
+
+O backend continua responsável pela autenticação,
+pelo isolamento entre usuários e pela seleção
+das sessões concluídas.
+
+A filtragem ocorre exclusivamente no mobile,
+sobre o histórico autenticado recebido.
+
+A alteração dos filtros não dispara novas
+requisições ao backend.
+
+Não foram necessários novos endpoints,
+migrations, dependências ou alterações
+nos contratos de comunicação.
+
+### Validação
+
+A implementação foi desenvolvida em etapas
+Red e Green, seguidas de integração da interface
+e testes complementares de concorrência.
+
+Evidências da validação local da FUNC-08:
+
+* 32 novos testes unitários mobile;
+* 21 novos testes de integração mobile;
+* 53 novos testes automatizados no total;
+* 32 testes de filtragem aprovados nos fusos
+  America/Sao_Paulo, UTC e America/New_York;
+* 8 testes existentes do calendário preservados;
+* 61 testes direcionados aprovados;
+* 576 testes mobile da baseline preservados;
+* 1123 testes backend da baseline preservados;
+* 629 testes mobile aprovados em 41 suítes;
+* 1123 testes backend aprovados;
+* 1752 testes automatizados aprovados na regressão;
+* TypeScript, ESLint, Prettier, Ruff e Pyright aprovados;
+* integridade dos lockfiles e dependências validada.
+
+As 96 execuções nos três fusos horários
+correspondem aos mesmos 32 testes unitários,
+sem duplicar a contagem de testes distintos.
+
+Os testes estão organizados em:
+
+* `src/utils/__tests__/workoutHistoryFilters.test.ts`;
+* `src/screens/__tests__/WorkoutHistoryScreen.test.tsx`.
+
+A cobertura inclui pesquisa, normalização,
+intervalos temporais, combinação de filtros,
+imutabilidade, preservação da ordem, estados
+vazios, navegação, retry, atualização e
+proteção contra respostas obsoletas.
+
+Os testes backend foram executados em PostgreSQL
+isolado, na porta 5434, sem utilizar o banco
+de desenvolvimento da aplicação.
+
+A regressão apresentou novamente o aviso
+conhecido de depreciação Starlette/AnyIO
+e o aviso React `act` na suíte
+`MapGymPreview.test.tsx`.
+
+Esses avisos não foram considerados resolvidos
+e não representam falhas dos testes da FUNC-08.
+
+### Validação física
+
+A validação manual realizada no iPhone via Expo Go,
+em 16/11/2026, foi confirmada pelo desenvolvedor
+para os 15 cenários do roteiro:
+
+* apresentação inicial do histórico;
+* pesquisa por nome;
+* pesquisa sem distinção de acentos e maiúsculas;
+* filtro de 7 dias;
+* filtro de 30 dias;
+* filtro de 90 dias;
+* combinação de nome e período;
+* contador de resultados;
+* estado vazio filtrado;
+* limpeza dos filtros;
+* acesso aos detalhes da sessão;
+* preservação dos filtros ao retornar;
+* comportamento do teclado;
+* tema claro;
+* tema escuro.
+
+### Limitações
+
+A filtragem utiliza o conjunto de sessões
+retornado pelo endpoint atual.
+
+Paginação e otimizações para históricos
+extensos permanecem no escopo das adequações
+posteriores de performance.
+
+A referência temporal é recalculada durante
+as renderizações da tela. Não existe
+um temporizador específico para atualização
+automática dos filtros à meia-noite.
+
+A invalidação de requisições obsoletas
+é lógica e não constitui cancelamento
+do transporte HTTP.
+
+Os filtros permanecem em memória enquanto
+a tela permanece montada. Não existe persistência
+das preferências após o encerramento do aplicativo.
+
+A validação física no iPhone via Expo Go
+não constitui evidência de validação completa
+no Android, em builds nativos ou em todas
+as configurações de acessibilidade.
+
 ## Autenticação
 
 O FitMap utiliza autenticação gerenciada pelo backend FastAPI e persistida em PostgreSQL.
