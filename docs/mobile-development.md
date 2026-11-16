@@ -253,6 +253,140 @@ Essa organização facilita:
 * testes;
 * alterações na comunicação com o backend.
 
+## Contraste das cores semânticas (ACC-01)
+
+A ACC-01 atende ao requisito NFR-ACC-003 (High)
+no escopo dos tokens semânticos do tema mobile.
+
+A implementação utiliza como referência os critérios
+1.4.3 e 1.4.11 da WCAG 2.2, nível AA:
+
+* contraste mínimo de 4,5:1 para textos normais;
+* contraste mínimo de 3:1 para elementos gráficos
+  essenciais e indicadores de interface aplicáveis.
+
+Referência: <https://www.w3.org/TR/WCAG22/>.
+
+### Auditoria inicial
+
+A baseline identificou 99 linhas de utilização
+dos tokens semânticos em 20 arquivos:
+
+* success: 21;
+* warning: 8;
+* danger: 70.
+
+Somente 2 das 12 combinações avaliadas no tema claro
+atingiam 4,5:1. No tema escuro, as 12 já atendiam
+ao limite estabelecido.
+
+### Implementação
+
+A alteração está centralizada em `src/theme/themes.ts`.
+
+| Token | Antes | Depois |
+| --- | --- | --- |
+| success | #16A36A | #047857 |
+| warning | #F5A524 | #92400E |
+| danger | #D92D20 | #B91C1C |
+
+Somente três valores do tema claro foram alterados.
+
+O tema escuro, a identidade Orange Fusion,
+os tokens de marca, componentes, tipografia
+e espaçamentos permanecem preservados.
+
+Não foram adicionadas dependências ou alterações
+no backend, nos contratos HTTP ou no banco de dados.
+
+### Resultados de contraste
+
+| Token | Background | Surface | SurfaceSecondary | PrimarySoft |
+| --- | ---: | ---: | ---: | ---: |
+| success | 5,13 | 5,36 | 4,67 | 4,92 |
+| warning | 6,63 | 6,93 | 6,03 | 6,36 |
+| danger | 6,05 | 6,33 | 5,51 | 5,80 |
+
+Os valores apresentados estão arredondados.
+Os testes utilizam os valores sem arredondamento.
+
+As 12 combinações do tema claro e as 12 do tema
+escuro atendem ao limite de 4,5:1.
+
+Os testes também validam textos e ícones sobre
+fundos semânticos, estrelas e barras de progresso.
+
+### Validação automatizada
+
+Os testes estão localizados em:
+
+* `src/theme/__tests__/semanticContrast.test.ts`.
+
+A suíte utiliza luminância relativa sRGB
+e valida relações de contraste, sem exigir
+valores hexadecimais específicos.
+
+Foram acrescentados 39 testes:
+
+* 3 verificações do cálculo de contraste;
+* 24 combinações de tokens e superfícies;
+* 4 verificações de texto e ícones sobre fundos semânticos;
+* 8 verificações de elementos gráficos.
+
+Resultados Red: 25 aprovados e 14 falhas intencionais.
+
+Resultados Green: 39 aprovados e nenhuma falha.
+
+A regressão completa da branch independente apresentou:
+
+* 576 testes anteriores preservados;
+* 39 novos testes aprovados;
+* 615 testes mobile aprovados em 40 suítes;
+* nenhum teste com falha ou ignorado;
+* Prettier, TypeScript e ESLint aprovados.
+
+A regressão foi concluída em 14,35 segundos.
+
+Esses resultados correspondem à baseline anterior
+à integração da FUNC-08 e da PERF-03.
+
+### Validação física
+
+Em 16/11/2026, o desenvolvedor confirmou
+16 cenários no iPhone via Expo Go.
+
+Os oito grupos foram aprovados nos temas claro e escuro:
+
+* indicadores de status na Home e no Mapa;
+* metas fitness;
+* conclusão de exercícios;
+* estrelas de avaliação;
+* botão de confirmação de exclusão;
+* mensagens e ícones de erro;
+* fotos de progresso;
+* identidade visual Orange Fusion.
+
+Os quatro cenários inicialmente não executados
+foram aprovados na validação complementar.
+
+### Limitações
+
+Os testes avaliam combinações de cores RGB opacas.
+Não constituem uma auditoria exaustiva dos elementos
+renderizados pelo aplicativo.
+
+Transparências, gradientes, estados desabilitados
+e outros tokens podem exigir avaliações adicionais.
+
+A adequação não constitui declaração de conformidade
+integral com a WCAG.
+
+A validação em Expo Go não comprova compatibilidade
+com todos os dispositivos ou configurações.
+
+Leitores de tela, ampliação de texto, áreas de toque
+e outros requisitos permanecem previstos para a ACC-02.
+
 ## Filtros de descoberta de academias
 
 A implementação da FUNC-05 atende ao requisito funcional
