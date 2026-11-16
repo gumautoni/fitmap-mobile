@@ -27,9 +27,9 @@ export const lightColors = {
   border: brandColors.warmBorder,
   divider: "#EDE7DF",
 
-  success: "#16A36A",
-  warning: "#F5A524",
-  danger: "#D92D20",
+  success: "#047857",
+  warning: "#92400E",
+  danger: "#B91C1C",
 
   icon: "#57534E",
 } as const;
