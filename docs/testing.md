@@ -510,9 +510,7 @@ As verificações incluem:
 - consistência do lockfile;
 - detecção de alterações de schema não representadas por migrations.
 
-O comando `alembic check` utiliza a configuração do banco de desenvolvimento.
-
-Ele deve ser executado somente com o ambiente correto configurado e não substitui a validação das migrations no banco isolado de testes.
+O comando `alembic check` utiliza a configuração ativa do ambiente. Para a validação de CI, utiliza exclusivamente o PostgreSQL isolado de testes.
 
 ### 6.2. Mobile
 
@@ -561,9 +559,39 @@ As verificações incluem:
 - Ruff lint;
 - Ruff format;
 - Pyright;
+- aplicação das migrations Alembic;
+- consistência do schema com `alembic check`;
 - pytest.
 
 O PostgreSQL de CI é disponibilizado por meio de um serviço isolado na porta `5434`.
+
+#### Consistência de migrations (INFRA-02)
+
+Requisitos relacionados: NFR-DATA-004, NFR-DATA-005,
+NFR-TEST-003 e NFR-TEST-006.
+
+Antes do pytest, a CI aplica `alembic upgrade head`
+no PostgreSQL exclusivo de testes e executa `alembic check`
+com transações somente leitura.
+
+Uma falha na migration ou na comparação interrompe o job.
+A fixture de migrations da suíte pytest permanece preservada.
+
+A validação local de 17/11/2026 confirmou:
+
+- inicialização de um banco de testes vazio;
+- revisão `f03a7b2c9d81` como head;
+- controle positivo sem novas operações;
+- controle negativo com uma coluna simulada apenas em memória.
+
+O controle negativo não cria migrations nem altera o banco.
+
+O `alembic check` detecta diferenças suportadas pelo
+autogenerate. Ele não comprova equivalência integral de
+todos os objetos, constraints ou comportamentos do banco.
+
+A validação local não substitui a execução na CI.
+Nenhuma migration automática em produção foi introduzida.
 
 ### 7.3. Backend container validation
 

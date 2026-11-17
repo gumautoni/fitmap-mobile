@@ -131,6 +131,27 @@ jobs:
       - name: Run Pyright
         run: uv run pyright
 
+      - name: Validate database migrations
+        shell: bash
+        env:
+          FITMAP_ENVIRONMENT: test
+          FITMAP_DB_HOST: 127.0.0.1
+          FITMAP_DB_PORT: "5434"
+          FITMAP_DB_NAME: fitmap_test
+          FITMAP_DB_USER: fitmap_test
+        run: |
+          FITMAP_DB_PASSWORD="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          echo "::add-mask::$FITMAP_DB_PASSWORD"
+          export FITMAP_DB_PASSWORD
+          FITMAP_AUTH_JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          FITMAP_AUTH_RATE_LIMIT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          echo "::add-mask::$FITMAP_AUTH_JWT_SECRET"
+          echo "::add-mask::$FITMAP_AUTH_RATE_LIMIT_SECRET"
+          export FITMAP_AUTH_JWT_SECRET FITMAP_AUTH_RATE_LIMIT_SECRET
+
+          uv run --frozen alembic upgrade head
+          PGOPTIONS="-c default_transaction_read_only=on" uv run --frozen alembic check
+
       - name: Run tests
         run: uv run pytest
 
