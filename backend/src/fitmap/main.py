@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from fitmap.api.auth_cache import AuthenticationNoStoreMiddleware
 from fitmap.api.errors import register_exception_handlers
+from fitmap.api.observability import RequestObservabilityMiddleware
 from fitmap.api.router import api_router
 from fitmap.api.system import router as system_router
 from fitmap.config import Settings, get_settings
@@ -23,6 +24,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.add_middleware(
         AuthenticationNoStoreMiddleware,
+        api_prefix=app_settings.api_v1_prefix,
+    )
+
+    application.add_middleware(
+        RequestObservabilityMiddleware,
         api_prefix=app_settings.api_v1_prefix,
     )
 
