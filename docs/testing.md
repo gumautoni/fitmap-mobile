@@ -601,7 +601,39 @@ O workflow também verifica:
 - execução sem usuário root;
 - ausência do arquivo `.env` na imagem;
 - inicialização do container;
-- resposta do endpoint `/health`.
+- resposta do endpoint `/health`;
+- disponibilidade do PostgreSQL pelo endpoint `/ready`;
+- indisponibilidade temporaria e recuperacao da conexao.
+
+#### Readiness containerizada (INFRA-03)
+
+A CI utiliza uma rede Docker exclusiva, PostgreSQL 18
+temporario e credenciais geradas durante a execucao.
+
+O backend utiliza a imagem construida pelo proprio job,
+em modo `production`, sem acessar bancos existentes.
+
+| Cenario | /health | /ready |
+|---|---|---|
+| PostgreSQL disponivel | 200 | 200 |
+| PostgreSQL indisponivel | 200 | 503 |
+| PostgreSQL restabelecido | 200 | 200 |
+
+A validacao inclui os contratos JSON completos, inclusive
+o codigo de erro `database_unavailable`.
+
+Os tres cenarios foram aprovados localmente em 17/11/2026,
+utilizando containers reais. A API recuperou a conexao
+sem ser reiniciada.
+
+Os recursos temporarios da CI sao removidos ao final,
+inclusive quando uma validacao falha.
+
+O endpoint `/ready` verifica conectividade por `SELECT 1`.
+Ele nao comprova a completude das migrations, integridade
+dos dados ou disponibilidade de todos os servicos externos.
+A consistencia Alembic possui validacao independente
+na INFRA-02.
 
 ### 7.4. Critérios para merge
 
