@@ -29,11 +29,19 @@ External integrations are isolated from core business logic.
 ## Requirements
 
 - Python 3.13
-- uv
+- uv 0.13.6
 - Docker Desktop with Docker Compose
 - PostgreSQL 18, provided through Docker Compose
 
 Node.js, npm and Expo are required for mobile development but are not backend runtime dependencies.
+
+The uv CLI version is aligned between local development,
+CI and the Docker image. The `uv_build` backend has its own
+version constraints and is maintained independently.
+
+Python virtual environments managed by uv do not require
+pip to be installed. Use `uv pip check` when validating
+installed dependencies.
 
 ## Setup
 
