@@ -37,6 +37,7 @@
     ],
     "android": {
       "package": "com.bryan.fitmap",
+      "versionCode": 1,
       "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/brand/fitmap-adaptive-foreground.png",
@@ -45,6 +46,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.bryan.fitmap",
+      "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Permita que o FitMap acesse sua localização para encontrar academias próximas."

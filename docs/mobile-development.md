@@ -99,6 +99,35 @@ Por isso, elas nunca devem armazenar:
 * tokens privados do servidor;
 * qualquer outro segredo do backend.
 
+## Preparacao de builds EAS (INFRA-05)
+
+O arquivo `eas.json` separa os ambientes development,
+preview e production.
+
+O fluxo atual com Expo Go permanece inalterado.
+O perfil development com cliente nativo depende da
+instalacao futura do `expo-dev-client`.
+
+O perfil preview permite preparar um APK Android para
+testes internos. O perfil production prepara um AAB
+para futura distribuicao oficial.
+
+Ambos exigem uma API acessivel por HTTPS, credenciais
+nativas adequadas e vinculacao ao projeto Expo.
+
+A chave do Maps SDK para Android deve ser configurada
+pela variavel `GOOGLE_MAPS_ANDROID_API_KEY`, com
+restricoes de pacote, certificado SHA-1 e API.
+
+Essa chave nao substitui as credenciais server-side
+utilizadas pelo backend para descoberta de academias.
+
+Nao utilize os arquivos dotenv locais nos builds remotos.
+As variaveis de cada ambiente devem ser configuradas no EAS.
+
+Consulte [Deployment](deployment.md#mobile-releases)
+para os requisitos de distribuicao.
+
 ## Executar o aplicativo
 
 Para iniciar o Expo normalmente:

@@ -1,0 +1,67 @@
+# Dependências
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Arquivos de build
+android/
+ios/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.development
+.env.production
+
+# Cache
+.cache/
+coverage/
+
+# Arquivos temporários
+*.tmp
+*.log
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local environment variants and mobile signing credentials
+.env.*
+!.env.example
+credentials.json
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+
+# Mobile distribution artifacts
+*.apk
+*.aab
+*.ipa
+
+# Mobile build uploads must not include backend or local secrets
+/backend/
+/docs/
+/.github/
+/.git/
+/.env*
+**/.env*
+*.pem
+*.key

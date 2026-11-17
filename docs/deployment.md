@@ -306,7 +306,70 @@ The backend container workflow does not package or deploy the mobile application
 
 Mobile release responsibilities remain separate and compatible with the approved React Native and Expo architecture.
 
-Future mobile release automation may use Expo Application Services (EAS), but that work is independent from backend Docker deployment.
+### Mobile release foundation (INFRA-05)
+
+The repository defines EAS development, preview and production
+profiles in `eas.json`, independently of backend deployment.
+
+| Profile | Distribution | Android |
+|---|---|---|
+| development | Internal development client | APK |
+| preview | Internal release build | APK |
+| production | App store release | AAB |
+
+Development continues through Expo Go. The development-client
+profile requires installing a compatible `expo-dev-client`
+before its first native build.
+
+The Node.js baseline follows INFRA-04. Build versions are
+managed locally in `app.json`, with explicit versionCode
+and buildNumber values. Increase them intentionally before
+subsequent store releases.
+
+Before initiating a remote build:
+
+1. Confirm ownership of the existing Android and iOS identifiers.
+2. Link the repository to the intended Expo project.
+3. Configure the corresponding EAS environment.
+4. Provide a reachable HTTPS API URL for release builds.
+5. Configure restricted Android Maps SDK credentials.
+6. Configure platform signing and distribution credentials.
+7. Use a clean Git checkout.
+
+`EXPO_PUBLIC_API_URL` is public client configuration, not a secret.
+Preview and production must use an actual HTTPS backend.
+No production API URL is currently committed.
+
+The Android Maps SDK key is read dynamically by `app.config.ts`
+from `GOOGLE_MAPS_ANDROID_API_KEY`. Restrict it to the Android
+package, signing certificate SHA-1 and Maps SDK for Android.
+It is embedded in the native application and is not a server secret.
+
+The iOS application retains its default Apple Maps provider.
+
+The EAS upload exclusions preserve Git exclusions and additionally
+exclude the backend, documentation and local environment files.
+Configure build environment variables through Expo Services
+instead of uploading local dotenv files.
+
+After prerequisites are satisfied, supported commands include:
+
+```bash
+eas build --platform android --profile preview
+eas build --platform android --profile production
+eas build --platform ios --profile preview
+eas build --platform ios --profile production
+```
+
+These commands require an authenticated, compatible EAS CLI.
+iOS physical-device distribution requires appropriate Apple
+signing credentials and provisioning.
+
+No remote Expo project, signing credentials, native build,
+store submission or mobile production deployment was created
+as part of INFRA-05.
+
+Expo Go validation does not replace native build validation.
 
 ## Current infrastructure scope
 

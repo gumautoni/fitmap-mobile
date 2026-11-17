@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "requireCommit": true,
+    "appVersionSource": "local"
+  },
+  "build": {
+    "base": {
+      "node": "22.23.4",
+      "env": {
+        "EXPO_NO_DOTENV": "1"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "environment": "development",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "environment": "preview",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "distribution": "store",
+      "environment": "production",
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}

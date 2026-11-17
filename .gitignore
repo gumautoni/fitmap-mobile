@@ -40,3 +40,18 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Local environment variants and mobile signing credentials
+.env.*
+!.env.example
+credentials.json
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+
+# Mobile distribution artifacts
+*.apk
+*.aab
+*.ipa
