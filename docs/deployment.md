@@ -177,7 +177,16 @@ The CI workflow validates:
 - non-root container execution;
 - exclusion of `.env` from the image;
 - backend container startup;
-- backend `/health` response.
+- backend `/health` response;
+- backend `/ready` response with a real PostgreSQL instance;
+- readiness HTTP 503 during database unavailability;
+- readiness recovery after PostgreSQL restarts.
+
+The container smoke test uses an isolated Docker network,
+ephemeral credentials and temporary PostgreSQL storage.
+The backend remains running during the simulated outage.
+Readiness validates connectivity, not schema completeness
+or all external dependencies.
 
 A production-oriented backend artifact should only originate from code that has passed the required Pull Request validation.
 

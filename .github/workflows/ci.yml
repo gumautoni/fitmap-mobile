@@ -171,37 +171,146 @@ jobs:
           test "$(docker run --rm fitmap-backend:${{ github.sha }} id -u)" != "0"
           docker run --rm fitmap-backend:${{ github.sha }} sh -c "test ! -f /app/.env"
 
-      - name: Start backend container
+      - name: Start isolated backend and PostgreSQL
+        shell: bash
         run: |
-          # Ephemeral, independent secrets for this isolated smoke test.
+          FITMAP_DB_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
           FITMAP_AUTH_JWT_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
           FITMAP_AUTH_RATE_LIMIT_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          echo "::add-mask::$FITMAP_DB_PASSWORD"
           echo "::add-mask::$FITMAP_AUTH_JWT_SECRET"
           echo "::add-mask::$FITMAP_AUTH_RATE_LIMIT_SECRET"
-          export FITMAP_AUTH_JWT_SECRET FITMAP_AUTH_RATE_LIMIT_SECRET
+          export FITMAP_DB_PASSWORD FITMAP_AUTH_JWT_SECRET FITMAP_AUTH_RATE_LIMIT_SECRET
+          export POSTGRES_PASSWORD="$FITMAP_DB_PASSWORD"
+
+          docker network create fitmap-ci-network
+
+          docker run \
+            --detach \
+            --name fitmap-postgres-ci \
+            --network fitmap-ci-network \
+            --env POSTGRES_DB=fitmap_test \
+            --env POSTGRES_USER=fitmap_test \
+            --env POSTGRES_PASSWORD \
+            --tmpfs /var/lib/postgresql \
+            postgres:18-alpine
+
           docker run \
             --detach \
             --name fitmap-backend-ci \
+            --network fitmap-ci-network \
             --env FITMAP_ENVIRONMENT=production \
-            --env FITMAP_DB_PASSWORD=ci-placeholder \
+            --env FITMAP_DB_HOST=fitmap-postgres-ci \
+            --env FITMAP_DB_PORT=5432 \
+            --env FITMAP_DB_NAME=fitmap_test \
+            --env FITMAP_DB_USER=fitmap_test \
+            --env FITMAP_DB_PASSWORD \
             --env FITMAP_AUTH_JWT_SECRET \
             --env FITMAP_AUTH_RATE_LIMIT_SECRET \
-            --publish 8000:8000 \
+            --publish 127.0.0.1:8000:8000 \
             fitmap-backend:${{ github.sha }}
 
-      - name: Validate backend health
+      - name: Validate backend health and readiness
+        shell: bash
         run: |
-          for attempt in {1..20}; do
-            if curl --fail --silent http://127.0.0.1:8000/health; then
-              exit 0
-            fi
+          python3 - <<'PY'
+          import http.client
+          import json
+          import subprocess
+          import time
+          from urllib.error import HTTPError, URLError
+          from urllib.request import ProxyHandler, build_opener
 
-            sleep 1
+          opener = build_opener(ProxyHandler({}))
+          base = "http://127.0.0.1:8000"
+
+          health = (200, {"status": "ok"})
+          ready = (200, {"status": "ready"})
+          unavailable = (
+              503,
+              {"error": {
+                  "code": "database_unavailable",
+                  "message": "Database is unavailable.",
+              }},
+          )
+
+          def request(path):
+              try:
+                  with opener.open(base + path, timeout=6) as response:
+                      return response.status, json.load(response)
+              except HTTPError as exc:
+                  return exc.code, json.load(exc)
+              except (URLError, OSError, http.client.HTTPException):
+                  return None
+
+          def wait_for(label, predicate):
+              deadline = time.monotonic() + 60
+              while time.monotonic() < deadline:
+                  state = subprocess.check_output(
+                      ["docker", "inspect", "--format",
+                       "{{.State.Running}}", "fitmap-backend-ci"],
+                      text=True,
+                  ).strip()
+                  if state != "true":
+                      raise RuntimeError("Backend container exited.")
+                  if predicate():
+                      print(f"{label}: passed", flush=True)
+                      return
+                  time.sleep(1)
+              raise RuntimeError(f"{label}: timeout")
+
+          def database_ready():
+              return subprocess.run(
+                  ["docker", "exec", "fitmap-postgres-ci",
+                   "pg_isready", "-h", "127.0.0.1",
+                   "-U", "fitmap_test", "-d", "fitmap_test"],
+                  capture_output=True,
+              ).returncode == 0
+
+          wait_for("PostgreSQL startup", database_ready)
+          wait_for("Health HTTP 200", lambda: request("/health") == health)
+          wait_for("Readiness HTTP 200", lambda: request("/ready") == ready)
+
+          subprocess.run(
+              ["docker", "stop", "fitmap-postgres-ci"],
+              check=True,
+          )
+
+          wait_for("Readiness HTTP 503",
+                   lambda: request("/ready") == unavailable)
+
+          assert request("/health") == health
+          print("Health remains HTTP 200 during database outage.")
+
+          subprocess.run(
+              ["docker", "start", "fitmap-postgres-ci"],
+              check=True,
+          )
+
+          wait_for("PostgreSQL recovery", database_ready)
+          wait_for("Readiness recovered HTTP 200",
+                   lambda: request("/ready") == ready)
+
+          assert request("/health") == health
+          print("All readiness scenarios passed.")
+          PY
+
+      - name: Collect container diagnostics
+        if: failure()
+        run: |
+          docker logs --tail 50 fitmap-backend-ci || true
+          docker logs --tail 50 fitmap-postgres-ci || true
+
+      - name: Clean up isolated containers
+        if: always()
+        shell: bash
+        run: |
+          for name in fitmap-backend-ci fitmap-postgres-ci; do
+            if docker container inspect "$name" >/dev/null 2>&1; then
+              docker rm --force --volumes "$name"
+            fi
           done
 
-          docker logs fitmap-backend-ci
-          exit 1
-
-      - name: Clean up backend container
-        if: always()
-        run: docker rm --force fitmap-backend-ci || true
+          if docker network inspect fitmap-ci-network >/dev/null 2>&1; then
+            docker network rm fitmap-ci-network
+          fi
