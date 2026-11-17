@@ -455,13 +455,13 @@ This prevents accidental partial commits and keeps business transactions predict
 Start the development API:
 
 ```bash
-uv run uvicorn fitmap.main:app --host 127.0.0.1 --port 8000 --reload
+uv run python -m fitmap.server --host 127.0.0.1 --port 8000 --reload
 ```
 
 When a physical mobile device needs to communicate with the backend through the local network, use:
 
 ```bash
-uv run uvicorn fitmap.main:app --host 0.0.0.0 --port 8000 --reload
+uv run python -m fitmap.server --host 0.0.0.0 --port 8000 --reload
 ```
 
 The development computer and mobile device must have network connectivity that permits access to the backend.
@@ -1651,6 +1651,89 @@ GET /ready
 `/health` confirms that the API process is running.
 
 `/ready` verifies connectivity with PostgreSQL and returns `503 Service Unavailable` when the database dependency is unavailable.
+
+## Request observability (OBS-01)
+
+The API generates a new UUIDv4 request identifier on the server
+for each HTTP request processed by the ASGI middleware.
+
+The identifier is returned through the `X-Request-ID` response
+header and included in the corresponding structured HTTP event.
+
+Each `http_request` event contains only:
+
+- UTC timestamp;
+- severity level;
+- event name;
+- request identifier;
+- HTTP method;
+- matched route template;
+- HTTP status code;
+- elapsed duration in milliseconds.
+
+Route templates preserve the configured API prefix while
+excluding actual path parameters. Unknown routes are recorded
+as `unmatched`. Unrecognized methods are recorded as `OTHER`
+when accepted by the underlying HTTP server.
+
+Query strings, bodies, client identifiers, cookies,
+authorization headers and raw resource identifiers are not
+included in request events.
+
+HTTP responses below status 500 use INFO severity.
+Server errors use ERROR severity.
+
+Unhandled exceptions retain the generic HTTP 500 response
+and remain propagated to the server.
+
+The supported startup command is:
+
+```bash
+uv run python -m fitmap.server --host 127.0.0.1 --port 8000
+```
+
+The Docker image uses the same server module.
+
+The server applies `FITMAP_LOG_LEVEL`, disables conventional
+Uvicorn access logging and emits sanitized operational events.
+Use INFO to retain successful request events.
+
+Known operational messages are mapped to fixed event names.
+Other messages and exception tracebacks are not reproduced
+by the configured operational formatter.
+
+### Validation evidence
+
+On 17 November 2026:
+
+- 14 original request-observability tests passed;
+- 8 server-logging tests passed;
+- 4 additional route-resolution tests passed;
+- all 1206 backend tests passed;
+- strict Pyright and Ruff checks passed;
+- nine real HTTP responses were correlated with JSON events;
+- an invalid HTTP method was rejected before ASGI processing;
+- synthetic credentials, private markers, resource UUIDs
+  and raw tracebacks were absent from the captured server logs.
+
+The HTTP validation used an isolated non-root Docker container
+without an environment file or external network access.
+
+### Limitations
+
+Request identifiers are not distributed tracing identifiers.
+Requests rejected before ASGI processing may not receive one.
+
+Sanitized operational logs intentionally trade exception detail
+for reduced disclosure risk.
+
+The route resolver supports the current FitMap API composition.
+The configured formatter does not guarantee the behavior of
+external proxies, arbitrary third-party handlers or direct
+output outside the logging system.
+
+External monitoring, alerting, retention and log aggregation
+remain deployment concerns.
 
 ## Automated testing
 

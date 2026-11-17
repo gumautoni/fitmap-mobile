@@ -40,7 +40,7 @@ The image:
 
 The application startup command is:
 
-`uvicorn fitmap.main:app --host 0.0.0.0 --port 8000`
+`python -m fitmap.server --host 0.0.0.0 --port 8000`
 
 Application startup does not execute database migrations.
 
@@ -126,6 +126,33 @@ That file is ignored by Git and excluded from the Docker build context.
 Staging and production environments must provide their own configuration through the selected hosting platform or secret-management mechanism.
 
 Production credentials must never be committed to the repository or embedded in a Docker image.
+
+## Operational logging (OBS-01)
+
+Start the API through `python -m fitmap.server` to apply the
+supported logging configuration.
+
+The container entrypoint uses this command by default.
+
+Set `FITMAP_LOG_LEVEL=INFO` to retain request-level operational
+events. Higher severity thresholds suppress lower-level events.
+
+Logs are emitted as JSON records to standard output.
+
+Use the response `X-Request-ID` to correlate API requests
+with their corresponding `http_request` events.
+
+Conventional Uvicorn access logs are disabled because raw
+request URLs can contain sensitive information.
+
+Unexpected exceptions remain errors, while the configured
+operational formatter omits raw messages and tracebacks.
+
+The API does not automatically configure external monitoring,
+log retention, alerting or centralized log collection.
+
+Future hosting infrastructure must restrict access to logs
+and independently review proxy and platform logging settings.
 
 ## Database migrations
 

@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from fitmap.api.observability import REQUEST_ID_HEADER
 
 
 class ErrorDetail(BaseModel):
@@ -31,6 +33,20 @@ class ApiError(Exception):
 
 
 def register_exception_handlers(application: FastAPI) -> None:
+    @application.exception_handler(Exception)
+    async def handle_unexpected_error(
+        request: Request,
+        _exc: Exception,
+    ) -> PlainTextResponse:
+        request_id = getattr(request.state, "request_id", None)
+        headers = {REQUEST_ID_HEADER: request_id} if isinstance(request_id, str) else None
+
+        return PlainTextResponse(
+            "Internal Server Error",
+            status_code=500,
+            headers=headers,
+        )
+
     @application.exception_handler(ApiError)
     async def handle_api_error(_request: Request, exc: ApiError) -> JSONResponse:
         payload = ErrorResponse(

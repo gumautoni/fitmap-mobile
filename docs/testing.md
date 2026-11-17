@@ -285,6 +285,42 @@ Os testes utilizam substituições de dependências quando o comportamento avali
 
 A existência de testes de armazenamento não significa que toda a suíte dependa de um S3 real.
 
+### 3.7. Observabilidade (OBS-01)
+
+Requisitos relacionados: NFR-OBS-001, NFR-OBS-002 e
+NFR-OBS-003. A readiness permanece coberta pela INFRA-03.
+
+Testes automatizados:
+
+- `test_request_observability.py`: 14 testes;
+- `test_server_logging.py`: 8 testes;
+- `test_observability_routes.py`: 4 testes.
+
+A estrategia TDD confirmou 14 falhas iniciais esperadas.
+A validacao Docker identificou uma lacuna na resolucao
+das rotas de routers aninhados. Quatro testes adicionais
+foram criados, com tres falhas esperadas e um controle
+positivo, antes da correcao.
+
+Todos os 26 testes foram aprovados apos a implementacao.
+
+Em 17/11/2026, a validacao HTTP real confirmou nove
+respostas correlacionadas com eventos JSON, incluindo
+status 200, 401, 404, 405, 422, 500 e 503.
+
+Um metodo HTTP artificial recebeu status 400 antes
+de chegar ao middleware ASGI.
+
+Os dados sinteticos sensiveis e tracebacks brutos
+nao apareceram nos logs capturados.
+
+A regressao completa confirmou 1206 testes backend
+aprovados em 81,04 segundos, com o aviso de depreciacao
+Starlette/AnyIO previamente conhecido.
+
+A validacao Docker local nao substitui a CI e nao
+comprova o comportamento de logs de infraestrutura externa.
+
 ## 4. Testes do mobile
 
 ### 4.1. Ferramentas
