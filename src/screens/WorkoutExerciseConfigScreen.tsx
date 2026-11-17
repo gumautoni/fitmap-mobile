@@ -423,6 +423,8 @@ export default function WorkoutExerciseConfigScreen({
                 <Text style={styles.label}>Séries</Text>
 
                 <TextInput
+                  accessibilityLabel="Séries"
+                  accessibilityState={{ disabled: saving }}
                   value={targetSets}
                   onChangeText={setTargetSets}
                   editable={!saving}
@@ -438,6 +440,8 @@ export default function WorkoutExerciseConfigScreen({
                 <Text style={styles.label}>Repetições</Text>
 
                 <TextInput
+                  accessibilityLabel="Repetições"
+                  accessibilityState={{ disabled: saving }}
                   value={targetRepetitions}
                   onChangeText={setTargetRepetitions}
                   editable={!saving}
@@ -464,6 +468,8 @@ export default function WorkoutExerciseConfigScreen({
             <Text style={styles.label}>Carga</Text>
 
             <TextInput
+              accessibilityLabel="Carga"
+              accessibilityState={{ disabled: saving }}
               value={targetLoad}
               onChangeText={setTargetLoad}
               editable={!saving}
@@ -479,6 +485,11 @@ export default function WorkoutExerciseConfigScreen({
             <View style={styles.unitRow}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="kg"
+                accessibilityState={{
+                  selected: loadUnit === "kg",
+                  disabled: saving,
+                }}
                 disabled={saving}
                 onPress={() => setLoadUnit("kg")}
                 style={({ pressed }) => [
@@ -493,12 +504,17 @@ export default function WorkoutExerciseConfigScreen({
                     loadUnit === "kg" && styles.unitButtonTextSelected,
                   ]}
                 >
-                  kg
+                  {loadUnit === "kg" ? "kg \u2713" : "kg"}
                 </Text>
               </Pressable>
 
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="lb"
+                accessibilityState={{
+                  selected: loadUnit === "lb",
+                  disabled: saving,
+                }}
                 disabled={saving}
                 onPress={() => setLoadUnit("lb")}
                 style={({ pressed }) => [
@@ -513,7 +529,7 @@ export default function WorkoutExerciseConfigScreen({
                     loadUnit === "lb" && styles.unitButtonTextSelected,
                   ]}
                 >
-                  lb
+                  {loadUnit === "lb" ? "lb \u2713" : "lb"}
                 </Text>
               </Pressable>
             </View>
@@ -530,6 +546,8 @@ export default function WorkoutExerciseConfigScreen({
             </Text>
 
             <TextInput
+              accessibilityLabel="Notas do exercício"
+              accessibilityState={{ disabled: saving }}
               value={notes}
               onChangeText={setNotes}
               editable={!saving}
@@ -557,6 +575,8 @@ export default function WorkoutExerciseConfigScreen({
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Salvar configuração"
+            accessibilityState={{ busy: saving, disabled: saving }}
             disabled={saving}
             onPress={() => {
               void handleSave();

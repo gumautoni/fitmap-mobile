@@ -136,6 +136,8 @@ export default function CreateWorkoutScreen({
             <Text style={styles.label}>Nome do treino</Text>
 
             <TextInput
+              accessibilityLabel="Nome do treino"
+              accessibilityState={{ disabled: saving }}
               value={name}
               onChangeText={setName}
               editable={!saving}
@@ -163,6 +165,8 @@ export default function CreateWorkoutScreen({
 
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Criar treino"
+              accessibilityState={{ busy: saving, disabled: saving }}
               disabled={saving}
               onPress={() => {
                 void handleCreateWorkout();

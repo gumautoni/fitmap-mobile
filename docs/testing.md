@@ -522,6 +522,66 @@ em cada requisição do celular.
 Essas limitações devem ser preservadas no relato
 de validação da funcionalidade.
 
+### 5.3. Acessibilidade dos formulários de treino (ACC-02.1)
+
+Em 17/11/2026, a entrega registrou oito novos testes
+automatizados em:
+
+`src/screens/__tests__/WorkoutFormsAccessibility.test.tsx`
+
+A cobertura inclui:
+
+* identificação acessível do nome do treino;
+* identificação dos campos de configuração do exercício;
+* estado acessível e alternância da unidade de carga;
+* preservação do nome do botão durante a criação;
+* indicador visual de seleção independente de cores;
+* estados acessíveis durante o salvamento da configuração;
+* desabilitação e recuperação dos controles de criação;
+* recuperação dos controles após falha no salvamento.
+
+Os quatro testes iniciais falharam pelos motivos
+esperados antes da implementação e foram aprovados
+após as correções.
+
+Os quatro testes complementares também foram aprovados.
+
+A regressão mobile completa registrou:
+
+* 722 testes aprovados;
+* 46 suítes aprovadas;
+* TypeScript, ESLint e Prettier aprovados;
+* duração local de 17,64 segundos, incluindo a
+  inicialização do comando de testes.
+
+A última regressão confirmada do backend permanece
+com 1.206 testes aprovados, totalizando 1.928 testes
+automatizados nas duas suítes acumuladas.
+
+#### Validação física
+
+O desenvolvedor confirmou os seguintes cenários
+no iPhone, com Expo e backend local:
+
+1. Criação do treino.
+2. Funcionamento dos campos de configuração.
+3. Indicador visual da unidade selecionada.
+4. Alternância entre kg e lb.
+5. Persistência dos dados após salvar.
+6. Identificação do nome do treino pelo VoiceOver.
+7. Identificação dos botões de criação pelo VoiceOver.
+8. Identificação dos quatro campos de configuração.
+9. Anúncio da unidade selecionada pelo VoiceOver.
+10. Identificação do botão de salvar pelo VoiceOver.
+11. Usabilidade da criação com texto ampliado.
+12. Usabilidade da configuração com texto ampliado.
+
+Resultado: 12 de 12 verificações aprovadas.
+
+A validação manual complementa os testes automatizados,
+mas não comprova conformidade integral de acessibilidade
+nem compatibilidade com todos os dispositivos.
+
 ## 6. Verificações de qualidade
 
 ### 6.1. Backend
