@@ -28,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version-file: backend/.python-version
 
       - name: Scan secrets
         env:
@@ -50,7 +50,17 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: "22.15.0"
+          node-version-file: .node-version
+
+      - name: Validate mobile toolchain
+        shell: bash
+        run: |
+          test "$(node --version)" = "v$(cat .node-version)"
+          npm_version="$(node -p "require('./package.json').packageManager.slice(4)")"
+          if [ "$(npm --version)" != "$npm_version" ]; then
+            npm install --global "npm@$npm_version" --no-audit --no-fund
+          fi
+          test "$(npm --version)" = "$npm_version"
 
       - name: Audit production dependencies
         run: npm audit --package-lock-only --omit=dev --audit-level=info
@@ -103,7 +113,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.13"
+          python-version-file: backend/.python-version
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0

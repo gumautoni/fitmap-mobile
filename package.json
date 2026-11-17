@@ -4,6 +4,11 @@
   "description": "Aplicativo para localizar academias próximas, comparar opções e registrar exercícios concluídos.",
   "main": "node_modules/expo/AppEntry.js",
   "private": true,
+  "packageManager": "npm@10.9.9",
+  "engines": {
+    "node": ">=22.23.4 <23",
+    "npm": ">=10.9.9 <11"
+  },
   "jest": {
     "preset": "jest-expo"
   },

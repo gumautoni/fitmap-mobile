@@ -654,15 +654,43 @@ fitmap-mobile/
 For the full local development workflow, install:
 
 - Git;
-- Node.js;
-- npm;
+- Node.js 22.23.4;
+- npm 10.9.9;
 - Python 3.13;
-- uv;
+- uv 0.13.6;
 - Docker Desktop with Docker Compose.
 
 For physical-device mobile development, install Expo Go on the device.
 
 The development machine and mobile device must have network connectivity that permits access to the backend.
+
+### Toolchain baseline (INFRA-04)
+
+Use the versions declared in `.node-version`,
+`package.json` and `backend/.python-version`.
+
+CI uses the exact Node.js and npm baseline. The npm
+engine ranges permit compatible updates within the
+same major versions, but the declared baseline is
+the reproducible development reference.
+
+Python remains on the 3.13 series, allowing patch updates.
+The uv CLI is pinned to 0.13.6 in CI and Docker.
+PostgreSQL remains on version 18.
+
+Check installed versions before switching computers:
+
+- `node --version`
+- `npm --version`
+- `uv --version`
+- `uv python list --only-installed`
+
+Install application dependencies from the committed
+lockfiles using `npm ci` and `uv sync --frozen --dev`.
+
+Do not replace existing local environment files.
+Docker Desktop and Git versions may differ between
+development machines.
 
 ## Local development setup
 
