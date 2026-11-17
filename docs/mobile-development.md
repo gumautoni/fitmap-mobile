@@ -477,6 +477,126 @@ builds nativos.
 Os demais fluxos permanecem no escopo das etapas
 seguintes da ACC-02.
 
+## Acessibilidade do gerenciamento, execução e histórico de treinos (ACC-02.2)
+
+A segunda etapa da ACC-02 complementa a acessibilidade
+dos formulários de treino implementada na ACC-02.1.
+
+O escopo contribui para os requisitos NFR-ACC-001,
+NFR-ACC-002 e NFR-ACC-006, com avaliação localizada
+dos requisitos NFR-ACC-004 e NFR-ACC-005.
+
+### Gerenciamento e catálogo
+
+Arquivos envolvidos:
+
+* `src/screens/ExerciseCatalogScreen.tsx`;
+* `src/screens/WorkoutDetailsScreen.tsx`;
+* `src/screens/WorkoutsScreen.tsx`.
+
+Foram aprimorados:
+
+* rótulos acessíveis da busca, dos campos de edição
+  e das ações de gerenciamento;
+* identificação das ações de criação e adição
+  de exercícios durante solicitações pendentes;
+* estados acessíveis de processamento e desabilitação
+  durante edição, arquivamento, reordenação,
+  remoção e restauração de treinos ou exercícios.
+
+### Execução de treinos
+
+Arquivos envolvidos:
+
+* `src/screens/WorkoutSessionScreen.tsx`;
+* `src/components/WorkoutNoteEditor.tsx`.
+
+Os campos de repetições e carga identificam o exercício
+correspondente em seus rótulos acessíveis.
+
+Os seletores kg e lb informam o estado `selected`
+e apresentam um indicador visual de confirmação
+independente de cor.
+
+A remoção de séries identifica a posição da série
+e o nome do exercício correspondente.
+
+Os controles de registro, conclusão, reabertura,
+finalização e cancelamento expõem estados acessíveis
+compatíveis com os estados de processamento existentes.
+
+Os campos de observações informam explicitamente
+quando estão desabilitados.
+
+Os botões de conclusão, remoção e seleção de
+unidade foram ajustados para dimensões mínimas
+de interação de 48 unidades lógicas, preservando
+larguras maiores quando existentes.
+
+### Histórico de treinos
+
+Arquivos envolvidos:
+
+* `src/screens/WorkoutHistoryScreen.tsx`;
+* `src/screens/WorkoutHistoryDetailsScreen.tsx`.
+
+O filtro de período selecionado apresenta um
+indicador visual de confirmação, preservando o
+rótulo acessível e o estado `selected`.
+
+Nos detalhes do histórico, cada exercício apresenta
+o texto Concluído ou Não concluído, acompanhado
+de um rótulo acessível contextual.
+
+O estado utiliza exclusivamente `exercise.isCompleted`.
+A existência de séries registradas não implica
+a conclusão do exercício.
+
+Os ícones existentes e os tokens de tema foram
+preservados. A indicação textual não utiliza altura fixa.
+
+### Validação
+
+A entrega acrescentou 36 testes automatizados:
+
+* 19 no gerenciamento e catálogo;
+* 11 na execução de treinos;
+* 6 no histórico e em seus detalhes.
+
+A regressão direcionada aprovou 120 testes em 7 suítes.
+
+A regressão mobile completa aprovou 758 testes
+em 49 suítes, com TypeScript, ESLint e Prettier
+aprovados.
+
+Em 17/11/2026, o desenvolvedor confirmou
+25 de 25 verificações físicas no iPhone,
+com Expo Go e backend local, incluindo VoiceOver,
+ampliação de texto e persistência dos registros.
+
+A lógica de negócio, a navegação, os contratos HTTP,
+a paginação, as dependências e a identidade Orange Fusion
+permaneceram inalterados.
+
+### Limitações
+
+Os resultados se restringem aos cenários automatizados
+e à configuração física utilizada.
+
+A dimensão lógica configurada nos controles não
+constitui medição física exaustiva de todas as telas.
+
+A validação não comprova conformidade integral
+com a WCAG, compatibilidade com todos os dispositivos
+ou funcionamento em builds nativos.
+
+A validação física no Android permanece pendente.
+
+Os demais módulos e as verificações transversais
+permanecem previstos nas etapas seguintes da ACC-02.
+
+A validação integrada por CI permanece necessária.
+
 ---
 
 ## Filtros de descoberta de academias

@@ -621,6 +621,91 @@ describe("WorkoutHistoryScreen filters", () => {
     },
   );
 
+  it("accessibility: shows the selected period without relying on color", async () => {
+    await mountLoadedHistory();
+
+    const options = [
+      { label: ALL_PERIOD, text: "Todos", count: 6 },
+      { label: SEVEN_DAYS, text: "7 dias", count: 3 },
+      { label: THIRTY_DAYS, text: "30 dias", count: 4 },
+      { label: NINETY_DAYS, text: "90 dias", count: 5 },
+    ];
+
+    function expectSelectedPeriod(selectedLabel: string) {
+      for (const option of options) {
+        const selected = option.label === selectedLabel;
+
+        const button = screen.getByRole("button", {
+          name: option.label,
+        });
+
+        expect(button).toHaveProp(
+          "accessibilityState",
+          expect.objectContaining({ selected }),
+        );
+
+        const visibleText = selected ? `${option.text} \u2713` : option.text;
+
+        expect(screen.getByText(visibleText)).toBeTruthy();
+
+        const unexpectedText = selected ? option.text : `${option.text} \u2713`;
+
+        expect(screen.queryByText(unexpectedText)).toBeNull();
+      }
+    }
+
+    expectSelectedPeriod(ALL_PERIOD);
+
+    for (const option of options.slice(1)) {
+      await choosePeriod(option.label);
+
+      expectSelectedPeriod(option.label);
+      expectCount(option.count);
+    }
+
+    await fireEvent.press(
+      screen.getByRole("button", {
+        name: CLEAR_FILTERS,
+      }),
+    );
+
+    expectSelectedPeriod(ALL_PERIOD);
+    expectCount(6);
+
+    expect(mockedHistoryPage).toHaveBeenCalledTimes(1);
+    expect(mockedHistory).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: preserves the non-color period indicator in dark mode", async () => {
+    const view = await mountLoadedHistory();
+
+    await choosePeriod(THIRTY_DAYS);
+
+    expect(screen.getByText("30 dias \u2713")).toBeTruthy();
+
+    mockThemeMode = "dark";
+
+    await view.rerender(historyTree());
+
+    expect(screen.getByText("30 dias \u2713")).toBeTruthy();
+
+    expect(screen.queryByText("Todos \u2713")).toBeNull();
+
+    expect(
+      screen.getByRole("button", {
+        name: THIRTY_DAYS,
+      }),
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ selected: true }),
+    );
+
+    expectCount(4);
+
+    expect(mockedHistoryPage).toHaveBeenCalledTimes(1);
+    expect(mockedHistory).not.toHaveBeenCalled();
+  });
+
   it("preserves filter state when changing to the dark theme", async () => {
     const view = await mountLoadedHistory();
 
