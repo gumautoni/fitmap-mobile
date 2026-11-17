@@ -493,6 +493,8 @@ export default function WorkoutDetailsScreen({
             <Text style={styles.label}>Nome</Text>
 
             <TextInput
+              accessibilityLabel="Nome do treino"
+              accessibilityState={{ disabled: busy }}
               value={name}
               onChangeText={setName}
               editable={!busy}
@@ -511,6 +513,11 @@ export default function WorkoutDetailsScreen({
             {nameChanged ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Salvar nome"
+                accessibilityState={{
+                  busy: savingName,
+                  disabled: busy,
+                }}
                 disabled={busy}
                 onPress={() => {
                   void handleSaveName();
@@ -675,6 +682,10 @@ export default function WorkoutDetailsScreen({
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Mover ${exercise.exerciseName} para cima`}
+                        accessibilityState={{
+                          busy: reordering,
+                          disabled: busy || first,
+                        }}
                         disabled={busy || first}
                         onPress={() => {
                           void handleMoveExercise(index, "up");
@@ -706,6 +717,10 @@ export default function WorkoutDetailsScreen({
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Mover ${exercise.exerciseName} para baixo`}
+                        accessibilityState={{
+                          busy: reordering,
+                          disabled: busy || last,
+                        }}
                         disabled={busy || last}
                         onPress={() => {
                           void handleMoveExercise(index, "down");
@@ -737,6 +752,10 @@ export default function WorkoutDetailsScreen({
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Remover ${exercise.exerciseName}`}
+                        accessibilityState={{
+                          busy: removing,
+                          disabled: busy,
+                        }}
                         disabled={busy}
                         onPress={() => confirmRemoveExercise(exercise)}
                         style={({ pressed }) => [
@@ -784,6 +803,11 @@ export default function WorkoutDetailsScreen({
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Arquivar treino"
+            accessibilityState={{
+              busy: archiving,
+              disabled: busy,
+            }}
             disabled={busy}
             onPress={confirmArchive}
             style={({ pressed }) => [

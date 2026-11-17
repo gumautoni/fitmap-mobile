@@ -586,7 +586,7 @@ export default function WorkoutHistoryScreen({
                           selected && styles.periodButtonTextSelected,
                         ]}
                       >
-                        {option.label}
+                        {selected ? `${option.label} \u2713` : option.label}
                       </Text>
                     </Pressable>
                   );

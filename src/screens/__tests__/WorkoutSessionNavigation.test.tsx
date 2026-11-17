@@ -15,6 +15,8 @@ import {
   cancelWorkoutSession,
   finishWorkoutSession,
   getActiveWorkoutSession,
+  getWorkoutSession,
+  removeSetExecution,
   updateExerciseExecution,
   updateWorkoutSession,
   type WorkoutSession,
@@ -1114,6 +1116,550 @@ describe("WorkoutSessionScreen - navegacao apos encerramento", () => {
         false,
         expect.any(Function),
       );
+    });
+  });
+
+  describe("execution accessibility - ACC-02.2", () => {
+    const exerciseName = session.exercises[0].exerciseName;
+
+    const secondExerciseName = "Segundo exercicio";
+
+    const addLabel = `Registrar s\u00e9rie de ${exerciseName}`;
+
+    const reopenLabel = `Reabrir exerc\u00edcio ${exerciseName}`;
+
+    const twoExerciseSession: WorkoutSession = {
+      ...session,
+      exercises: [
+        session.exercises[0],
+        {
+          ...session.exercises[0],
+          id: "accessibility-second-exercise",
+          exerciseId: "accessibility-second-catalog",
+          exerciseName: secondExerciseName,
+          position: 2,
+          isCompleted: false,
+          completedAt: null,
+          plannedLoadUnit: "lb",
+        },
+      ],
+    };
+
+    function pendingFailure() {
+      let reject!: (reason: Error) => void;
+
+      const promise = new Promise<WorkoutSession>((_, rejectRequest) => {
+        reject = rejectRequest;
+      });
+
+      return { promise, reject };
+    }
+
+    function expectActionState(label: string, busy: boolean) {
+      expect(screen.getByRole("button", { name: label })).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy,
+          disabled: busy,
+        }),
+      );
+    }
+
+    beforeEach(() => {
+      mockedAdd.mockReset();
+      mockedUpdate.mockReset();
+    });
+
+    it("accessibility: identifies set input fields by exercise", async () => {
+      mockedActive.mockResolvedValue(twoExerciseSession);
+
+      await renderSession();
+
+      for (const name of [exerciseName, secondExerciseName]) {
+        expect(
+          screen.getByLabelText(`Repeti\u00e7\u00f5es de ${name}`),
+        ).toHaveProp("editable", true);
+
+        expect(screen.getByLabelText(`Carga de ${name}`)).toHaveProp(
+          "editable",
+          true,
+        );
+      }
+
+      await fireEvent.changeText(
+        screen.getByLabelText(`Repeti\u00e7\u00f5es de ${exerciseName}`),
+        "12",
+      );
+
+      expect(
+        screen.getByLabelText(`Repeti\u00e7\u00f5es de ${secondExerciseName}`),
+      ).toHaveProp("value", "10");
+    });
+
+    it("accessibility: exposes independent selected load units", async () => {
+      mockedActive.mockResolvedValue(twoExerciseSession);
+
+      await renderSession();
+
+      function unitButton(unit: "kg" | "lb", name: string) {
+        return screen.getByRole("button", {
+          name: `Usar carga em ${unit} para ${name}`,
+        });
+      }
+
+      expect(unitButton("kg", exerciseName)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      expect(unitButton("lb", secondExerciseName)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      await fireEvent.press(unitButton("lb", exerciseName));
+
+      expect(unitButton("kg", exerciseName)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: false }),
+      );
+
+      expect(unitButton("lb", exerciseName)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      expect(unitButton("lb", secondExerciseName)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+    });
+
+    it("accessibility: shows the selected unit without relying on color", async () => {
+      await renderSession();
+
+      expect(screen.getByText("kg \u2713")).toBeTruthy();
+
+      await fireEvent.press(screen.getByText("lb"));
+
+      expect(screen.getByText("lb \u2713")).toBeTruthy();
+
+      expect(screen.queryByText("kg \u2713")).toBeNull();
+    });
+
+    it("accessibility: announces set registration and restores inputs after failure", async () => {
+      const request = pendingFailure();
+
+      mockedAdd.mockReturnValueOnce(request.promise);
+
+      await renderSession();
+
+      await fireEvent.changeText(screen.getByPlaceholderText("Ex.: 10"), "12");
+
+      await fireEvent.changeText(
+        screen.getByPlaceholderText("Opcional"),
+        "42,5",
+      );
+
+      await fireEvent.press(screen.getByText("lb"));
+
+      await fireEvent.press(
+        screen.getByRole("button", {
+          name: addLabel,
+        }),
+      );
+
+      try {
+        expect(mockedAdd).toHaveBeenCalledWith(
+          "test-access-token",
+          session.id,
+          session.exercises[0].id,
+          {
+            repetitions: 12,
+            load: "42.5",
+            loadUnit: "lb",
+          },
+        );
+
+        expectActionState(addLabel, true);
+
+        for (const label of [
+          `Repeti\u00e7\u00f5es de ${exerciseName}`,
+          `Carga de ${exerciseName}`,
+        ]) {
+          const field = screen.getByLabelText(label);
+
+          expect(field).toHaveProp("editable", false);
+
+          expect(field).toHaveProp(
+            "accessibilityState",
+            expect.objectContaining({ disabled: true }),
+          );
+        }
+
+        expect(screen.getByLabelText("Finalizar treino")).toBeDisabled();
+      } finally {
+        await act(async () => {
+          request.reject(new Error("Falha de teste ao registrar"));
+        });
+      }
+
+      expect(
+        await screen.findByText("Falha de teste ao registrar"),
+      ).toBeTruthy();
+
+      expectActionState(addLabel, false);
+
+      expect(
+        screen.getByLabelText(`Repeti\u00e7\u00f5es de ${exerciseName}`),
+      ).toHaveProp("value", "12");
+
+      expect(screen.getByLabelText(`Carga de ${exerciseName}`)).toHaveProp(
+        "editable",
+        true,
+      );
+
+      expect(
+        screen.getByRole("button", {
+          name: `Usar carga em lb para ${exerciseName}`,
+        }),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          selected: true,
+          disabled: false,
+        }),
+      );
+    });
+
+    it("accessibility: announces exercise updates without losing their action label", async () => {
+      const request = pendingFailure();
+
+      mockedUpdate.mockReturnValueOnce(request.promise);
+
+      await renderSession();
+
+      await fireEvent.press(
+        screen.getByRole("button", {
+          name: reopenLabel,
+        }),
+      );
+
+      try {
+        expect(mockedUpdate).toHaveBeenCalledWith(
+          "test-access-token",
+          session.id,
+          session.exercises[0].id,
+          { completed: false },
+        );
+
+        expectActionState(reopenLabel, true);
+
+        expect(screen.getByLabelText("Cancelar treino")).toBeDisabled();
+      } finally {
+        await act(async () => {
+          request.reject(new Error("Falha de teste ao reabrir"));
+        });
+      }
+
+      expect(await screen.findByText("Falha de teste ao reabrir")).toBeTruthy();
+
+      expectActionState(reopenLabel, false);
+
+      expect(screen.getByLabelText("Cancelar treino")).not.toBeDisabled();
+    });
+
+    async function verifyClosingAccessibility(kind: "finish" | "cancel") {
+      const request = pendingFailure();
+
+      const actionLabel =
+        kind === "finish" ? "Finalizar treino" : "Cancelar treino";
+
+      const confirmLabel = kind === "finish" ? "Finalizar" : "Cancelar treino";
+
+      const mock = kind === "finish" ? mockedFinish : mockedCancel;
+
+      mock.mockReturnValueOnce(request.promise);
+
+      await renderSession();
+
+      await fireEvent.press(
+        screen.getByRole("button", {
+          name: actionLabel,
+        }),
+      );
+
+      expect(mock).not.toHaveBeenCalled();
+
+      await confirmAlert(actionLabel, confirmLabel);
+
+      try {
+        expect(mock).toHaveBeenCalledWith("test-access-token", session.id);
+
+        expectActionState(actionLabel, true);
+
+        expect(screen.getByLabelText(addLabel)).toBeDisabled();
+
+        expect(navigation.popTo).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => {
+          request.reject(new Error("Falha de teste no encerramento"));
+        });
+      }
+
+      expect(
+        await screen.findByText("Falha de teste no encerramento"),
+      ).toBeTruthy();
+
+      expectActionState(actionLabel, false);
+
+      expect(screen.getByLabelText(addLabel)).not.toBeDisabled();
+
+      expect(navigation.popTo).not.toHaveBeenCalled();
+    }
+
+    it("accessibility: announces pending workout completion", async () => {
+      await verifyClosingAccessibility("finish");
+    });
+
+    it("accessibility: announces pending workout cancellation", async () => {
+      await verifyClosingAccessibility("cancel");
+    });
+  });
+
+  describe("execution accessibility complementary - ACC-02.2", () => {
+    const firstExerciseName = session.exercises[0].exerciseName;
+    const secondExerciseName = "Segundo exercicio";
+
+    const firstSet = {
+      id: "accessibility-first-set",
+      position: 1,
+      repetitions: 10,
+      load: "40",
+      loadUnit: "kg" as const,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    };
+
+    const secondSet = {
+      ...firstSet,
+      id: "accessibility-second-set",
+      repetitions: 12,
+    };
+
+    const recordedSession: WorkoutSession = {
+      ...session,
+      exercises: [
+        {
+          ...session.exercises[0],
+          sets: [firstSet],
+        },
+        {
+          ...session.exercises[0],
+          id: "accessibility-second-exercise",
+          exerciseId: "accessibility-second-catalog",
+          exerciseName: secondExerciseName,
+          position: 2,
+          isCompleted: false,
+          completedAt: null,
+          sets: [secondSet],
+        },
+      ],
+    };
+
+    const mockedRemove = jest.mocked(removeSetExecution);
+    const mockedRefresh = jest.mocked(getWorkoutSession);
+
+    function removeButton(name: string) {
+      return screen.getByRole("button", {
+        name: `Remover s\u00e9rie 1 de ${name}`,
+      });
+    }
+
+    beforeEach(() => {
+      mockedActive.mockResolvedValue(recordedSession);
+      mockedRemove.mockReset();
+      mockedRefresh.mockReset();
+      mockedAdd.mockReset();
+    });
+
+    it("accessibility: removes the correct set when exercise positions repeat", async () => {
+      const refreshedSession: WorkoutSession = {
+        ...recordedSession,
+        exercises: [
+          recordedSession.exercises[0],
+          {
+            ...recordedSession.exercises[1],
+            sets: [],
+          },
+        ],
+      };
+
+      mockedRemove.mockResolvedValueOnce(undefined);
+      mockedRefresh.mockResolvedValueOnce(refreshedSession);
+
+      await renderSession();
+
+      expect(removeButton(firstExerciseName)).toBeTruthy();
+      expect(removeButton(secondExerciseName)).toBeTruthy();
+
+      await fireEvent.press(removeButton(secondExerciseName));
+
+      expect(mockedRemove).not.toHaveBeenCalled();
+
+      await confirmAlert("Remover s\u00e9rie", "Remover");
+
+      await waitFor(() => {
+        expect(mockedRemove).toHaveBeenCalledTimes(1);
+
+        expect(mockedRemove).toHaveBeenCalledWith(
+          "test-access-token",
+          recordedSession.id,
+          recordedSession.exercises[1].id,
+          secondSet.id,
+        );
+
+        expect(mockedRefresh).toHaveBeenCalledWith(
+          "test-access-token",
+          recordedSession.id,
+        );
+
+        expect(
+          screen.queryByRole("button", {
+            name: `Remover s\u00e9rie 1 de ${secondExerciseName}`,
+          }),
+        ).toBeNull();
+      });
+
+      expect(removeButton(firstExerciseName)).not.toBeDisabled();
+
+      expect(navigation.popTo).not.toHaveBeenCalled();
+    });
+
+    it("accessibility: restores contextual set controls after removal failure", async () => {
+      mockedRemove.mockRejectedValueOnce(
+        new Error("Falha de teste ao remover serie"),
+      );
+
+      await renderSession();
+
+      await fireEvent.press(removeButton(firstExerciseName));
+
+      await confirmAlert("Remover s\u00e9rie", "Remover");
+
+      expect(
+        await screen.findByText("Falha de teste ao remover serie"),
+      ).toBeTruthy();
+
+      expect(mockedRemove).toHaveBeenCalledWith(
+        "test-access-token",
+        recordedSession.id,
+        recordedSession.exercises[0].id,
+        firstSet.id,
+      );
+
+      expect(removeButton(firstExerciseName)).not.toBeDisabled();
+
+      expect(removeButton(secondExerciseName)).not.toBeDisabled();
+
+      expect(mockedRefresh).not.toHaveBeenCalled();
+      expect(navigation.popTo).not.toHaveBeenCalled();
+    });
+
+    it("accessibility: provides practical minimum touch targets", async () => {
+      await renderSession();
+
+      const reopenButton = screen.getByRole("button", {
+        name: `Reabrir exerc\u00edcio ${firstExerciseName}`,
+      });
+
+      const completeButton = screen.getByRole("button", {
+        name: `Concluir exerc\u00edcio ${secondExerciseName}`,
+      });
+
+      expect(reopenButton).toHaveStyle({
+        minHeight: 48,
+        minWidth: 48,
+      });
+
+      expect(completeButton).toHaveStyle({
+        minHeight: 48,
+      });
+
+      for (const name of [firstExerciseName, secondExerciseName]) {
+        expect(removeButton(name)).toHaveStyle({
+          minWidth: 48,
+          minHeight: 48,
+        });
+
+        for (const unit of ["kg", "lb"]) {
+          expect(
+            screen.getByRole("button", {
+              name: `Usar carga em ${unit} para ${name}`,
+            }),
+          ).toHaveStyle({
+            minHeight: 48,
+          });
+        }
+      }
+    });
+
+    it("accessibility: exposes disabled note fields during pending set operations", async () => {
+      let resolveSet!: (value: WorkoutSession) => void;
+
+      mockedAdd.mockReturnValueOnce(
+        new Promise<WorkoutSession>((resolve) => {
+          resolveSet = resolve;
+        }),
+      );
+
+      await renderSession();
+
+      const noteLabels = [
+        "Observa\u00e7\u00e3o do treino",
+        `Observa\u00e7\u00e3o do exerc\u00edcio ${firstExerciseName}`,
+        `Observa\u00e7\u00e3o do exerc\u00edcio ${secondExerciseName}`,
+      ];
+
+      await fireEvent.press(
+        screen.getByRole("button", {
+          name: `Registrar s\u00e9rie de ${secondExerciseName}`,
+        }),
+      );
+
+      try {
+        expect(mockedAdd).toHaveBeenCalledTimes(1);
+
+        for (const label of noteLabels) {
+          const field = screen.getByLabelText(label);
+
+          expect(field).toHaveProp("editable", false);
+
+          expect(field).toHaveProp(
+            "accessibilityState",
+            expect.objectContaining({
+              disabled: true,
+            }),
+          );
+        }
+      } finally {
+        await act(async () => {
+          resolveSet(recordedSession);
+        });
+      }
+
+      for (const label of noteLabels) {
+        const field = screen.getByLabelText(label);
+
+        expect(field).toHaveProp("editable", true);
+
+        expect(field).toHaveProp(
+          "accessibilityState",
+          expect.objectContaining({
+            disabled: false,
+          }),
+        );
+      }
     });
   });
 });

@@ -206,6 +206,16 @@ export default function ExerciseCatalogScreen({
     [exercises, customName],
   );
 
+  const customActionLabel =
+    exactCustomExercise && !workoutExerciseIds.has(exactCustomExercise.id)
+      ? "Adicionar existente"
+      : "Criar exercício";
+
+  const customActionBusy =
+    creatingCustom ||
+    (exactCustomExercise != null &&
+      addingExerciseId === exactCustomExercise.id);
+
   const customSuggestions = useMemo(() => {
     if (normalizeExerciseSearch(customName).length < 2) {
       return [];
@@ -441,6 +451,7 @@ export default function ExerciseCatalogScreen({
 
               <TextInput
                 accessibilityLabel="Nome do exercício personalizado"
+                accessibilityState={{ disabled: busy }}
                 value={customName}
                 onChangeText={setCustomName}
                 editable={!busy}
@@ -467,6 +478,10 @@ export default function ExerciseCatalogScreen({
                       key={exercise.id}
                       accessibilityRole="button"
                       accessibilityLabel={`Adicionar sugestão ${exercise.name}`}
+                      accessibilityState={{
+                        busy: addingExerciseId === exercise.id,
+                        disabled: busy,
+                      }}
                       disabled={busy}
                       onPress={() => {
                         void handleAddExercise(exercise);
@@ -501,6 +516,11 @@ export default function ExerciseCatalogScreen({
 
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={customActionLabel}
+                accessibilityState={{
+                  busy: customActionBusy,
+                  disabled: busy,
+                }}
                 disabled={busy}
                 onPress={() => {
                   void handleCreateCustomExercise();
@@ -525,10 +545,7 @@ export default function ExerciseCatalogScreen({
                     />
 
                     <Text style={styles.createButtonText}>
-                      {exactCustomExercise &&
-                      !workoutExerciseIds.has(exactCustomExercise.id)
-                        ? "Adicionar existente"
-                        : "Criar exercício"}
+                      {customActionLabel}
                     </Text>
                   </>
                 )}
@@ -565,6 +582,8 @@ export default function ExerciseCatalogScreen({
           <Search size={19} strokeWidth={2.2} color={theme.colors.textMuted} />
 
           <TextInput
+            accessibilityLabel="Buscar exercício"
+            accessibilityState={{ disabled: busy }}
             value={search}
             onChangeText={setSearch}
             editable={!busy}
@@ -677,6 +696,10 @@ export default function ExerciseCatalogScreen({
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Adicionar ${exercise.name}`}
+                    accessibilityState={{
+                      busy: adding,
+                      disabled: busy,
+                    }}
                     disabled={busy}
                     onPress={() => {
                       void handleAddExercise(exercise);

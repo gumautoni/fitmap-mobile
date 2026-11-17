@@ -473,6 +473,10 @@ export default function WorkoutsScreen({ navigation }: WorkoutsScreenProps) {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Restaurar treino ${workout.name}`}
+                      accessibilityState={{
+                        busy: restoring,
+                        disabled: restoringWorkoutId !== null,
+                      }}
                       disabled={restoringWorkoutId !== null}
                       onPress={() => confirmRestore(workout)}
                       style={({ pressed }) => [

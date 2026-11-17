@@ -1027,6 +1027,10 @@ export default function WorkoutSessionScreen({
                           ? `Reabrir exercício ${exercise.exerciseName}`
                           : `Concluir exercício ${exercise.exerciseName}`
                       }
+                      accessibilityState={{
+                        busy: exerciseBusy,
+                        disabled: busy,
+                      }}
                       disabled={busy}
                       onPress={() => {
                         void handleToggleExercise(exercise);
@@ -1138,7 +1142,7 @@ export default function WorkoutSessionScreen({
 
                             <Pressable
                               accessibilityRole="button"
-                              accessibilityLabel={`Remover série ${setExecution.position}`}
+                              accessibilityLabel={`Remover série ${setExecution.position} de ${exercise.exerciseName}`}
                               disabled={busy}
                               onPress={() =>
                                 confirmRemoveSet(exercise, setExecution)
@@ -1171,6 +1175,8 @@ export default function WorkoutSessionScreen({
                         <Text style={styles.inputLabel}>Repetições</Text>
 
                         <TextInput
+                          accessibilityLabel={`Repetições de ${exercise.exerciseName}`}
+                          accessibilityState={{ disabled: busy }}
                           value={draft.repetitions}
                           editable={!busy}
                           keyboardType="number-pad"
@@ -1189,6 +1195,8 @@ export default function WorkoutSessionScreen({
                         <Text style={styles.inputLabel}>Carga</Text>
 
                         <TextInput
+                          accessibilityLabel={`Carga de ${exercise.exerciseName}`}
+                          accessibilityState={{ disabled: busy }}
                           value={draft.load}
                           editable={!busy}
                           keyboardType="decimal-pad"
@@ -1209,7 +1217,11 @@ export default function WorkoutSessionScreen({
                         <Pressable
                           key={unit}
                           accessibilityRole="button"
-                          accessibilityLabel={`Usar carga em ${unit}`}
+                          accessibilityLabel={`Usar carga em ${unit} para ${exercise.exerciseName}`}
+                          accessibilityState={{
+                            selected: draft.loadUnit === unit,
+                            disabled: busy,
+                          }}
                           disabled={busy}
                           onPress={() =>
                             updateDraft(exercise, {
@@ -1230,7 +1242,7 @@ export default function WorkoutSessionScreen({
                                 styles.unitButtonTextActive,
                             ]}
                           >
-                            {unit}
+                            {draft.loadUnit === unit ? `${unit} \u2713` : unit}
                           </Text>
                         </Pressable>
                       ))}
@@ -1239,6 +1251,10 @@ export default function WorkoutSessionScreen({
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Registrar série de ${exercise.exerciseName}`}
+                      accessibilityState={{
+                        busy: exerciseBusy,
+                        disabled: busy,
+                      }}
                       disabled={busy}
                       onPress={() => {
                         void handleAddSet(exercise);
@@ -1278,6 +1294,10 @@ export default function WorkoutSessionScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Finalizar treino"
+              accessibilityState={{
+                busy: finishing,
+                disabled: busy,
+              }}
               disabled={busy}
               onPress={confirmFinish}
               style={({ pressed }) => [
@@ -1307,6 +1327,10 @@ export default function WorkoutSessionScreen({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Cancelar treino"
+              accessibilityState={{
+                busy: cancelling,
+                disabled: busy,
+              }}
               disabled={busy}
               onPress={confirmCancel}
               style={({ pressed }) => [
@@ -1573,7 +1597,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     completeButton: {
-      minHeight: 38,
+      minHeight: 48,
       minWidth: 80,
       alignItems: "center",
       justifyContent: "center",
@@ -1585,7 +1609,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     completeButtonActive: {
-      minWidth: 44,
+      minWidth: 48,
       borderColor: theme.colors.success,
       backgroundColor: theme.colors.success,
     },
@@ -1724,8 +1748,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     deleteSetButton: {
-      width: 38,
-      height: 38,
+      minWidth: 48,
+      minHeight: 48,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: theme.radii.md,
@@ -1775,7 +1799,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     unitButton: {
       minWidth: 58,
-      height: 38,
+      minHeight: 48,
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
