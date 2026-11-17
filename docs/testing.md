@@ -635,6 +635,38 @@ dos dados ou disponibilidade de todos os servicos externos.
 A consistencia Alembic possui validacao independente
 na INFRA-02.
 
+#### Seguranca dos workflows (INFRA-06)
+
+As 12 referencias diretas a Actions nos workflows de CI
+e publicacao da imagem backend utilizam commits SHA completos.
+
+Os comentarios preservam as tags de origem para facilitar
+a manutencao e a revisao das atualizacoes.
+
+Todos os cinco checkouts utilizam `persist-credentials: false`.
+
+As permissoes permanecem limitadas a `contents: read`
+na CI e a `contents: read` e `packages: write` no
+workflow de publicacao da imagem backend.
+
+O Gitleaks permanece fixado por versao e digest SHA-256,
+com as regras e o isolamento existentes preservados.
+
+Para atualizar uma Action:
+
+1. Revisar a release oficial e suas mudancas.
+2. Resolver a tag no repositorio oficial.
+3. Confirmar o SHA completo do commit.
+4. Atualizar a referencia e seu comentario.
+5. Executar as validacoes obrigatorias da Pull Request.
+
+A fixacao por SHA protege as referencias diretas.
+Ela nao garante a seguranca de dependencias transitivas,
+imagens-base mutaveis ou codigo executado internamente.
+
+A publicacao no GHCR deve ser validada separadamente
+apos alteracoes no workflow de imagem.
+
 ### 7.4. Critérios para merge
 
 Uma Pull Request somente deve ser considerada pronta quando:
