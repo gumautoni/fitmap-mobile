@@ -21,8 +21,8 @@
     "clear": "expo start --clear",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "format": "prettier --write src/**/*.{ts,tsx} app.json package.json tsconfig.json eslint.config.js",
-    "format:check": "prettier --check src/**/*.{ts,tsx} app.json package.json tsconfig.json eslint.config.js",
+    "format": "prettier --write src/**/*.{ts,tsx} app.json app.config.ts eas.json package.json tsconfig.json eslint.config.js",
+    "format:check": "prettier --check src/**/*.{ts,tsx} app.json app.config.ts eas.json package.json tsconfig.json eslint.config.js",
     "test": "jest --runInBand",
     "test:watch": "jest --watch"
   },
