@@ -770,11 +770,9 @@ export default function MapScreen({ navigation }: Props) {
                   </View>
 
                   <View style={styles.favoriteCardCopy}>
-                    <Text style={styles.favoriteCardName} numberOfLines={2}>
-                      {favorite.name}
-                    </Text>
+                    <Text style={styles.favoriteCardName}>{favorite.name}</Text>
 
-                    <Text style={styles.favoriteCardAddress} numberOfLines={2}>
+                    <Text style={styles.favoriteCardAddress}>
                       {favorite.address ?? "Endereço não informado"}
                     </Text>
                   </View>
@@ -885,7 +883,7 @@ export default function MapScreen({ navigation }: Props) {
                   ]}
                 >
                   <MapPin size={17} color={theme.colors.primary} />
-                  <Text style={styles.locationSuggestionText} numberOfLines={2}>
+                  <Text style={styles.locationSuggestionText}>
                     {suggestion.label}
                   </Text>
                 </Pressable>
@@ -1341,9 +1339,7 @@ export default function MapScreen({ navigation }: Props) {
                 </View>
 
                 <View style={styles.gymTitleArea}>
-                  <Text style={styles.gymName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
+                  <Text style={styles.gymName}>{item.name}</Text>
 
                   {isSelected || isFavorite ? (
                     <View style={styles.gymBadgesRow}>
@@ -1380,7 +1376,7 @@ export default function MapScreen({ navigation }: Props) {
                     color={theme.colors.textMuted}
                   />
 
-                  <Text style={styles.gymAddress} numberOfLines={2}>
+                  <Text style={styles.gymAddress}>
                     {item.address ?? "Endereço não informado"}
                   </Text>
                 </View>

@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react-native";
 import * as Location from "expo-location";
 import type { ComponentProps, ContextType } from "react";
@@ -209,6 +210,106 @@ describe("MapScreen - previa de academia selecionada", () => {
         longitude: -43.82633,
       },
     });
+  });
+
+  it("accessibility: keeps long gym results readable", async () => {
+    const gym = {
+      ...gyms[0],
+      name: "Academia Aurora Centro de Treinamento e Condicionamento",
+      address: "Avenida das Flores, 1234, bloco B, bairro Jardim Central",
+    };
+
+    mockedSearch.mockResolvedValueOnce([gym]);
+
+    await mountMap();
+    await searchForGyms();
+
+    const card = await screen.findByLabelText(`Selecionar ${gym.name}`);
+
+    expect(
+      within(card).getByText(gym.name).props.numberOfLines,
+    ).toBeUndefined();
+
+    expect(
+      within(card).getByText(gym.address).props.numberOfLines,
+    ).toBeUndefined();
+
+    await fireEvent.press(card);
+
+    expect(
+      screen.getByLabelText(`Ver detalhes de ${gym.name} no mapa`),
+    ).toBeTruthy();
+  });
+
+  it("accessibility: keeps long favorite gym information readable", async () => {
+    const favorite = {
+      id: "favorite-long",
+      gymId: "internal-long",
+      providerName: "tomtom" as const,
+      externalId: "external-long",
+      name: "Academia Favorita Centro Esportivo de Treinamento",
+      coordinates: null,
+      address: "Rua Central, 1234, segundo andar, bairro Jardim Central",
+      favoritedAt: "2026-11-06T12:00:00Z",
+    };
+
+    mockedFavorites.mockResolvedValueOnce([favorite]);
+
+    await mountMap();
+
+    const card = await screen.findByLabelText(
+      `Abrir academia favorita ${favorite.name}`,
+    );
+
+    expect(
+      within(card).getByText(favorite.name).props.numberOfLines,
+    ).toBeUndefined();
+
+    expect(
+      within(card).getByText(favorite.address).props.numberOfLines,
+    ).toBeUndefined();
+
+    await fireEvent.press(card);
+
+    expect(navigation.navigate).toHaveBeenCalledWith("DetalhesAcademia", {
+      gymId: favorite.externalId,
+      providerName: favorite.providerName,
+      distanceKm: null,
+    });
+  });
+
+  it("accessibility: keeps long location suggestions readable", async () => {
+    const suggestion: LocationSuggestion = {
+      label: "Jardim Central, Volta Redonda, Rio de Janeiro, Brasil",
+      query: "Jardim Central, Volta Redonda",
+      coordinates: {
+        latitude: -22.512419,
+        longitude: -44.0905846,
+      },
+    };
+
+    mockedSuggestions.mockResolvedValueOnce([suggestion]);
+
+    await mountMap();
+
+    await fireEvent.changeText(
+      screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+      suggestion.query,
+    );
+
+    const control = await screen.findByLabelText(
+      `Selecionar localidade ${suggestion.label}`,
+      {},
+      { timeout: 3000 },
+    );
+
+    expect(
+      within(control).getByText(suggestion.label).props.numberOfLines,
+    ).toBeUndefined();
+
+    expect(control).toHaveStyle({ minHeight: 48 });
+    expect(mockedNearby).not.toHaveBeenCalled();
+    expect(mockedSearch).not.toHaveBeenCalled();
   });
 
   it("accessibility: identifies the location search field", async () => {

@@ -1014,6 +1014,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     monthTitle: {
+      flex: 1,
+      minWidth: 0,
+      textAlign: "center",
       color: theme.colors.textPrimary,
       fontFamily: theme.typography.fontFamily.bold,
       fontSize: 15,
@@ -1022,6 +1025,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     monthArrow: {
       width: 48,
       height: 48,
+      flexShrink: 0,
       alignItems: "center",
       justifyContent: "center",
     },

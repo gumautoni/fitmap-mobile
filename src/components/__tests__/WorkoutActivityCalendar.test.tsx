@@ -554,6 +554,38 @@ describe("PERF-03 WorkoutActivityCalendar pagination", () => {
     expect(mockedLegacy).not.toHaveBeenCalled();
   });
 
+  it("accessibility: lets the month title use available space without shrinking controls", async () => {
+    await mountCalendar();
+    await expandCalendar();
+
+    await screen.findByLabelText(summary(0, 0));
+
+    const monthText = new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+    }).format(new Date());
+
+    const monthLabel = monthText.charAt(0).toUpperCase() + monthText.slice(1);
+
+    const heading = screen.getByRole("header", { name: monthLabel });
+
+    expect(heading).toHaveStyle({
+      flex: 1,
+      minWidth: 0,
+      textAlign: "center",
+    });
+
+    expect(heading.props.numberOfLines).toBeUndefined();
+
+    for (const name of [PREVIOUS, NEXT]) {
+      expect(screen.getByRole("button", { name })).toHaveStyle({
+        width: 48,
+        height: 48,
+        flexShrink: 0,
+      });
+    }
+  });
+
   it("accessibility: provides practical calendar controls and announces the visible month", async () => {
     await mountCalendar();
 
