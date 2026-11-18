@@ -276,3 +276,182 @@ describe("AppNavigator - telas secundarias", () => {
     ).toMatchObject({ selected: true });
   });
 });
+
+describe("ACC-02.4 navigation accessibility", () => {
+  const tabs = [
+    {
+      label: /^In\u00edcio, tab,/,
+      content: "Conteudo Home",
+    },
+    {
+      label: /^Mapa, tab,/,
+      content: "Conteudo Mapa",
+    },
+    {
+      label: /^Treinos, tab,/,
+      content: "Conteudo Treinos",
+    },
+    {
+      label: /^Progresso, tab,/,
+      content: "Conteudo Progresso",
+    },
+  ];
+
+  function expectSelectedTab(index: number) {
+    tabs.forEach((tab, tabIndex) => {
+      const button = screen.getByRole("button", {
+        name: tab.label,
+      });
+
+      expect(Boolean(button.props.accessibilityState?.selected)).toBe(
+        index === tabIndex,
+      );
+
+      expect(button).not.toBeDisabled();
+    });
+  }
+
+  it("preserves exclusive accessible selection across all four tabs", async () => {
+    await renderNavigator();
+
+    await screen.findByText(tabs[0].content);
+
+    expectSelectedTab(0);
+
+    for (const index of [1, 2, 3, 0]) {
+      const tab = tabs[index];
+
+      await fireEvent.press(
+        screen.getByRole("button", {
+          name: tab.label,
+        }),
+      );
+
+      await screen.findByText(tab.content);
+
+      await waitFor(() => {
+        expectSelectedTab(index);
+      });
+    }
+  });
+
+  it("accessibility: provides a practical history header action and preserves the selected workout tab", async () => {
+    const navigation = await renderWithStackReference();
+
+    await act(async () => {
+      navigation.navigate("MainTabs", {
+        screen: "Treinos",
+      });
+    });
+
+    await screen.findByText("Conteudo Treinos");
+
+    const history = await screen.findByRole("button", {
+      name: "Abrir hist\u00f3rico de treinos",
+    });
+
+    expect(history).not.toBeDisabled();
+
+    expect(history).toHaveStyle({
+      minHeight: 48,
+      minWidth: 48,
+    });
+
+    expect(history).toHaveProp(
+      "accessibilityHint",
+      "Consulte seus treinos conclu\u00eddos.",
+    );
+
+    await fireEvent.press(history);
+
+    await screen.findByText("Conteudo Historico");
+
+    expect(navigation.getCurrentRoute()?.name).toBe("HistoricoTreinos");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", {
+          name: /^Treinos, tab,/,
+        }),
+      ).toBeNull();
+    });
+
+    await act(async () => {
+      navigation.goBack();
+    });
+
+    await screen.findByText("Conteudo Treinos");
+
+    await waitFor(() => {
+      expectSelectedTab(2);
+    });
+  });
+
+  it("accessibility: provides a practical workout execution header action and preserves the workout identifier", async () => {
+    const navigation = await renderWithStackReference();
+
+    const workoutId = "accessibility-workout-test";
+
+    await act(async () => {
+      navigation.navigate("MainTabs", {
+        screen: "Treinos",
+      });
+    });
+
+    await screen.findByText("Conteudo Treinos");
+
+    await act(async () => {
+      navigation.navigate("DetalhesTreino", {
+        workoutId,
+      });
+    });
+
+    await screen.findByText("Conteudo DetalhesTreino");
+
+    const execute = await screen.findByRole("button", {
+      name: "Executar treino",
+    });
+
+    expect(execute).not.toBeDisabled();
+
+    expect(execute).toHaveStyle({
+      minHeight: 48,
+      minWidth: 48,
+    });
+
+    expect(execute).toHaveProp(
+      "accessibilityHint",
+      "Abre a tela de execu\u00e7\u00e3o deste treino.",
+    );
+
+    await fireEvent.press(execute);
+
+    await screen.findByText("Conteudo ExecutarTreino");
+
+    expect(navigation.getCurrentRoute()).toMatchObject({
+      name: "ExecutarTreino",
+      params: { workoutId },
+    });
+
+    await act(async () => {
+      navigation.goBack();
+    });
+
+    await screen.findByText("Conteudo DetalhesTreino");
+
+    expect(navigation.getCurrentRoute()).toMatchObject({
+      name: "DetalhesTreino",
+      params: { workoutId },
+    });
+
+    await act(async () => {
+      navigation.goBack();
+    });
+
+    await screen.findByText("Conteudo Treinos");
+
+    await waitFor(() => {
+      expectSelectedTab(2);
+    });
+  });
+});

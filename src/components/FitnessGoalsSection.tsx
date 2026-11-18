@@ -50,6 +50,9 @@ function getAllowedUnits(type: BodyMetricType): BodyMetricUnit[] {
   return type === "weight" ? ["kg", "lb"] : ["cm", "in"];
 }
 
+const GOAL_VALUE_GUIDANCE =
+  "Informe um alvo positivo, com até duas casas decimais.";
+
 function validateValue(input: string): string | null {
   const normalized = input.trim().replace(",", ".");
 
@@ -276,7 +279,7 @@ export default function FitnessGoalsSection() {
     const normalized = validateValue(targetValue);
 
     if (!normalized) {
-      setFormError("Informe um alvo positivo, com até duas casas decimais.");
+      setFormError(GOAL_VALUE_GUIDANCE);
       setSuccessMessage(null);
       return;
     }
@@ -357,6 +360,11 @@ export default function FitnessGoalsSection() {
                 onPress={() => selectMetricType(option.type)}
                 style={[styles.option, selected && styles.optionSelected]}
               >
+                {selected ? (
+                  <Text accessible={false} style={styles.selectionMark}>
+                    ✓
+                  </Text>
+                ) : null}
                 <Text
                   style={[
                     styles.optionText,
@@ -375,6 +383,11 @@ export default function FitnessGoalsSection() {
         <View style={styles.valueRow}>
           <TextInput
             accessibilityLabel="Valor alvo da meta fitness"
+            accessibilityState={{ disabled: saving }}
+            accessibilityHint={
+              formError ??
+              `${getMetricLabel(selectedType)} em ${selectedUnit}. ${GOAL_VALUE_GUIDANCE}`
+            }
             style={styles.valueInput}
             value={targetValue}
             onChangeText={(text) => {
@@ -406,6 +419,11 @@ export default function FitnessGoalsSection() {
                     selected && styles.unitButtonSelected,
                   ]}
                 >
+                  {selected ? (
+                    <Text accessible={false} style={styles.selectionMark}>
+                      ✓
+                    </Text>
+                  ) : null}
                   <Text
                     style={[
                       styles.unitText,
@@ -435,7 +453,7 @@ export default function FitnessGoalsSection() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Salvar meta fitness"
-          accessibilityState={{ disabled: saving }}
+          accessibilityState={{ busy: saving, disabled: saving }}
           disabled={saving}
           onPress={() => void saveGoal()}
           style={[styles.saveButton, saving && styles.disabled]}
@@ -469,6 +487,7 @@ export default function FitnessGoalsSection() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Atualizar acompanhamento de metas"
+          accessibilityState={{ busy: loading, disabled: loading || saving }}
           disabled={loading || saving}
           onPress={() => void refreshGoals()}
           style={styles.refreshButton}
@@ -499,6 +518,12 @@ export default function FitnessGoalsSection() {
         <View style={styles.goalList}>
           {items.map(({ goal, progress }) => {
             const percentage = getProgressPercentage(progress);
+            const formattedPercentage =
+              percentage === null
+                ? null
+                : new Intl.NumberFormat("pt-BR", {
+                    maximumFractionDigits: 2,
+                  }).format(percentage);
 
             return (
               <View key={goal.id} style={styles.goalCard}>
@@ -560,14 +585,22 @@ export default function FitnessGoalsSection() {
                           </Text>
 
                           <Text style={styles.progressPercentage}>
-                            {new Intl.NumberFormat("pt-BR", {
-                              maximumFractionDigits: 2,
-                            }).format(percentage)}
-                            %
+                            {formattedPercentage}%
                           </Text>
                         </View>
 
-                        <View style={styles.progressTrack}>
+                        <View
+                          accessible
+                          accessibilityRole="progressbar"
+                          accessibilityLabel={`Evolução da meta de ${getMetricLabel(goal.metricType)}, alvo ${formatValue(goal.targetValue, goal.unit)}`}
+                          accessibilityValue={{
+                            min: 0,
+                            max: 100,
+                            now: percentage,
+                            text: `${formattedPercentage}% — ${getStatusLabel(progress.status)}`,
+                          }}
+                          style={styles.progressTrack}
+                        >
                           <View
                             style={[
                               styles.progressFill,
@@ -655,6 +688,12 @@ function createStyles(theme: AppTheme) {
       gap: 8,
     },
     option: {
+      minHeight: 48,
+      minWidth: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
       paddingHorizontal: 14,
       paddingVertical: 10,
       borderRadius: radii.full,
@@ -665,6 +704,11 @@ function createStyles(theme: AppTheme) {
     optionSelected: {
       backgroundColor: colors.primarySoft,
       borderColor: colors.primary,
+    },
+    selectionMark: {
+      color: colors.primary,
+      fontFamily: typography.fontFamily.bold,
+      fontSize: typography.size.small,
     },
     optionText: {
       fontFamily: typography.fontFamily.semibold,
@@ -697,7 +741,10 @@ function createStyles(theme: AppTheme) {
       gap: 6,
     },
     unitButton: {
-      minHeight: 44,
+      minHeight: 48,
+      minWidth: 48,
+      flexDirection: "row",
+      gap: 6,
       paddingHorizontal: 12,
       alignItems: "center",
       justifyContent: "center",
@@ -764,8 +811,8 @@ function createStyles(theme: AppTheme) {
       color: colors.textPrimary,
     },
     refreshButton: {
-      minWidth: 44,
-      minHeight: 44,
+      minWidth: 48,
+      minHeight: 48,
       alignItems: "center",
       justifyContent: "center",
     },

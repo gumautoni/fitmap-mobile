@@ -465,4 +465,447 @@ describe("PERF-03 WorkoutActivityCalendar pagination", () => {
 
     expect(screen.queryByLabelText(/^Resumo de /)).toBeNull();
   });
+
+  it("accessibility: announces loading and errors and provides a practical retry action", async () => {
+    let reject!: (reason: Error) => void;
+
+    const pending = new Promise<Page<WorkoutHistoryItem>>((_, fail) => {
+      reject = fail;
+    });
+
+    mockedPage.mockReturnValueOnce(pending);
+
+    await render(calendarTree());
+
+    try {
+      const progress = screen.getByRole("progressbar", {
+        name: "Atualizando seus treinos",
+      });
+
+      expect(progress).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: true }),
+      );
+
+      expect(progress).toHaveProp("accessibilityLiveRegion", "polite");
+
+      expect(screen.getByText(LOADING)).toBeTruthy();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByLabelText(RETRY)).toBeNull();
+      expect(screen.queryByLabelText(/^Resumo de /)).toBeNull();
+
+      expect(mockedPage).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => {
+        reject(new Error("Calendar unavailable."));
+      });
+    }
+
+    const alert = screen.getByRole("alert");
+
+    expect(alert).toHaveTextContent(ERROR);
+
+    expect(alert).toHaveProp("accessibilityLiveRegion", "polite");
+
+    expect(screen.queryByRole("progressbar")).toBeNull();
+
+    const retry = screen.getByRole("button", {
+      name: RETRY,
+    });
+
+    expect(retry).not.toBeDisabled();
+
+    expect(retry).toHaveStyle({
+      minHeight: 48,
+      minWidth: 48,
+    });
+
+    const recovery = deferredPage();
+
+    mockedPage.mockReturnValueOnce(recovery.promise);
+
+    try {
+      await fireEvent.press(retry);
+
+      expect(
+        screen.getByRole("progressbar", {
+          name: "Atualizando seus treinos",
+        }),
+      ).toBeTruthy();
+
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByLabelText(RETRY)).toBeNull();
+      expect(mockedPage).toHaveBeenCalledTimes(2);
+      expect(mockedPage).toHaveBeenLastCalledWith(token, weekBounds());
+    } finally {
+      await act(async () => {
+        recovery.resolve({
+          items: [],
+          nextCursor: null,
+        });
+      });
+    }
+
+    await waitUntilReady();
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.queryByLabelText(RETRY)).toBeNull();
+    expect(mockedLegacy).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: provides practical calendar controls and announces the visible month", async () => {
+    await mountCalendar();
+
+    const expand = screen.getByRole("button", {
+      name: EXPAND,
+    });
+
+    expect(expand).toHaveStyle({
+      minHeight: 48,
+    });
+
+    expect(expand).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ expanded: false }),
+    );
+
+    await fireEvent.press(expand);
+
+    await screen.findByLabelText(summary(0, 0));
+
+    const monthText = new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+    }).format(new Date());
+
+    const monthLabel = monthText.charAt(0).toUpperCase() + monthText.slice(1);
+
+    const heading = screen.getByRole("header", {
+      name: monthLabel,
+    });
+
+    expect(heading).toHaveProp("accessibilityLiveRegion", "polite");
+
+    expect(screen.getByRole("button", { name: COLLAPSE })).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ expanded: true }),
+    );
+
+    const previous = screen.getByRole("button", {
+      name: PREVIOUS,
+    });
+
+    const next = screen.getByRole("button", {
+      name: NEXT,
+    });
+
+    for (const control of [previous, next]) {
+      expect(control).toHaveStyle({
+        width: 48,
+        height: 48,
+      });
+    }
+
+    expect(previous).not.toBeDisabled();
+    expect(next).toBeDisabled();
+
+    await fireEvent.press(next);
+
+    expect(mockedPage).toHaveBeenCalledTimes(2);
+
+    await fireEvent.press(previous);
+
+    await waitUntilReady();
+
+    expect(mockedPage).toHaveBeenLastCalledWith(token, monthBounds(-1));
+
+    const returnToCurrent = screen.getByRole("button", {
+      name: NEXT,
+    });
+
+    expect(returnToCurrent).not.toBeDisabled();
+
+    await fireEvent.press(returnToCurrent);
+
+    await waitUntilReady();
+
+    expect(mockedPage).toHaveBeenLastCalledWith(token, monthBounds());
+
+    expect(
+      screen.getByRole("header", {
+        name: monthLabel,
+      }),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByRole("button", {
+        name: NEXT,
+      }),
+    ).toBeDisabled();
+
+    await fireEvent.press(screen.getByRole("button", { name: COLLAPSE }));
+
+    await waitUntilReady();
+
+    expect(mockedPage).toHaveBeenLastCalledWith(token, weekBounds());
+
+    expect(mockedPage).toHaveBeenCalledTimes(5);
+    expect(mockedLegacy).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: identifies today and exposes the selected empty training diary", async () => {
+    await mountCalendar();
+
+    const todayLabel = new Intl.DateTimeFormat("pt-BR", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(new Date());
+
+    const dayLabel = `${todayLabel}. Sem treino conclu\u00eddo registrado. Hoje`;
+
+    const today = screen.getByRole("button", {
+      name: dayLabel,
+    });
+
+    expect(today).not.toBeDisabled();
+
+    expect(today).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ selected: false }),
+    );
+
+    await fireEvent.press(today);
+
+    await screen.findByLabelText(summary(0, 0));
+
+    const selected = screen.getByRole("button", {
+      name: dayLabel,
+    });
+
+    expect(selected).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ selected: true }),
+    );
+
+    expect(selected).toHaveStyle({
+      minHeight: 48,
+    });
+
+    expect(
+      screen.getByRole("header", {
+        name: todayLabel,
+      }),
+    ).toBeTruthy();
+
+    expect(screen.getByText("Dia sem registros")).toHaveProp(
+      "accessibilityLiveRegion",
+      "polite",
+    );
+
+    expect(
+      screen.getByText(
+        "Nenhum treino conclu\u00eddo foi registrado nesta data.",
+      ),
+    ).toBeTruthy();
+
+    expect(openWorkout).not.toHaveBeenCalled();
+    expect(mockedPage).toHaveBeenCalledTimes(2);
+    expect(mockedPage).toHaveBeenLastCalledWith(token, monthBounds());
+  });
+
+  it("accessibility: distinguishes same-name sessions without exposing identifiers", async () => {
+    await mountCalendar();
+
+    const first = {
+      ...session("private-first-id", 1, 10),
+      workoutName: "Treino A",
+    };
+
+    const second = {
+      ...session("private-second-id", 1, 10),
+      workoutName: "Treino A",
+    };
+
+    const unique = {
+      ...session("private-unique-id", 1, 12),
+      workoutName: "Treino B",
+    };
+
+    mockedPage.mockResolvedValueOnce({
+      items: [first, second, unique],
+      nextCursor: null,
+    });
+
+    await expandCalendar();
+
+    await screen.findByLabelText(summary(1, 3));
+
+    await fireEvent.press(screen.getByLabelText(/^1 de .+\. 3 treino/));
+
+    const firstButton = screen.getByRole("button", {
+      name: "Ver detalhes do treino Treino A, registro 1 de 2 neste dia",
+    });
+
+    const secondButton = screen.getByRole("button", {
+      name: "Ver detalhes do treino Treino A, registro 2 de 2 neste dia",
+    });
+
+    const uniqueButton = screen.getByRole("button", {
+      name: "Ver detalhes do treino Treino B",
+    });
+
+    expect(firstButton).not.toBe(secondButton);
+
+    for (const [button, item] of [
+      [firstButton, first],
+      [secondButton, second],
+      [uniqueButton, unique],
+    ] as const) {
+      const time = new Date(item.completedAt).toLocaleTimeString("pt-BR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      expect(button).toHaveProp(
+        "accessibilityHint",
+        `Conclu\u00eddo \u00e0s ${time}. Ver exerc\u00edcios, s\u00e9ries e cargas.`,
+      );
+
+      expect(button).toHaveStyle({
+        minHeight: 48,
+        minWidth: 48,
+      });
+
+      expect(button.props.accessibilityLabel).not.toContain(item.id);
+    }
+
+    await fireEvent.press(secondButton);
+    await fireEvent.press(uniqueButton);
+
+    expect(openWorkout.mock.calls).toEqual([[second.id], [unique.id]]);
+
+    expect(mockedPage).toHaveBeenCalledTimes(2);
+    expect(mockedLegacy).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: keeps calendar motion reduced while the preference is pending and when detection fails", async () => {
+    let reject!: (reason: Error) => void;
+
+    const preference = new Promise<boolean>((_, fail) => {
+      reject = fail;
+    });
+
+    jest
+      .mocked(AccessibilityInfo.isReduceMotionEnabled)
+      .mockReturnValueOnce(preference);
+
+    await mountCalendar();
+
+    try {
+      await expandCalendar();
+
+      await screen.findByLabelText(summary(0, 0));
+
+      expect(LayoutAnimation.configureNext).not.toHaveBeenCalled();
+
+      expect(mockedPage).toHaveBeenCalledTimes(2);
+
+      expect(mockedPage).toHaveBeenLastCalledWith(token, monthBounds());
+    } finally {
+      await act(async () => {
+        reject(new Error("Motion preference unavailable."));
+      });
+    }
+
+    await fireEvent.press(screen.getByLabelText(COLLAPSE));
+
+    await waitUntilReady();
+
+    expect(LayoutAnimation.configureNext).not.toHaveBeenCalled();
+
+    expect(mockedPage).toHaveBeenCalledTimes(3);
+
+    expect(mockedPage).toHaveBeenLastCalledWith(token, weekBounds());
+
+    expect(mockedLegacy).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: does not overwrite a newer reduced-motion preference with a stale response", async () => {
+    let resolve!: (enabled: boolean) => void;
+
+    const preference = new Promise<boolean>((done) => {
+      resolve = done;
+    });
+
+    const remove = jest.fn();
+
+    jest
+      .spyOn(AccessibilityInfo, "addEventListener")
+      .mockReturnValue({ remove });
+
+    jest
+      .mocked(AccessibilityInfo.isReduceMotionEnabled)
+      .mockReturnValueOnce(preference);
+
+    const view = await mountCalendar();
+
+    const subscription = jest
+      .mocked(AccessibilityInfo.addEventListener)
+      .mock.calls.find(([event]) => event === "reduceMotionChanged");
+
+    expect(subscription).toBeDefined();
+
+    const listener = subscription?.[1] as (enabled: boolean) => void;
+
+    await act(async () => {
+      listener(true);
+    });
+
+    await act(async () => {
+      resolve(false);
+    });
+
+    expect(mockedPage).toHaveBeenCalledTimes(1);
+
+    await expandCalendar();
+
+    await screen.findByLabelText(summary(0, 0));
+
+    expect(LayoutAnimation.configureNext).not.toHaveBeenCalled();
+
+    expect(mockedPage).toHaveBeenCalledTimes(2);
+
+    expect(mockedPage).toHaveBeenLastCalledWith(token, monthBounds());
+
+    await view.unmount();
+
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(mockedLegacy).not.toHaveBeenCalled();
+  });
+
+  it("preserves calendar layout animation when motion is enabled", async () => {
+    jest
+      .mocked(AccessibilityInfo.isReduceMotionEnabled)
+      .mockResolvedValue(false);
+
+    await mountCalendar();
+
+    await expandCalendar();
+
+    await screen.findByLabelText(summary(0, 0));
+
+    expect(LayoutAnimation.configureNext).toHaveBeenCalledTimes(1);
+
+    expect(LayoutAnimation.configureNext).toHaveBeenCalledWith(
+      LayoutAnimation.Presets.easeInEaseOut,
+    );
+
+    expect(mockedPage).toHaveBeenCalledTimes(2);
+
+    expect(mockedPage).toHaveBeenLastCalledWith(token, monthBounds());
+
+    expect(mockedLegacy).not.toHaveBeenCalled();
+  });
 });

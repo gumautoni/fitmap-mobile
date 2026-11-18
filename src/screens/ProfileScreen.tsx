@@ -430,7 +430,14 @@ export default function ProfileScreen(_: ProfileScreenProps) {
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
         <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <ActivityIndicator
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="Carregando perfil"
+            accessibilityState={{ busy: true }}
+            size="large"
+            color={theme.colors.primary}
+          />
 
           <Text style={styles.centerStateTitle}>Carregando seu perfil</Text>
 
@@ -457,12 +464,13 @@ export default function ProfileScreen(_: ProfileScreenProps) {
             Não foi possível carregar seu perfil
           </Text>
 
-          <Text style={styles.centerStateText}>
+          <Text accessibilityRole="alert" style={styles.centerStateText}>
             {error ?? "Tente novamente em alguns instantes."}
           </Text>
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Tentar carregar perfil novamente"
             onPress={() => {
               void retryLoadProfile();
             }}
@@ -541,7 +549,18 @@ export default function ProfileScreen(_: ProfileScreenProps) {
             </View>
           </View>
 
-          <View style={styles.progressTrack}>
+          <View
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="Completude do perfil de treino"
+            accessibilityValue={{
+              min: 0,
+              max: 100,
+              now: completionPercentage,
+              text: `${completedPreferences} de 5 preferências configuradas, ${completionPercentage}%`,
+            }}
+            style={styles.progressTrack}
+          >
             <View
               style={[
                 styles.progressFill,
@@ -567,6 +586,8 @@ export default function ProfileScreen(_: ProfileScreenProps) {
             <Text style={styles.fieldLabel}>Nome</Text>
 
             <TextInput
+              accessibilityLabel="Nome do perfil"
+              accessibilityState={{ disabled: saving }}
               value={name}
               onChangeText={setName}
               editable={!saving}
@@ -585,6 +606,8 @@ export default function ProfileScreen(_: ProfileScreenProps) {
             {nameChanged ? (
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Salvar nome"
+                accessibilityState={{ busy: saving, disabled: saving }}
                 disabled={saving}
                 onPress={() => {
                   void saveName();
@@ -754,13 +777,16 @@ export default function ProfileScreen(_: ProfileScreenProps) {
 
         {error ? (
           <View style={styles.inlineError}>
-            <Text style={styles.inlineErrorText}>{error}</Text>
+            <Text accessibilityRole="alert" style={styles.inlineErrorText}>
+              {error}
+            </Text>
           </View>
         ) : null}
 
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Sair da conta"
+          accessibilityState={{ busy: loggingOut, disabled: loggingOut }}
           disabled={loggingOut}
           onPress={confirmLogout}
           style={({ pressed }) => [
@@ -812,6 +838,8 @@ function SettingRow({
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={`${title}: ${value}`}
+      accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
@@ -890,6 +918,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     retryButton: {
+      minHeight: 50,
+      justifyContent: "center",
       marginTop: theme.spacing.xl,
       paddingHorizontal: theme.spacing.xl,
       paddingVertical: 13,
@@ -1070,7 +1100,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     saveNameButton: {
-      minHeight: 44,
+      minHeight: 48,
       marginTop: theme.spacing.md,
       alignItems: "center",
       justifyContent: "center",

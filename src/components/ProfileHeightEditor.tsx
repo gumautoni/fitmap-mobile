@@ -12,6 +12,9 @@ import {
 import { useAppTheme } from "../theme/ThemeProvider";
 import { formatHeightCmInput, normalizeHeightCm } from "../utils/profileHeight";
 
+const HEIGHT_GUIDANCE =
+  "Valores entre 50 e 250 cm. Use vírgula ou ponto como separador.";
+
 interface ProfileHeightEditorProps {
   heightCm: string | null;
   saving: boolean;
@@ -116,6 +119,8 @@ export default function ProfileHeightEditor({
 
       <TextInput
         accessibilityLabel="Altura em centímetros"
+        accessibilityState={{ disabled: saving }}
+        accessibilityHint={validationError ?? HEIGHT_GUIDANCE}
         value={input}
         onChangeText={handleChangeText}
         editable={!saving}
@@ -127,9 +132,7 @@ export default function ProfileHeightEditor({
         style={styles.input}
       />
 
-      <Text style={styles.hint}>
-        Valores entre 50 e 250 cm. Use vírgula ou ponto como separador.
-      </Text>
+      <Text style={styles.hint}>{HEIGHT_GUIDANCE}</Text>
 
       {validationError ? (
         <Text accessibilityLiveRegion="polite" style={styles.error}>
@@ -146,6 +149,7 @@ export default function ProfileHeightEditor({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Salvar altura"
+        accessibilityState={{ busy: saving, disabled: saving }}
         disabled={saving}
         onPress={() => {
           void saveHeight();
@@ -167,6 +171,7 @@ export default function ProfileHeightEditor({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Remover altura"
+          accessibilityState={{ disabled: saving }}
           disabled={saving}
           onPress={confirmRemoval}
           style={({ pressed }) => [
@@ -236,7 +241,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontSize: theme.typography.size.small,
     },
     saveButton: {
-      minHeight: 46,
+      minHeight: 48,
       marginTop: theme.spacing.lg,
       alignItems: "center",
       justifyContent: "center",
@@ -249,7 +254,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontSize: theme.typography.size.small,
     },
     removeButton: {
-      minHeight: 44,
+      minHeight: 48,
       marginTop: theme.spacing.sm,
       alignItems: "center",
       justifyContent: "center",
