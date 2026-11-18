@@ -130,8 +130,10 @@ export default function RegisterScreen({ navigation }) {
       title="Comece sua evolução."
       subtitle="Crie sua conta e dê o primeiro passo com o FitMap."
       onBack={goBack}
+      backDisabled={submitting}
     >
       <AuthField
+        editable={!submitting}
         label="Nome completo"
         placeholder="Seu nome completo"
         icon={UserRound}
@@ -145,6 +147,7 @@ export default function RegisterScreen({ navigation }) {
       />
 
       <AuthField
+        editable={!submitting}
         label="E-mail"
         placeholder="seu@email.com"
         icon={Mail}
@@ -159,6 +162,7 @@ export default function RegisterScreen({ navigation }) {
       />
 
       <AuthField
+        editable={!submitting}
         label="Senha"
         placeholder="Crie uma senha segura"
         icon={LockKeyhole}
@@ -175,7 +179,9 @@ export default function RegisterScreen({ navigation }) {
       <PasswordRequirements password={password} />
 
       <AuthField
+        editable={!submitting}
         label="Confirmar senha"
+        visibilityLabel="confirmação de senha"
         placeholder="Repita sua senha"
         icon={LockKeyhole}
         value={confirmPassword}
@@ -210,8 +216,10 @@ export default function RegisterScreen({ navigation }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Ir para Login"
+          accessibilityState={{ disabled: submitting }}
+          disabled={submitting}
           onPress={() => navigation.navigate("Login")}
-          style={styles.footerLink}
+          style={[styles.footerLink, submitting && styles.footerLinkDisabled]}
         >
           <Text style={styles.footerLinkText}>Entrar</Text>
         </Pressable>
@@ -256,7 +264,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: authColors.textSecondary,
   },
-  footerLink: { paddingVertical: 4 },
+  footerLink: {
+    minHeight: 48,
+    minWidth: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  footerLinkDisabled: { opacity: 0.55 },
   footerLinkText: {
     fontFamily: "Manrope_700Bold",
     fontSize: 12,

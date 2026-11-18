@@ -455,7 +455,14 @@ export default function ProgressScreen() {
       <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
         <ScreenGradient theme={theme} />
         <View style={styles.centerState}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <ActivityIndicator
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="Carregando seu progresso"
+            accessibilityState={{ busy: true }}
+            size="large"
+            color={theme.colors.primary}
+          />
 
           <Text style={styles.centerTitle}>Carregando seu progresso</Text>
 
@@ -484,11 +491,19 @@ export default function ProgressScreen() {
             Não foi possível carregar seu progresso
           </Text>
 
-          <Text style={styles.centerText}>{error}</Text>
+          <Text
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={styles.centerText}
+          >
+            {error}
+          </Text>
 
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Tentar carregar progresso novamente"
+            accessibilityState={{ busy: loading, disabled: loading }}
+            disabled={loading}
             onPress={() => {
               void loadProgress();
             }}
@@ -514,6 +529,36 @@ export default function ProgressScreen() {
     return null;
   }
 
+  const datedPhotos = photos.map((photo) => ({
+    photo,
+    dateLabel: formatDate(photo.recordedAt),
+  }));
+
+  const photoDateCounts = new Map<string, number>();
+
+  for (const { dateLabel } of datedPhotos) {
+    photoDateCounts.set(dateLabel, (photoDateCounts.get(dateLabel) ?? 0) + 1);
+  }
+
+  const photoDatePositions = new Map<string, number>();
+
+  const photoEntries = datedPhotos.map(({ photo, dateLabel }) => {
+    const position = (photoDatePositions.get(dateLabel) ?? 0) + 1;
+    photoDatePositions.set(dateLabel, position);
+
+    const count = photoDateCounts.get(dateLabel) ?? 1;
+    const baseLabel = `Ampliar foto de progresso registrada em ${dateLabel}`;
+
+    return {
+      photo,
+      dateLabel,
+      accessibilityLabel:
+        count > 1
+          ? `${baseLabel}, foto ${position} de ${count} nesta data`
+          : baseLabel,
+    };
+  });
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
       <ScreenGradient theme={theme} />
@@ -525,12 +570,27 @@ export default function ProgressScreen() {
         <View style={styles.header}>
           <Text style={styles.eyebrow}>ACOMPANHAMENTO</Text>
 
-          <Text style={styles.title}>Meu progresso</Text>
+          <Text accessibilityRole="header" style={styles.title}>
+            Meu progresso
+          </Text>
 
           <Text style={styles.subtitle}>
             Acompanhe sua frequência de treino, evolução de desempenho e seus
             registros visuais privados.
           </Text>
+
+          {loading ? (
+            <Text
+              accessible
+              accessibilityRole="progressbar"
+              accessibilityLabel="Atualizando seu progresso"
+              accessibilityState={{ busy: true }}
+              accessibilityLiveRegion="polite"
+              style={styles.subtitle}
+            >
+              Atualizando seu progresso...
+            </Text>
+          ) : null}
         </View>
 
         {error ? (
@@ -542,10 +602,17 @@ export default function ProgressScreen() {
             />
 
             <View style={{ flex: 1 }}>
-              <Text style={styles.inlineErrorText}>{error}</Text>
+              <Text
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                style={styles.inlineErrorText}
+              >
+                {error}
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Tentar carregar progresso novamente"
+                accessibilityState={{ busy: loading, disabled: loading }}
                 disabled={loading}
                 onPress={() => void loadProgress()}
                 style={styles.retryButton}
@@ -560,14 +627,20 @@ export default function ProgressScreen() {
           <View>
             <Text style={styles.sectionEyebrow}>VISÃO GERAL</Text>
 
-            <Text style={styles.sectionTitle}>Atividade de treino</Text>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
+              Atividade de treino
+            </Text>
           </View>
 
           <Activity size={23} strokeWidth={2.2} color={theme.colors.primary} />
         </View>
 
         <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
+          <View
+            accessible
+            accessibilityLabel={`Treinos concluídos: ${statistics.completedWorkouts}`}
+            style={styles.metricCard}
+          >
             <View
               style={styles.metricIcon}
               accessible={false}
@@ -587,7 +660,11 @@ export default function ProgressScreen() {
             <Text style={styles.metricLabel}>Treinos concluídos</Text>
           </View>
 
-          <View style={styles.metricCard}>
+          <View
+            accessible
+            accessibilityLabel={`Treinos concluídos nos últimos 7 dias: ${statistics.completedWorkoutsLast7Days}`}
+            style={styles.metricCard}
+          >
             <View
               style={styles.metricIcon}
               accessible={false}
@@ -607,7 +684,11 @@ export default function ProgressScreen() {
             <Text style={styles.metricLabel}>Últimos 7 dias</Text>
           </View>
 
-          <View style={styles.metricCard}>
+          <View
+            accessible
+            accessibilityLabel={`Treinos concluídos nos últimos 30 dias: ${statistics.completedWorkoutsLast30Days}`}
+            style={styles.metricCard}
+          >
             <View
               style={styles.metricIcon}
               accessible={false}
@@ -627,7 +708,11 @@ export default function ProgressScreen() {
             <Text style={styles.metricLabel}>Últimos 30 dias</Text>
           </View>
 
-          <View style={styles.metricCard}>
+          <View
+            accessible
+            accessibilityLabel={`Dias de treino em 30 dias: ${statistics.trainingDaysLast30Days}`}
+            style={styles.metricCard}
+          >
             <View
               style={[styles.metricIcon, styles.metricIconTeal]}
               accessible={false}
@@ -648,7 +733,11 @@ export default function ProgressScreen() {
           </View>
         </View>
 
-        <View style={styles.setsCard}>
+        <View
+          accessible
+          accessibilityLabel={`Séries realmente realizadas: ${statistics.totalPerformedSets}`}
+          style={styles.setsCard}
+        >
           <View style={styles.setsIcon}>
             <Dumbbell
               size={23}
@@ -702,7 +791,9 @@ export default function ProgressScreen() {
             <View>
               <Text style={styles.sectionEyebrow}>REGISTRO VISUAL</Text>
 
-              <Text style={styles.sectionTitle}>Fotos de progresso</Text>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                Fotos de progresso
+              </Text>
             </View>
 
             <Images size={23} strokeWidth={2.2} color={theme.colors.primary} />
@@ -733,7 +824,13 @@ export default function ProgressScreen() {
                 color={theme.colors.danger}
               />
 
-              <Text style={styles.inlineErrorText}>{photoError}</Text>
+              <Text
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                style={styles.inlineErrorText}
+              >
+                {photoError}
+              </Text>
             </View>
           ) : null}
 
@@ -746,6 +843,10 @@ export default function ProgressScreen() {
             <View style={styles.photoEmptyCard}>
               <ActivityIndicator size="small" color={theme.colors.primary} />
               <Text
+                accessible
+                accessibilityRole="progressbar"
+                accessibilityLabel="Atualizando suas fotos"
+                accessibilityState={{ busy: true }}
                 style={styles.photoEmptyText}
                 accessibilityLiveRegion="polite"
               >
@@ -754,7 +855,11 @@ export default function ProgressScreen() {
             </View>
           ) : error && photos.length === 0 ? (
             <View style={styles.photoEmptyCard}>
-              <Text style={styles.photoEmptyText}>
+              <Text
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                style={styles.photoEmptyText}
+              >
                 Não foi possível confirmar seus registros visuais.
               </Text>
             </View>
@@ -768,7 +873,10 @@ export default function ProgressScreen() {
                 />
               </View>
 
-              <Text style={styles.photoEmptyTitle}>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={styles.photoEmptyTitle}
+              >
                 Nenhuma foto registrada
               </Text>
 
@@ -779,12 +887,12 @@ export default function ProgressScreen() {
             </View>
           ) : (
             <View style={styles.photoGrid}>
-              {photos.map((photo) => (
+              {photoEntries.map(({ photo, dateLabel, accessibilityLabel }) => (
                 <View key={photo.id} style={styles.photoCard}>
                   {accessToken ? (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={`Ampliar foto de progresso registrada em ${formatDate(photo.recordedAt)}`}
+                      accessibilityLabel={accessibilityLabel}
                       accessibilityHint="Abre a imagem inteira em tela cheia"
                       onPress={() => setSelectedPhoto(photo)}
                       style={({ pressed }) => [
@@ -814,9 +922,7 @@ export default function ProgressScreen() {
                   )}
 
                   <View style={styles.photoMeta}>
-                    <Text style={styles.photoDate}>
-                      {formatDate(photo.recordedAt)}
-                    </Text>
+                    <Text style={styles.photoDate}>{dateLabel}</Text>
 
                     <Text style={styles.photoPrivacy}>Privada</Text>
                   </View>
@@ -829,6 +935,7 @@ export default function ProgressScreen() {
             <View>
               {pageError ? (
                 <Text
+                  accessibilityRole="alert"
                   style={styles.inlineErrorText}
                   accessibilityLiveRegion="polite"
                 >
@@ -877,7 +984,9 @@ export default function ProgressScreen() {
             <View>
               <Text style={styles.sectionEyebrow}>DESEMPENHO</Text>
 
-              <Text style={styles.sectionTitle}>Evolução por exercício</Text>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                Evolução por exercício
+              </Text>
             </View>
 
             <TrendingUp
@@ -900,7 +1009,10 @@ export default function ProgressScreen() {
                 color={theme.colors.textMuted}
               />
 
-              <Text style={styles.performanceEmptyTitle}>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={styles.performanceEmptyTitle}
+              >
                 Ainda não há evolução suficiente
               </Text>
 
@@ -935,7 +1047,10 @@ export default function ProgressScreen() {
                       </View>
 
                       <View style={styles.performanceHeaderCopy}>
-                        <Text style={styles.exerciseName}>
+                        <Text
+                          accessibilityRole="header"
+                          style={styles.exerciseName}
+                        >
                           {exercise.exerciseName}
                         </Text>
 
@@ -947,7 +1062,11 @@ export default function ProgressScreen() {
 
                     <View style={styles.performanceDivider} />
 
-                    <View style={styles.performanceRow}>
+                    <View
+                      accessible
+                      accessibilityLabel={`${exercise.exerciseName}: primeiro registro, ${formatDate(firstPoint.completedAt)}`}
+                      style={styles.performanceRow}
+                    >
                       <Text style={styles.performanceLabel}>
                         Primeiro registro
                       </Text>
@@ -957,7 +1076,11 @@ export default function ProgressScreen() {
                       </Text>
                     </View>
 
-                    <View style={styles.performanceRow}>
+                    <View
+                      accessible
+                      accessibilityLabel={`${exercise.exerciseName}: registro mais recente, ${formatDate(latestPoint.completedAt)}`}
+                      style={styles.performanceRow}
+                    >
                       <Text style={styles.performanceLabel}>
                         Registro mais recente
                       </Text>
@@ -967,7 +1090,11 @@ export default function ProgressScreen() {
                       </Text>
                     </View>
 
-                    <View style={styles.performanceRow}>
+                    <View
+                      accessible
+                      accessibilityLabel={`${exercise.exerciseName}: séries realizadas, ${latestPoint.performedSets}`}
+                      style={styles.performanceRow}
+                    >
                       <Text style={styles.performanceLabel}>
                         Séries realizadas
                       </Text>
@@ -977,7 +1104,11 @@ export default function ProgressScreen() {
                       </Text>
                     </View>
 
-                    <View style={styles.performanceRow}>
+                    <View
+                      accessible
+                      accessibilityLabel={`${exercise.exerciseName}: repetições registradas, ${latestPoint.totalRepetitions}`}
+                      style={styles.performanceRow}
+                    >
                       <Text style={styles.performanceLabel}>
                         Repetições registradas
                       </Text>
@@ -988,16 +1119,25 @@ export default function ProgressScreen() {
                     </View>
 
                     <View style={styles.loadBlock}>
-                      <Text style={styles.loadLabel}>
-                        Carga máxima no registro mais recente
-                      </Text>
+                      <View
+                        accessible
+                        accessibilityLabel={`${exercise.exerciseName}: carga máxima no registro mais recente, ${formatLoadSummary(latestPoint)}`}
+                      >
+                        <Text style={styles.loadLabel}>
+                          Carga máxima no registro mais recente
+                        </Text>
 
-                      <Text style={styles.loadValue}>
-                        {formatLoadSummary(latestPoint)}
-                      </Text>
+                        <Text style={styles.loadValue}>
+                          {formatLoadSummary(latestPoint)}
+                        </Text>
+                      </View>
 
                       {loadEvolution ? (
-                        <View style={styles.evolutionBadge}>
+                        <View
+                          accessible
+                          accessibilityLabel={`Evolução de carga de ${exercise.exerciseName}: ${loadEvolution.replace(/ → /g, " para ").replace(/ • /g, "; ")}`}
+                          style={styles.evolutionBadge}
+                        >
                           <TrendingUp
                             size={15}
                             strokeWidth={2.2}
@@ -1087,6 +1227,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     retryButton: {
       minHeight: 48,
+      minWidth: 48,
       marginTop: theme.spacing.xl,
       flexDirection: "row",
       alignItems: "center",
@@ -1423,6 +1564,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     photoThumbnailButton: {
       width: "100%",
+      minHeight: 48,
+      minWidth: 48,
       position: "relative",
     },
 

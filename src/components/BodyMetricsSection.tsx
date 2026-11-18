@@ -83,6 +83,9 @@ function getErrorMessage(error: unknown): string {
   return "Não foi possível concluir a operação.";
 }
 
+const METRIC_VALUE_GUIDANCE =
+  "Informe um valor positivo, com até duas casas decimais.";
+
 function validateValue(input: string): string | null {
   const normalized = input.trim().replace(",", ".");
 
@@ -194,7 +197,7 @@ export default function BodyMetricsSection({
     const normalizedValue = validateValue(value);
 
     if (!normalizedValue) {
-      setFormError("Informe um valor positivo, com até duas casas decimais.");
+      setFormError(METRIC_VALUE_GUIDANCE);
       return;
     }
 
@@ -266,6 +269,11 @@ export default function BodyMetricsSection({
                 onPress={() => selectMetricType(option.type)}
                 style={[styles.option, selected && styles.optionSelected]}
               >
+                {selected ? (
+                  <Text accessible={false} style={styles.selectionMark}>
+                    ✓
+                  </Text>
+                ) : null}
                 <Text
                   style={[
                     styles.optionText,
@@ -284,6 +292,11 @@ export default function BodyMetricsSection({
         <View style={styles.valueRow}>
           <TextInput
             accessibilityLabel="Valor da medida corporal"
+            accessibilityState={{ disabled: saving }}
+            accessibilityHint={
+              formError ??
+              `${getMetricLabel(selectedType)} em ${selectedUnit}. ${METRIC_VALUE_GUIDANCE}`
+            }
             style={styles.valueInput}
             value={value}
             onChangeText={(text) => {
@@ -316,6 +329,11 @@ export default function BodyMetricsSection({
                     selected && styles.unitButtonSelected,
                   ]}
                 >
+                  {selected ? (
+                    <Text accessible={false} style={styles.selectionMark}>
+                      ✓
+                    </Text>
+                  ) : null}
                   <Text
                     style={[
                       styles.unitText,
@@ -339,6 +357,7 @@ export default function BodyMetricsSection({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Salvar medida corporal"
+          accessibilityState={{ busy: saving, disabled: saving }}
           disabled={saving}
           onPress={() => void saveMetric()}
           style={[styles.saveButton, saving && styles.disabled]}
@@ -374,6 +393,7 @@ export default function BodyMetricsSection({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Atualizar histórico de medidas"
+          accessibilityState={{ busy: loading, disabled: loading }}
           disabled={loading}
           onPress={() => void refreshMetrics()}
           style={styles.refreshButton}
@@ -486,6 +506,12 @@ function createStyles(theme: AppTheme) {
       gap: 8,
     },
     option: {
+      minHeight: 48,
+      minWidth: 48,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
       paddingHorizontal: 14,
       paddingVertical: 10,
       borderRadius: radii.full,
@@ -496,6 +522,11 @@ function createStyles(theme: AppTheme) {
     optionSelected: {
       backgroundColor: colors.primarySoft,
       borderColor: colors.primary,
+    },
+    selectionMark: {
+      color: colors.primary,
+      fontFamily: typography.fontFamily.bold,
+      fontSize: typography.size.small,
     },
     optionText: {
       fontFamily: typography.fontFamily.semibold,
@@ -529,7 +560,10 @@ function createStyles(theme: AppTheme) {
     },
     unitButton: {
       paddingHorizontal: 12,
-      minHeight: 44,
+      minHeight: 48,
+      minWidth: 48,
+      flexDirection: "row",
+      gap: 6,
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
@@ -588,8 +622,8 @@ function createStyles(theme: AppTheme) {
       color: colors.textPrimary,
     },
     refreshButton: {
-      minHeight: 44,
-      minWidth: 44,
+      minHeight: 48,
+      minWidth: 48,
       alignItems: "center",
       justifyContent: "center",
     },

@@ -1,8 +1,10 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react-native";
 import type { ContextType } from "react";
 
@@ -339,5 +341,273 @@ describe("BodyMetricsSection", () => {
 
     expect(screen.queryByText("79,50 kg")).toBeNull();
     expect(onWeightSaved).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: provides visible selection indicators and practical touch targets", async () => {
+    await renderSection();
+
+    await screen.findByText("Nenhuma medida registrada");
+
+    function expectSelection(label: string, selected: boolean) {
+      const button = screen.getByLabelText(label);
+
+      expect(button).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected, disabled: false }),
+      );
+
+      expect(button).toHaveStyle({
+        minHeight: 48,
+        minWidth: 48,
+      });
+
+      if (selected) {
+        expect(within(button).getByText("\u2713")).toBeTruthy();
+      } else {
+        expect(within(button).queryByText("\u2713")).toBeNull();
+      }
+    }
+
+    expectSelection("Selecionar Peso", true);
+    expectSelection("Selecionar Cintura", false);
+    expectSelection("Unidade kg", true);
+    expectSelection("Unidade lb", false);
+
+    await fireEvent.press(screen.getByLabelText("Selecionar Cintura"));
+
+    expectSelection("Selecionar Peso", false);
+    expectSelection("Selecionar Cintura", true);
+    expectSelection("Unidade cm", true);
+    expectSelection("Unidade in", false);
+
+    await fireEvent.press(screen.getByLabelText("Unidade in"));
+
+    expectSelection("Unidade cm", false);
+    expectSelection("Unidade in", true);
+
+    expect(mockedCreateBodyMetric).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: associates the selected measurement and validation error with its input", async () => {
+    await renderSection();
+
+    await screen.findByText("Nenhuma medida registrada");
+
+    const input = "Valor da medida corporal";
+    const guidance =
+      "Informe um valor positivo, com at\u00e9 duas casas decimais.";
+
+    expect(screen.getByLabelText(input)).toHaveProp(
+      "accessibilityHint",
+      `Peso em kg. ${guidance}`,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Selecionar Cintura"));
+
+    expect(screen.getByLabelText(input)).toHaveProp(
+      "accessibilityHint",
+      `Cintura em cm. ${guidance}`,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Unidade in"));
+
+    expect(screen.getByLabelText(input)).toHaveProp(
+      "accessibilityHint",
+      `Cintura em in. ${guidance}`,
+    );
+
+    await fireEvent.changeText(screen.getByLabelText(input), "0");
+
+    await fireEvent.press(screen.getByLabelText("Salvar medida corporal"));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(guidance);
+
+    expect(screen.getByLabelText(input)).toHaveProp(
+      "accessibilityHint",
+      guidance,
+    );
+
+    expect(mockedCreateBodyMetric).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText(input), "34,50");
+
+    expect(screen.queryByText(guidance)).toBeNull();
+
+    expect(screen.getByLabelText(input)).toHaveProp(
+      "accessibilityHint",
+      `Cintura em in. ${guidance}`,
+    );
+  });
+
+  it("accessibility: exposes saving states and restores controls after a failed measurement", async () => {
+    let reject!: (reason: Error) => void;
+    let resolve!: (value: BodyMetric) => void;
+
+    const request = new Promise<BodyMetric>((done, fail) => {
+      resolve = done;
+      reject = fail;
+    });
+
+    mockedCreateBodyMetric
+      .mockReturnValueOnce(request)
+      .mockResolvedValueOnce(savedWeight);
+
+    const onWeightSaved = jest.fn();
+
+    await renderSection(onWeightSaved);
+
+    await screen.findByText("Nenhuma medida registrada");
+
+    const inputLabel = "Valor da medida corporal";
+    const saveLabel = "Salvar medida corporal";
+
+    await fireEvent.changeText(screen.getByLabelText(inputLabel), "80,00");
+
+    try {
+      await fireEvent.press(screen.getByLabelText(saveLabel));
+
+      expect(mockedCreateBodyMetric).toHaveBeenCalledTimes(1);
+
+      expect(mockedCreateBodyMetric).toHaveBeenCalledWith("test-access-token", {
+        metricType: "weight",
+        value: "80.00",
+        unit: "kg",
+      });
+
+      expect(screen.getByLabelText(inputLabel)).toHaveProp("editable", false);
+
+      expect(screen.getByLabelText(inputLabel)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ disabled: true }),
+      );
+
+      expect(screen.getByLabelText(saveLabel)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: true, disabled: true }),
+      );
+
+      for (const label of [saveLabel, "Selecionar Cintura", "Unidade lb"]) {
+        const button = screen.getByLabelText(label);
+
+        expect(button).toBeDisabled();
+
+        await fireEvent.press(button);
+      }
+
+      expect(mockedCreateBodyMetric).toHaveBeenCalledTimes(1);
+      expect(onWeightSaved).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => {
+        if (mockedCreateBodyMetric.mock.calls.length > 0) {
+          reject(new Error("Falha ao salvar medida."));
+        } else {
+          resolve(savedWeight);
+        }
+      });
+    }
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Falha ao salvar medida.",
+    );
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp("editable", true);
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp("value", "80,00");
+
+    expect(screen.getByLabelText(saveLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(screen.getByLabelText("Selecionar Cintura")).not.toBeDisabled();
+    expect(screen.getByLabelText("Unidade lb")).not.toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText(saveLabel));
+
+    expect(await screen.findByText("80,00 kg")).toBeTruthy();
+
+    expect(mockedCreateBodyMetric).toHaveBeenCalledTimes(2);
+    expect(onWeightSaved).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp("value", "");
+    expect(screen.queryByText("Falha ao salvar medida.")).toBeNull();
+  });
+
+  it("accessibility: exposes history refresh processing and restores the action after failure", async () => {
+    let reject!: (reason: Error) => void;
+    let resolve!: (value: BodyMetric[]) => void;
+
+    const request = new Promise<BodyMetric[]>((done, fail) => {
+      resolve = done;
+      reject = fail;
+    });
+
+    mockedGetBodyMetrics
+      .mockResolvedValueOnce([])
+      .mockReturnValueOnce(request)
+      .mockResolvedValueOnce([savedWeight]);
+
+    await renderSection();
+
+    await screen.findByText("Nenhuma medida registrada");
+
+    const label = "Atualizar hist\u00f3rico de medidas";
+
+    try {
+      await fireEvent.press(screen.getByLabelText(label));
+
+      const button = screen.getByLabelText(label);
+
+      expect(button).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: true, disabled: true }),
+      );
+
+      expect(button).toBeDisabled();
+
+      expect(button).toHaveStyle({
+        minHeight: 48,
+        minWidth: 48,
+      });
+
+      expect(screen.getByText("Carregando medidas...")).toBeTruthy();
+
+      await fireEvent.press(button);
+
+      expect(mockedGetBodyMetrics).toHaveBeenCalledTimes(2);
+    } finally {
+      await act(async () => {
+        if (mockedGetBodyMetrics.mock.calls.length > 1) {
+          reject(new Error("The backend could not be reached."));
+        } else {
+          resolve([]);
+        }
+      });
+    }
+
+    expect(
+      screen.getByText("N\u00e3o foi poss\u00edvel conectar ao servidor."),
+    ).toBeTruthy();
+
+    expect(screen.getByLabelText(label)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(screen.getByLabelText(label)).not.toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText(label));
+
+    expect(await screen.findByText("80,00 kg")).toBeTruthy();
+
+    expect(mockedGetBodyMetrics).toHaveBeenCalledTimes(3);
+    expect(
+      screen.queryByText("N\u00e3o foi poss\u00edvel conectar ao servidor."),
+    ).toBeNull();
   });
 });

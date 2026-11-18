@@ -1,5 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import type { ContextType } from "react";
+import { Animated } from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
@@ -9,6 +15,7 @@ import {
   uploadProgressPhoto,
   type ProgressPhoto,
 } from "../../services/progress";
+import ProgressPhotoViewer from "../../components/ProgressPhotoViewer";
 import ProgressScreen from "../ProgressScreen";
 
 jest.mock("../../config/environment", () => ({
@@ -37,6 +44,8 @@ jest.mock("../../theme/ThemeProvider", () => ({
     theme: jest.requireActual("../../theme/themes").lightTheme,
   }),
 }));
+
+jest.mock("../../components/BmiCard", () => () => null);
 
 jest.mock(
   "../../components/BodyMetricsSection",
@@ -188,5 +197,153 @@ describe("ProgressScreen - visualizador de fotos", () => {
     ).toBeTruthy();
 
     expect(mockedUpload).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: exposes the viewer heading, authenticated image and recording date", async () => {
+    await openPhoto();
+
+    const heading = screen.getByRole("header", {
+      name: "Foto de progresso",
+    });
+
+    expect(heading).toBeTruthy();
+
+    const image = screen.getByRole("image", {
+      name: "Foto de progresso ampliada",
+    });
+
+    const dateLabel = new Intl.DateTimeFormat("pt-BR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(photo.recordedAt));
+
+    expect(image).toHaveProp(
+      "accessibilityHint",
+      `Registrada em ${dateLabel}. Registro visual privado.`,
+    );
+
+    expect(image).toHaveProp("resizeMode", "contain");
+
+    expect(image).toHaveProp("source", {
+      uri: "https://example.test/progress/photos/photo-test-001/content",
+      headers: {
+        Authorization: "Bearer test-access-token",
+      },
+    });
+
+    expect(screen.getByText("Registro visual privado")).toBeTruthy();
+
+    let modalContainer = heading.parent;
+
+    while (
+      modalContainer &&
+      modalContainer.props.accessibilityViewIsModal !== true
+    ) {
+      modalContainer = modalContainer.parent;
+    }
+
+    if (!modalContainer) {
+      throw new Error("Accessible modal boundary not found.");
+    }
+
+    expect(modalContainer).toContainElement(image);
+    expect(within(modalContainer).getByText(dateLabel)).toBeTruthy();
+
+    expect(mockedUpload).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText("Fechar foto ampliada"));
+
+    expect(screen.queryByLabelText("Foto de progresso ampliada")).toBeNull();
+
+    expect(
+      screen.getByLabelText(/Ampliar foto de progresso registrada em/),
+    ).toBeTruthy();
+
+    expect(mockedUpload).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: provides a practical close target and an accessibility escape action", async () => {
+    const onClose = jest.fn();
+
+    await render(
+      <ProgressPhotoViewer
+        source={{ uri: "file:///synthetic-progress-photo.jpg" }}
+        dateLabel="05/11/2026"
+        reduceMotion
+        onClose={onClose}
+      />,
+    );
+
+    const close = screen.getByRole("button", {
+      name: "Fechar foto ampliada",
+    });
+
+    expect(close).toHaveStyle({
+      width: 48,
+      height: 48,
+    });
+
+    expect(close).not.toBeDisabled();
+
+    let modalContainer = close.parent;
+
+    while (
+      modalContainer &&
+      modalContainer.props.accessibilityViewIsModal !== true
+    ) {
+      modalContainer = modalContainer.parent;
+    }
+
+    if (!modalContainer) {
+      throw new Error("Accessible modal boundary not found.");
+    }
+
+    expect(modalContainer).toContainElement(close);
+
+    expect(modalContainer).toHaveProp(
+      "onAccessibilityEscape",
+      expect.any(Function),
+    );
+
+    await fireEvent(modalContainer, "accessibilityEscape");
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    onClose.mockClear();
+
+    await fireEvent.press(close);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves reduced-motion rendering and the close action without starting an animation", async () => {
+    const timing = jest.spyOn(Animated, "timing");
+
+    const onClose = jest.fn();
+
+    try {
+      await render(
+        <ProgressPhotoViewer
+          source={{ uri: "file:///synthetic-progress-photo.jpg" }}
+          dateLabel="05/11/2026"
+          reduceMotion
+          onClose={onClose}
+        />,
+      );
+
+      expect(screen.getByLabelText("Foto de progresso ampliada")).toBeTruthy();
+
+      expect(screen.getByText("05/11/2026")).toBeTruthy();
+
+      expect(timing).not.toHaveBeenCalled();
+
+      await fireEvent.press(screen.getByLabelText("Fechar foto ampliada"));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(timing).not.toHaveBeenCalled();
+    } finally {
+      timing.mockRestore();
+    }
   });
 });

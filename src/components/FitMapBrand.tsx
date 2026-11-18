@@ -48,6 +48,7 @@ export default function FitMapBrand({
       source={source}
       resizeMode="contain"
       accessible
+      accessibilityRole="image"
       accessibilityLabel="FIT Map"
       style={{
         width,

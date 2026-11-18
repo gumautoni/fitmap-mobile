@@ -215,4 +215,134 @@ describe("ProfileHeightEditor", () => {
 
     expect(screen.queryByLabelText("Remover altura")).toBeNull();
   });
+
+  it("accessibility: exposes pending height editing and action states", async () => {
+    const onSave = jest.fn().mockResolvedValue(true);
+
+    const view = await render(
+      <ProfileHeightEditor heightCm="175.00" saving={true} onSave={onSave} />,
+    );
+
+    const inputLabel = "Altura em cent\u00edmetros";
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp("editable", false);
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true }),
+    );
+
+    expect(screen.getByLabelText("Salvar altura")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: true, disabled: true }),
+    );
+
+    expect(screen.getByLabelText("Remover altura")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true }),
+    );
+
+    expect(screen.getByLabelText("Salvar altura")).toBeDisabled();
+    expect(screen.getByLabelText("Remover altura")).toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText("Salvar altura"));
+    await fireEvent.press(screen.getByLabelText("Remover altura"));
+
+    expect(onSave).not.toHaveBeenCalled();
+
+    await view.rerender(
+      <ProfileHeightEditor heightCm="175.00" saving={false} onSave={onSave} />,
+    );
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp("editable", true);
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+
+    expect(screen.getByLabelText("Salvar altura")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(screen.getByLabelText("Remover altura")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+
+    expect(screen.getByLabelText("Salvar altura")).not.toBeDisabled();
+    expect(screen.getByLabelText("Remover altura")).not.toBeDisabled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: associates height guidance and validation errors with the input", async () => {
+    const onSave = jest.fn().mockResolvedValue(true);
+
+    await render(
+      <ProfileHeightEditor heightCm={null} saving={false} onSave={onSave} />,
+    );
+
+    const inputLabel = "Altura em cent\u00edmetros";
+
+    const guidance =
+      "Valores entre 50 e 250 cm. Use v\u00edrgula ou ponto como separador.";
+
+    const error =
+      "Informe uma altura entre 50 e 250 cm, com at\u00e9 duas casas decimais.";
+
+    expect(screen.getByText(guidance)).toBeTruthy();
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp(
+      "accessibilityHint",
+      guidance,
+    );
+
+    await fireEvent.changeText(screen.getByLabelText(inputLabel), "49");
+
+    await fireEvent.press(screen.getByLabelText("Salvar altura"));
+
+    expect(screen.getByText(error)).toBeTruthy();
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp(
+      "accessibilityHint",
+      error,
+    );
+
+    expect(onSave).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByLabelText(inputLabel), "175,5");
+
+    expect(screen.queryByText(error)).toBeNull();
+
+    expect(screen.getByLabelText(inputLabel)).toHaveProp(
+      "accessibilityHint",
+      guidance,
+    );
+
+    await fireEvent.press(screen.getByLabelText("Salvar altura"));
+
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave).toHaveBeenCalledWith("175.50");
+
+    expect(await screen.findByText("Altura salva com sucesso.")).toBeTruthy();
+  });
+
+  it("accessibility: provides practical height action touch targets", async () => {
+    await render(
+      <ProfileHeightEditor
+        heightCm="175.00"
+        saving={false}
+        onSave={jest.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    expect(screen.getByLabelText("Salvar altura")).toHaveStyle({
+      minHeight: 48,
+    });
+
+    expect(screen.getByLabelText("Remover altura")).toHaveStyle({
+      minHeight: 48,
+    });
+  });
 });

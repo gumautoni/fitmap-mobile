@@ -12,6 +12,8 @@ export default function AuthField({
   value,
   onChangeText,
   secure = false,
+  visibilityLabel = "senha",
+  editable = true,
   error,
   helper,
   ...inputProps
@@ -50,15 +52,28 @@ export default function AuthField({
           autoCorrect={false}
           style={styles.input}
           accessibilityLabel={label}
+          editable={editable}
+          accessibilityState={{
+            ...inputProps.accessibilityState,
+            disabled: !editable,
+          }}
+          accessibilityHint={error || helper || inputProps.accessibilityHint}
         />
 
         {secure ? (
           <Pressable
             onPress={() => setRevealed((current) => !current)}
             accessibilityRole="button"
-            accessibilityLabel={revealed ? "Ocultar senha" : "Mostrar senha"}
-            accessibilityState={{ expanded: revealed }}
-            hitSlop={9}
+            accessibilityLabel={
+              revealed
+                ? `Ocultar ${visibilityLabel}`
+                : `Mostrar ${visibilityLabel}`
+            }
+            accessibilityState={{
+              expanded: revealed,
+              disabled: !editable,
+            }}
+            disabled={!editable}
             style={styles.eyeButton}
           >
             {revealed ? (
@@ -114,7 +129,14 @@ const styles = StyleSheet.create({
     color: authColors.textPrimary,
     padding: 0,
   },
-  eyeButton: { padding: 4, marginRight: -4 },
+  eyeButton: {
+    minHeight: 48,
+    minWidth: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 4,
+    marginRight: -4,
+  },
   errorText: {
     fontFamily: "Manrope_500Medium",
     color: "#C42C27",

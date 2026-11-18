@@ -132,6 +132,7 @@ export default function ProgressPhotoCapture({ uploading, onSave }: Props) {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Adicionar foto de progresso"
+        accessibilityState={{ busy, disabled: busy }}
         disabled={busy}
         onPress={openPhotoOptions}
         style={({ pressed }) => [
@@ -158,9 +159,9 @@ export default function ProgressPhotoCapture({ uploading, onSave }: Props) {
           animationType="fade"
           onRequestClose={discardPreview}
         >
-          <View style={styles.overlay}>
+          <View accessibilityViewIsModal style={styles.overlay}>
             <View style={styles.previewCard}>
-              <Text style={styles.previewTitle}>
+              <Text accessibilityRole="header" style={styles.previewTitle}>
                 Confirmar foto de progresso
               </Text>
 
@@ -172,6 +173,8 @@ export default function ProgressPhotoCapture({ uploading, onSave }: Props) {
                 source={{ uri: previewAsset.uri }}
                 style={styles.previewImage}
                 resizeMode="contain"
+                accessible
+                accessibilityRole="image"
                 accessibilityLabel="Prévia da foto de progresso"
               />
 
@@ -179,6 +182,7 @@ export default function ProgressPhotoCapture({ uploading, onSave }: Props) {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Descartar foto"
+                  accessibilityState={{ disabled: busy }}
                   disabled={busy}
                   onPress={discardPreview}
                   style={[styles.actionButton, styles.cancelButton]}
@@ -189,6 +193,7 @@ export default function ProgressPhotoCapture({ uploading, onSave }: Props) {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Salvar foto de progresso"
+                  accessibilityState={{ busy, disabled: busy }}
                   disabled={busy}
                   onPress={() => {
                     void confirmPhoto();
@@ -285,6 +290,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     actionButton: {
       flex: 1,
       minHeight: 48,
+      minWidth: 48,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",

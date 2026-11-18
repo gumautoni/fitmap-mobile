@@ -144,12 +144,17 @@ function MainTabsNavigator() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Abrir histórico de treinos"
+              accessibilityHint="Consulte seus treinos concluídos."
               onPress={() =>
                 navigation
                   .getParent<NativeStackNavigationProp<AppStackParamList>>()
                   ?.navigate("HistoricoTreinos")
               }
               style={({ pressed }) => ({
+                minHeight: 48,
+                minWidth: 48,
+                alignItems: "center",
+                justifyContent: "center",
                 paddingHorizontal: 8,
                 paddingVertical: 6,
                 opacity: pressed ? 0.65 : 1,
@@ -233,12 +238,17 @@ export default function AppNavigator() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Executar treino"
+              accessibilityHint="Abre a tela de execução deste treino."
               onPress={() =>
                 navigation.navigate("ExecutarTreino", {
                   workoutId: route.params.workoutId,
                 })
               }
               style={({ pressed }) => ({
+                minHeight: 48,
+                minWidth: 48,
+                alignItems: "center",
+                justifyContent: "center",
                 paddingHorizontal: 8,
                 paddingVertical: 6,
                 opacity: pressed ? 0.65 : 1,

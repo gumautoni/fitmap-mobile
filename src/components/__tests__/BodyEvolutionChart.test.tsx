@@ -1,4 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 
 import type {
   BodyMetric,
@@ -277,5 +282,260 @@ describe("BodyEvolutionChart", () => {
     expect(
       screen.getByText("30 de 32 registros válidos exibidos."),
     ).toBeTruthy();
+  });
+
+  it("accessibility: provides visible chart selection indicators and practical touch targets", async () => {
+    await renderChart([]);
+
+    function expectSelection(label: string, selected: boolean) {
+      const button = screen.getByLabelText(
+        `Visualizar evolu\u00e7\u00e3o de ${label}`,
+      );
+
+      expect(button).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected }),
+      );
+
+      expect(button).toHaveStyle({
+        minHeight: 48,
+        minWidth: 48,
+      });
+
+      if (selected) {
+        expect(within(button).getByText("\u2713")).toBeTruthy();
+      } else {
+        expect(within(button).queryByText("\u2713")).toBeNull();
+      }
+    }
+
+    for (const option of metricOptions) {
+      expectSelection(option.label, option.type === "weight");
+    }
+
+    await fireEvent.press(
+      screen.getByLabelText("Visualizar evolu\u00e7\u00e3o de Cintura"),
+    );
+
+    for (const option of metricOptions) {
+      expectSelection(option.label, option.type === "waist");
+    }
+
+    expect(
+      screen.getByText(/Nenhum registro v\u00e1lido de cintura/),
+    ).toBeTruthy();
+  });
+
+  it("accessibility: describes chronological values and changes in the selected chart", async () => {
+    await renderChart([
+      makeMetric({
+        id: "weight-later",
+        value: "75.00",
+        recordedAt: "2026-10-05T12:00:00Z",
+      }),
+      makeMetric({
+        id: "weight-earlier",
+        value: "80.00",
+      }),
+      makeMetric({
+        id: "waist-earlier",
+        metricType: "waist",
+        unit: "in",
+        value: "32.00",
+      }),
+      makeMetric({
+        id: "waist-later",
+        metricType: "waist",
+        unit: "cm",
+        value: "85.00",
+        recordedAt: "2026-10-05T12:00:00Z",
+      }),
+    ]);
+
+    const weightChart = screen.getByRole("image", {
+      name: "Gr\u00e1fico de Peso, com 2 registros",
+    });
+
+    expect(weightChart).toHaveProp(
+      "accessibilityHint",
+      "Primeiro registro: 80 kg em 01/10/2026. " +
+        "Mais recente: 75 kg em 05/10/2026. " +
+        "Varia\u00e7\u00e3o do per\u00edodo: -5 kg. " +
+        "2 de 2 registros v\u00e1lidos exibidos.",
+    );
+
+    expect(
+      screen.getByText("Varia\u00e7\u00e3o do per\u00edodo: -5 kg"),
+    ).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByLabelText("Visualizar evolu\u00e7\u00e3o de Cintura"),
+    );
+
+    const waistChart = screen.getByRole("image", {
+      name: "Gr\u00e1fico de Cintura, com 2 registros",
+    });
+
+    expect(waistChart).toHaveProp(
+      "accessibilityHint",
+      "Primeiro registro: 81,28 cm em 01/10/2026. " +
+        "Mais recente: 85 cm em 05/10/2026. " +
+        "Varia\u00e7\u00e3o do per\u00edodo: +3,72 cm. " +
+        "2 de 2 registros v\u00e1lidos exibidos.",
+    );
+
+    expect(
+      screen.getByText("Varia\u00e7\u00e3o do per\u00edodo: +3,72 cm"),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByLabelText("Gr\u00e1fico de Peso, com 2 registros"),
+    ).toBeNull();
+
+    expect(screen.getAllByRole("image")).toHaveLength(1);
+  });
+
+  it("accessibility: describes a single converted measurement without inventing a variation", async () => {
+    await renderChart([
+      makeMetric({
+        unit: "lb",
+        value: "100.00",
+      }),
+    ]);
+
+    const chart = screen.getByRole("image", {
+      name: "Gr\u00e1fico de Peso, com 1 registros",
+    });
+
+    expect(chart).toHaveProp(
+      "accessibilityHint",
+      "Registro: 45,36 kg em 01/10/2026. " +
+        "Adicione outro registro para visualizar a varia\u00e7\u00e3o. " +
+        "1 de 1 registros v\u00e1lidos exibidos.",
+    );
+
+    expect(screen.getAllByText("45,36 kg")).toHaveLength(2);
+
+    expect(
+      screen.getByText(
+        "Adicione outro registro para visualizar a varia\u00e7\u00e3o.",
+      ),
+    ).toBeTruthy();
+
+    expect(
+      screen.queryByText(/Varia\u00e7\u00e3o do per\u00edodo:/),
+    ).toBeNull();
+  });
+
+  it("accessibility: describes only the displayed valid history when the series is limited", async () => {
+    const records = Array.from({ length: 32 }, (_, index) =>
+      makeMetric({
+        id: `accessible-record-${index}`,
+        value: `${70 + index}.00`,
+        recordedAt: new Date(Date.UTC(2026, 9, index + 1, 12)).toISOString(),
+      }),
+    );
+
+    records.push(
+      makeMetric({
+        id: "invalid-accessibility-record",
+        value: "NaN",
+      }),
+      makeMetric({
+        id: "future-accessibility-record",
+        value: "999.00",
+        recordedAt: "2099-01-01T12:00:00Z",
+      }),
+    );
+
+    await renderChart(records);
+
+    const chart = screen.getByRole("image", {
+      name: "Gr\u00e1fico de Peso, com 30 registros",
+    });
+
+    expect(chart).toHaveProp(
+      "accessibilityHint",
+      "Primeiro registro: 72 kg em 03/10/2026. " +
+        "Mais recente: 101 kg em 01/11/2026. " +
+        "Varia\u00e7\u00e3o do per\u00edodo: +29 kg. " +
+        "30 de 32 registros v\u00e1lidos exibidos.",
+    );
+
+    expect(
+      screen.getByText("30 de 32 registros v\u00e1lidos exibidos."),
+    ).toBeTruthy();
+
+    expect(screen.queryByText("70 kg")).toBeNull();
+    expect(screen.queryByText("999 kg")).toBeNull();
+  });
+
+  it("accessibility: distinguishes loading, failure and empty chart states", async () => {
+    const metrics = [makeMetric()];
+
+    const view = await renderChart(metrics, true);
+
+    const loadingLabel = "Carregando evolu\u00e7\u00e3o corporal";
+
+    const progress = screen.getByRole("progressbar", {
+      name: loadingLabel,
+    });
+
+    expect(progress).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: true }),
+    );
+
+    expect(progress).toHaveProp("accessibilityLiveRegion", "polite");
+
+    expect(
+      screen.getByText("Carregando evolu\u00e7\u00e3o corporal..."),
+    ).toBeTruthy();
+
+    expect(screen.queryAllByRole("image")).toHaveLength(0);
+
+    await view.rerender(
+      <BodyEvolutionChart
+        metrics={metrics}
+        loading={false}
+        error="Connection failed"
+      />,
+    );
+
+    const alert = screen.getByRole("alert");
+
+    expect(alert).toHaveTextContent(
+      /N\u00e3o foi poss\u00edvel carregar a evolu\u00e7\u00e3o corporal/,
+    );
+
+    expect(alert).toHaveProp("accessibilityLiveRegion", "polite");
+
+    expect(screen.queryByLabelText(loadingLabel)).toBeNull();
+
+    expect(screen.queryAllByRole("image")).toHaveLength(0);
+
+    expect(screen.queryByText(/Nenhum registro v\u00e1lido/)).toBeNull();
+
+    await view.rerender(<BodyEvolutionChart metrics={[]} loading={false} />);
+
+    const empty = screen.getByText(/Nenhum registro v\u00e1lido de peso/);
+
+    expect(empty).toHaveProp("accessibilityLiveRegion", "polite");
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
+    expect(screen.queryAllByRole("image")).toHaveLength(0);
+
+    await view.rerender(
+      <BodyEvolutionChart metrics={metrics} loading={false} />,
+    );
+
+    expect(
+      screen.getByRole("image", {
+        name: "Gr\u00e1fico de Peso, com 1 registros",
+      }),
+    ).toBeTruthy();
+
+    expect(screen.queryByText(/Nenhum registro v\u00e1lido/)).toBeNull();
   });
 });

@@ -59,9 +59,12 @@ export default function ProgressPhotoViewer({
         style={styles.safeArea}
         edges={["top", "bottom"]}
         accessibilityViewIsModal
+        onAccessibilityEscape={onClose}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Foto de progresso</Text>
+          <Text accessibilityRole="header" style={styles.title}>
+            Foto de progresso
+          </Text>
 
           <Pressable
             accessibilityRole="button"
@@ -81,7 +84,10 @@ export default function ProgressPhotoViewer({
           <Animated.Image
             source={source}
             resizeMode="contain"
+            accessible
+            accessibilityRole="image"
             accessibilityLabel="Foto de progresso ampliada"
+            accessibilityHint={`Registrada em ${dateLabel}. Registro visual privado.`}
             style={[styles.image, { transform: [{ scale }] }]}
           />
         </View>
@@ -114,9 +120,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   closeButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.12)",

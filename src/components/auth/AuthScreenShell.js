@@ -33,6 +33,7 @@ export default function AuthScreenShell({
   subtitle,
   eyebrow,
   onBack,
+  backDisabled = false,
   children,
 }) {
   return (
@@ -55,10 +56,12 @@ export default function AuthScreenShell({
                 onPress={onBack}
                 accessibilityRole="button"
                 accessibilityLabel="Voltar para boas-vindas"
-                hitSlop={10}
+                accessibilityState={{ disabled: backDisabled }}
+                disabled={backDisabled}
                 style={({ pressed }) => [
                   styles.backButton,
-                  pressed && styles.pressed,
+                  pressed && !backDisabled && styles.pressed,
+                  backDisabled && styles.disabled,
                 ]}
               >
                 <ArrowLeft size={20} color={COLORS.navy} strokeWidth={2.2} />
@@ -101,6 +104,8 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   backButton: {
+    minHeight: 48,
+    minWidth: 48,
     alignSelf: "flex-start",
     flexDirection: "row",
     gap: 8,
@@ -115,6 +120,7 @@ const styles = StyleSheet.create({
     fontFamily: "Manrope_700Bold",
   },
   pressed: { opacity: 0.7 },
+  disabled: { opacity: 0.55 },
   brand: {
     flexDirection: "row",
     alignItems: "center",
