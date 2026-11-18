@@ -125,6 +125,7 @@ export default function GymReviewForm({
         numberOfLines={4}
         textAlignVertical="top"
         editable={!submitting}
+        accessibilityState={{ disabled: submitting }}
         value={comment}
         onChangeText={setComment}
         placeholder="Conte como foi sua experiência nesta academia..."
@@ -165,7 +166,10 @@ export default function GymReviewForm({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={submitLabel}
-          accessibilityState={{ disabled: submitting }}
+          accessibilityState={{
+            busy: submitting,
+            disabled: submitting,
+          }}
           disabled={submitting}
           onPress={handleSubmit}
           style={({ pressed }) => [

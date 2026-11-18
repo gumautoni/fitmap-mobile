@@ -211,6 +211,158 @@ describe("MapScreen - previa de academia selecionada", () => {
     });
   });
 
+  it("accessibility: identifies the location search field", async () => {
+    await mountMap();
+
+    const input = screen.getByLabelText(
+      "Buscar por cidade, bairro ou regi\u00e3o",
+    );
+
+    expect(input).toHaveProp("editable", true);
+
+    expect(input).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+
+    expect(input).toHaveProp("placeholder", "Cidade, bairro ou regi\u00e3o");
+  });
+
+  it("accessibility: exposes pending text search states", async () => {
+    let resolveSearch!: (results: GymSearchResult[]) => void;
+
+    const pendingSearch = new Promise<GymSearchResult[]>((resolve) => {
+      resolveSearch = resolve;
+    });
+
+    mockedSearch.mockReturnValueOnce(pendingSearch);
+
+    await mountMap();
+    await searchForGyms();
+
+    try {
+      expect(mockedSearch).toHaveBeenCalledTimes(1);
+
+      expect(screen.getByLabelText("Buscar academias")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: true, disabled: true }),
+      );
+
+      expect(
+        screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: false, disabled: true }),
+      );
+
+      expect(
+        screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ disabled: true }),
+      );
+    } finally {
+      await act(async () => {
+        resolveSearch(gyms);
+      });
+    }
+
+    await screen.findByTestId("map-marker-Academia Aurora");
+
+    expect(screen.getByLabelText("Buscar academias")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(
+      screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+  });
+
+  it("accessibility: restores search controls after denied location permission", async () => {
+    let resolvePermission!: (permission: { status: string }) => void;
+
+    const pendingPermission = new Promise<{ status: string }>((resolve) => {
+      resolvePermission = resolve;
+    });
+
+    mockedPermissions.mockReturnValueOnce(pendingPermission);
+
+    await mountMap();
+
+    const locationLabel = "Usar minha localiza\u00e7\u00e3o";
+
+    await fireEvent.press(screen.getByLabelText(locationLabel));
+
+    try {
+      expect(mockedPermissions).toHaveBeenCalledTimes(1);
+
+      expect(screen.getByLabelText(locationLabel)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: true, disabled: true }),
+      );
+
+      expect(screen.getByLabelText("Buscar academias")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: false, disabled: true }),
+      );
+
+      expect(
+        screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ disabled: true }),
+      );
+    } finally {
+      await act(async () => {
+        resolvePermission({ status: "denied" });
+      });
+    }
+
+    expect(
+      await screen.findByText(/Permiss\u00e3o de localiza\u00e7\u00e3o negada/),
+    ).toBeTruthy();
+
+    expect(mockedNearby).not.toHaveBeenCalled();
+    expect(mockedCurrentPosition).not.toHaveBeenCalled();
+
+    expect(screen.getByLabelText(locationLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(screen.getByLabelText("Buscar academias")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(
+      screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+  });
+
+  it("accessibility: provides a practical search button touch target", async () => {
+    await mountMap();
+
+    expect(screen.getByLabelText("Buscar academias")).toHaveStyle({
+      width: 48,
+      height: 48,
+    });
+  });
+
   it("nao apresenta a previa antes da selecao", async () => {
     await loadResults();
 
@@ -1240,6 +1392,167 @@ describe("MapScreen - previa de academia selecionada", () => {
 
     await screen.findByLabelText("Selecionar Academia Aurora");
   }
+
+  it("accessibility: identifies distance selection without relying on color", async () => {
+    await loadNearbyResults();
+
+    const options = [
+      ["Todas as dist\u00e2ncias", "Todas"],
+      ["At\u00e9 1 km", "At\u00e9 1 km"],
+      ["At\u00e9 3 km", "At\u00e9 3 km"],
+      ["At\u00e9 5 km", "At\u00e9 5 km"],
+    ] as const;
+
+    function assertSelection(selectedLabel: string): void {
+      for (const [label, visibleText] of options) {
+        const control = screen.getByLabelText(label);
+
+        const selected = label === selectedLabel;
+
+        expect(control).toHaveProp(
+          "accessibilityState",
+          expect.objectContaining({ selected }),
+        );
+
+        expect(control).toHaveTextContent(
+          selected ? `${visibleText} \u2713` : visibleText,
+        );
+
+        if (!selected) {
+          expect(control).not.toHaveTextContent("\u2713");
+        }
+      }
+    }
+
+    assertSelection(options[0][0]);
+
+    for (const [label] of options.slice(1)) {
+      await fireEvent.press(screen.getByLabelText(label));
+
+      assertSelection(label);
+    }
+
+    await fireEvent.press(screen.getByLabelText("Limpar filtros"));
+
+    assertSelection(options[0][0]);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: identifies sort selection without relying on color", async () => {
+    await loadNearbyResults();
+
+    const options = [
+      ["Ordenar por padr\u00e3o", "Padr\u00e3o"],
+      ["Ordenar por dist\u00e2ncia", "Mais pr\u00f3ximas"],
+      ["Ordenar por nome", "Nome A\u2013Z"],
+    ] as const;
+
+    function assertSelection(selectedLabel: string): void {
+      for (const [label, visibleText] of options) {
+        const control = screen.getByLabelText(label);
+
+        const selected = label === selectedLabel;
+
+        expect(control).toHaveProp(
+          "accessibilityState",
+          expect.objectContaining({ selected }),
+        );
+
+        expect(control).toHaveTextContent(
+          selected ? `${visibleText} \u2713` : visibleText,
+        );
+
+        if (!selected) {
+          expect(control).not.toHaveTextContent("\u2713");
+        }
+      }
+    }
+
+    assertSelection(options[0][0]);
+
+    await fireEvent.press(screen.getByLabelText(options[1][0]));
+
+    assertSelection(options[1][0]);
+
+    await fireEvent.press(screen.getByLabelText(options[2][0]));
+
+    assertSelection(options[2][0]);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Atlas",
+      "Selecionar Academia Aurora",
+    ]);
+
+    await fireEvent.press(screen.getByLabelText(options[0][0]));
+
+    assertSelection(options[0][0]);
+
+    expect(getResultOrder()).toEqual([
+      "Selecionar Academia Aurora",
+      "Selecionar Academia Atlas",
+    ]);
+
+    expect(mockedNearby).toHaveBeenCalledTimes(1);
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: synchronizes selected result with map and filters", async () => {
+    await loadResults();
+
+    const aurora = "Selecionar Academia Aurora";
+    const atlas = "Selecionar Academia Atlas";
+
+    function assertSelected(label: string, selected: boolean): void {
+      expect(screen.getByLabelText(label)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected }),
+      );
+    }
+
+    assertSelected(aurora, false);
+    assertSelected(atlas, false);
+
+    await fireEvent.press(screen.getByLabelText(aurora));
+
+    assertSelected(aurora, true);
+    assertSelected(atlas, false);
+
+    expect(
+      screen.getByLabelText("Ver detalhes de Academia Aurora no mapa"),
+    ).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId("map-marker-Academia Atlas"));
+
+    assertSelected(aurora, false);
+    assertSelected(atlas, true);
+
+    expect(
+      screen.getByLabelText("Ver detalhes de Academia Atlas no mapa"),
+    ).toBeTruthy();
+
+    expect(screen.getByLabelText(atlas)).toHaveTextContent(/Selecionada/);
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Filtrar por nome da academia"),
+      "Aurora",
+    );
+
+    expect(screen.queryByLabelText(atlas)).toBeNull();
+
+    assertSelected(aurora, false);
+
+    expect(screen.queryByText("ACADEMIA SELECIONADA")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Limpar filtros"));
+
+    assertSelected(aurora, false);
+    assertSelected(atlas, false);
+
+    expect(mockedSearch).toHaveBeenCalledTimes(1);
+    expect(mockedNearby).not.toHaveBeenCalled();
+  });
 
   it("sorting: hides sorting controls before searching", async () => {
     await mountMap();

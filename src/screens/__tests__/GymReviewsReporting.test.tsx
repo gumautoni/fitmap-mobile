@@ -55,6 +55,8 @@ const mockedReport = reportGymReview as jest.Mock;
 const mockedUpdate = updateGymReview as jest.Mock;
 const mockedTheme = useAppTheme as jest.Mock;
 
+const REPORT_ACTION_LABEL = /^Denunciar avalia\u00e7\u00e3o(?: |$)/;
+
 const ACCESS_TOKEN = "access-token-test";
 const EXTERNAL_GYM_ID = "external-gym-123";
 const INTERNAL_GYM_ID = "internal-gym-123";
@@ -106,9 +108,9 @@ async function renderSection() {
 }
 
 async function openReportForm(): Promise<void> {
-  await screen.findByLabelText("Denunciar avaliação");
+  await screen.findByLabelText(REPORT_ACTION_LABEL);
 
-  await fireEvent.press(screen.getByLabelText("Denunciar avaliação"));
+  await fireEvent.press(screen.getByLabelText(REPORT_ACTION_LABEL));
 
   await screen.findByLabelText("Enviar denúncia");
 }
@@ -149,9 +151,9 @@ describe("GymReviewsSection reporting", () => {
   it("shows reporting only for another user's review", async () => {
     await renderSection();
 
-    expect(await screen.findByLabelText("Denunciar avaliação")).toBeTruthy();
+    expect(await screen.findByLabelText(REPORT_ACTION_LABEL)).toBeTruthy();
 
-    expect(screen.getAllByLabelText("Denunciar avaliação")).toHaveLength(1);
+    expect(screen.getAllByLabelText(REPORT_ACTION_LABEL)).toHaveLength(1);
 
     expect(screen.getByText("Comentário próprio.")).toBeTruthy();
 
@@ -167,7 +169,7 @@ describe("GymReviewsSection reporting", () => {
 
     await screen.findByText("Comentário próprio.");
 
-    expect(screen.queryByLabelText("Denunciar avaliação")).toBeNull();
+    expect(screen.queryByLabelText(REPORT_ACTION_LABEL)).toBeNull();
 
     expect(mockedReport).not.toHaveBeenCalled();
   });
@@ -182,7 +184,7 @@ describe("GymReviewsSection reporting", () => {
 
     expect(screen.queryByLabelText("Enviar denúncia")).toBeNull();
 
-    expect(screen.getByLabelText("Denunciar avaliação")).toBeTruthy();
+    expect(screen.getByLabelText(REPORT_ACTION_LABEL)).toBeTruthy();
 
     expect(mockedReport).not.toHaveBeenCalled();
   });
@@ -214,7 +216,7 @@ describe("GymReviewsSection reporting", () => {
       },
     );
 
-    expect(screen.queryByLabelText("Denunciar avaliação")).toBeNull();
+    expect(screen.queryByLabelText(REPORT_ACTION_LABEL)).toBeNull();
 
     expect(screen.queryByLabelText("Enviar denúncia")).toBeNull();
   });
@@ -238,7 +240,7 @@ describe("GymReviewsSection reporting", () => {
       await screen.findByText("Esta avaliação já foi denunciada por você."),
     ).toBeTruthy();
 
-    expect(screen.queryByLabelText("Denunciar avaliação")).toBeNull();
+    expect(screen.queryByLabelText(REPORT_ACTION_LABEL)).toBeNull();
     expect(screen.queryByLabelText("Enviar denúncia")).toBeNull();
     expect(mockedReport).toHaveBeenCalledTimes(1);
   });
@@ -342,7 +344,7 @@ describe("GymReviewsSection reporting", () => {
       expect(mockedReviews).toHaveBeenCalledTimes(2);
     });
 
-    expect(screen.queryByLabelText("Denunciar avaliação")).toBeNull();
+    expect(screen.queryByLabelText(REPORT_ACTION_LABEL)).toBeNull();
 
     expect(mockedReport).toHaveBeenCalledTimes(1);
   });
@@ -400,7 +402,7 @@ describe("GymReviewsSection reporting", () => {
 
     expect(mockedReport).toHaveBeenCalledTimes(1);
 
-    expect(screen.queryByLabelText("Denunciar avaliação")).toBeNull();
+    expect(screen.queryByLabelText(REPORT_ACTION_LABEL)).toBeNull();
   });
 
   it("isolates submitted reports when navigating between gyms", async () => {
@@ -476,7 +478,7 @@ describe("GymReviewsSection reporting", () => {
 
     expect(screen.queryByText("Denúncia enviada para análise.")).toBeNull();
 
-    expect(screen.getByLabelText("Denunciar avaliação")).toBeTruthy();
+    expect(screen.getByLabelText(REPORT_ACTION_LABEL)).toBeTruthy();
 
     // Retorno a academia A: preservar a denuncia enviada.
     await view.rerender(
@@ -492,9 +494,84 @@ describe("GymReviewsSection reporting", () => {
 
     expect(screen.getByText("Denúncia enviada para análise.")).toBeTruthy();
 
-    expect(screen.queryByLabelText("Denunciar avaliação")).toBeNull();
+    expect(screen.queryByLabelText(REPORT_ACTION_LABEL)).toBeNull();
 
     // Navegar entre academias nao cria denuncias adicionais.
     expect(mockedReport).toHaveBeenCalledTimes(1);
+  });
+  it("accessibility: distinguishes report actions and submits the selected review", async () => {
+    const anotherReview = buildReview(
+      "another-review-789",
+      "Outro comentario de teste.",
+    );
+
+    mockedReviews.mockResolvedValue(
+      buildList([ownReview, otherReview, anotherReview]),
+    );
+
+    mockedReport.mockResolvedValueOnce({
+      id: "report-context-test",
+      reviewId: anotherReview.id,
+      reason: "spam",
+      createdAt: "2026-11-18T12:00:00Z",
+    });
+
+    await renderSection();
+
+    const firstLabel = "Denunciar avalia\u00e7\u00e3o 2 de 3, nota 4 de 5";
+    const secondLabel = "Denunciar avalia\u00e7\u00e3o 3 de 3, nota 4 de 5";
+
+    expect(await screen.findByLabelText(firstLabel)).toBeTruthy();
+    expect(screen.getByLabelText(secondLabel)).toBeTruthy();
+
+    expect(
+      screen.queryByLabelText(
+        "Denunciar avalia\u00e7\u00e3o 1 de 3, nota 4 de 5",
+      ),
+    ).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText(firstLabel));
+
+    expect(screen.getByLabelText(secondLabel)).toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText("Cancelar den\u00fancia"));
+
+    expect(screen.getByLabelText(firstLabel)).not.toBeDisabled();
+    expect(screen.getByLabelText(secondLabel)).not.toBeDisabled();
+
+    expect(mockedReport).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText(secondLabel));
+
+    await selectSpam();
+
+    await fireEvent.press(screen.getByLabelText("Enviar den\u00fancia"));
+
+    expect(
+      await screen.findByText("Den\u00fancia enviada para an\u00e1lise."),
+    ).toBeTruthy();
+
+    expect(mockedReport).toHaveBeenCalledTimes(1);
+
+    expect(mockedReport).toHaveBeenCalledWith(ACCESS_TOKEN, anotherReview.id, {
+      reason: "spam",
+      details: null,
+    });
+
+    expect(screen.queryByLabelText(secondLabel)).toBeNull();
+
+    expect(screen.getByLabelText(firstLabel)).not.toBeDisabled();
+
+    expect(screen.getByText(anotherReview.comment!)).toBeTruthy();
+  });
+
+  it("accessibility: provides a practical report action touch target", async () => {
+    await renderSection();
+
+    expect(await screen.findByLabelText(REPORT_ACTION_LABEL)).toHaveStyle({
+      minHeight: 48,
+    });
+
+    expect(mockedReport).not.toHaveBeenCalled();
   });
 });

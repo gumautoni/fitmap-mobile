@@ -597,6 +597,179 @@ permanecem previstos nas etapas seguintes da ACC-02.
 
 A validação integrada por CI permanece necessária.
 
+## Acessibilidade de academias, favoritos e avaliações (ACC-02.3)
+
+A terceira etapa da ACC-02 complementa as melhorias
+dos formulários, gerenciamento, execução e histórico
+de treinos implementadas nas etapas anteriores.
+
+O escopo contribui para os requisitos NFR-ACC-001,
+NFR-ACC-002 e NFR-ACC-006, com avaliação localizada
+dos requisitos NFR-ACC-004 e NFR-ACC-005.
+
+### Mapa e descoberta de academias
+
+Arquivo envolvido: `src/screens/MapScreen.tsx`.
+
+O campo de busca por cidade, bairro ou região possui
+rótulo acessível explícito e estado de desabilitação.
+
+Os botões de pesquisa e localização atual informam
+seus respectivos estados de processamento e
+desabilitação durante as solicitações existentes.
+
+O botão de pesquisa possui dimensões de 48 por 48
+unidades lógicas.
+
+Os filtros de distância e as opções de ordenação
+preservam seus rótulos acessíveis e o estado
+`selected`, acrescentando um indicador visual
+de confirmação independente de cor.
+
+Os resultados da lista informam o estado `selected`
+da academia correspondente.
+
+A seleção permanece sincronizada com a prévia
+do mapa e respeita os filtros existentes.
+
+A implementação preserva a busca por texto,
+as sugestões de localidade, a geolocalização,
+a ordenação e a identidade dos provedores.
+
+### Detalhes e favoritos
+
+Arquivo envolvido: `src/screens/GymDetailsScreen.tsx`.
+
+Durante a consulta inicial dos favoritos, o botão
+apresenta o rótulo acessível Sincronizando favorito.
+
+As ações de adição e remoção preservam seus rótulos
+durante o processamento e expõem os estados
+acessíveis `busy` e `disabled`.
+
+Uma falha na sincronização mantém a ação desabilitada
+até que o estado dos favoritos seja recuperado.
+
+O botão de recuperação possui dimensões mínimas
+de 48 por 48 unidades lógicas.
+
+A identificação do favorito por provedor e ID externo,
+a remoção pelo ID interno e as ações de rota,
+telefone e site permanecem preservadas.
+
+### Formulários de avaliação e denúncia
+
+Arquivos envolvidos:
+
+* `src/screens/GymReviewForm.tsx`;
+* `src/screens/GymReviewReportForm.tsx`.
+
+Os botões de publicação, edição e envio informam
+estados acessíveis de processamento e desabilitação,
+preservando seus rótulos durante as solicitações.
+
+Os campos de comentário e detalhes da denúncia
+informam explicitamente quando estão desabilitados.
+
+Os motivos de denúncia apresentam um indicador
+visual de confirmação independente de cor,
+preservando o estado `selected`.
+
+As opções de motivo e os botões de envio e
+cancelamento da denúncia possuem altura mínima
+de 48 unidades lógicas.
+
+A descrição textual das estrelas, os limites de
+caracteres e as validações existentes foram preservados.
+
+### Gerenciamento de avaliações
+
+Arquivo envolvido: `src/screens/GymReviewsSection.tsx`.
+
+A confirmação de exclusão informa os estados
+acessíveis `busy` e `disabled`.
+
+Os botões de denúncia identificam a posição da
+avaliação na lista apresentada e sua nota.
+
+O rótulo contextual não expõe identificadores
+internos nem reproduz o conteúdo dos comentários.
+
+Os identificadores utilizados nas solicitações
+ao backend permanecem inalterados.
+
+As ações de edição, exclusão, confirmação,
+cancelamento, denúncia e recuperação possuem
+altura mínima de 48 unidades lógicas.
+
+O botão de recuperação também possui largura
+mínima de 48 unidades lógicas.
+
+A confirmação explícita de exclusão, as regras de
+publicação e edição, o isolamento entre academias
+e o tratamento das denúncias foram preservados.
+
+### Validação
+
+A entrega acrescentou 25 testes automatizados:
+
+* 7 no mapa, busca, filtros e ordenação;
+* 6 nos detalhes e favoritos;
+* 7 nos formulários de avaliação e denúncia;
+* 5 no gerenciamento de avaliações.
+
+Os novos testes incluem acessibilidade e regressão
+funcional, preservando os testes anteriores.
+
+A regressão direcionada aprovou 158 testes
+em 9 suítes.
+
+A regressão mobile completa aprovou 783 testes
+em 50 suítes, com TypeScript, ESLint e Prettier
+aprovados.
+
+Em 18/11/2026, o desenvolvedor confirmou
+30 de 30 verificações físicas no iPhone via Expo Go,
+utilizando o backend local.
+
+A validação incluiu busca, mapa, favoritos,
+publicação, edição, exclusão, denúncias sintéticas,
+VoiceOver e ampliação de texto.
+
+A interação com os marcadores nativos do mapa
+foi aprovada na configuração física utilizada.
+
+Os serviços mobile, contratos HTTP, autenticação,
+persistência, dependências e identidade Orange Fusion
+permaneceram inalterados.
+
+### Limitações
+
+Os resultados representam os cenários automatizados
+e a configuração física utilizada pelo desenvolvedor.
+
+O tamanho configurado nos controles não constitui
+medição física exaustiva de todas as telas.
+
+A validação em Expo Go não constitui certificação
+integral de acessibilidade ou conformidade WCAG,
+nem comprova funcionamento em builds nativos.
+
+A validação física no Android permanece pendente.
+
+O aviso intermitente React `act` do VirtualizedList
+na suíte `MapGymPreview.test.tsx` permanece registrado
+para investigação na QUALITY-01.
+
+Os demais módulos e as verificações transversais
+permanecem no escopo das próximas etapas da ACC-02.
+
+A integração permanece condicionada à resolução
+do bloqueio de segurança da Issue #84 e à aprovação
+dos checks obrigatórios de CI.
+
+---
+
 ---
 
 ## Filtros de descoberta de academias
