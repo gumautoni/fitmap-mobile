@@ -201,6 +201,35 @@ describe("GymDetailsScreen - accessibility", () => {
     jest.restoreAllMocks();
   });
 
+  it("accessibility: keeps long gym address and website readable", async () => {
+    const address =
+      "Avenida das Flores, 1234, bloco B, segundo andar, bairro Jardim Central";
+
+    const website =
+      "https://academia.example.com/unidades/jardim-central/informacoes";
+
+    mockedDetails.mockResolvedValueOnce({
+      ...gym,
+      address,
+      website,
+    });
+
+    await renderDetails();
+    await waitForReady(ADD_LABEL);
+
+    const addresses = screen.getAllByText(address);
+
+    expect(addresses).toHaveLength(2);
+
+    for (const addressText of addresses) {
+      expect(addressText.props.numberOfLines).toBeUndefined();
+    }
+
+    expect(screen.getByText(website).props.numberOfLines).toBeUndefined();
+
+    expect(screen.getByLabelText("Abrir site da academia")).not.toBeDisabled();
+  });
+
   it("preserves gym details, external actions and map navigation", async () => {
     const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
 

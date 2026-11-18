@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react-native";
 import type { ComponentProps, ContextType } from "react";
 
@@ -230,6 +231,40 @@ describe("ExerciseCatalogScreen - intelligent catalog search", () => {
     expect(
       screen.queryByLabelText("Adicionar Supino reto com barra"),
     ).toBeNull();
+  });
+
+  it("accessibility: keeps long catalog suggestions readable", async () => {
+    const longName =
+      "Remada especial unilateral com apoio e movimento controlado";
+
+    mockedAvailable.mockResolvedValue([
+      ...exercises,
+      {
+        ...exercises[0],
+        id: "long-suggestion",
+        name: longName,
+      },
+    ]);
+
+    await renderCatalog();
+    await openCustomForm();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Nome do exerc\u00edcio personalizado"),
+      "Remada especial",
+    );
+
+    const suggestion = screen.getByRole("button", {
+      name: `Adicionar sugest\u00e3o ${longName}`,
+    });
+
+    const suggestionText = within(suggestion).getByText(longName);
+
+    expect(suggestionText.props.numberOfLines).toBeUndefined();
+    expect(suggestion).toHaveStyle({ minHeight: 48 });
+    expect(suggestion).not.toBeDisabled();
+    expect(mockedAdd).not.toHaveBeenCalled();
+    expect(mockedCreate).not.toHaveBeenCalled();
   });
 
   it("limits custom exercise suggestions to five", async () => {

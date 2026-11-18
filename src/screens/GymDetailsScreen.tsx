@@ -428,7 +428,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
             color={theme.colors.heroTextMuted}
           />
 
-          <Text style={styles.heroAddress} numberOfLines={3}>
+          <Text style={styles.heroAddress}>
             {gym.address ?? "Endereço não informado"}
           </Text>
         </View>
@@ -822,7 +822,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
           <View style={styles.infoCopy}>
             <Text style={styles.infoLabel}>Site</Text>
 
-            <Text style={styles.infoValue} numberOfLines={2}>
+            <Text style={styles.infoValue}>
               {gym.website ?? "Não informado"}
             </Text>
           </View>
