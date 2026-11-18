@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import { ApiClientError } from "../../services/apiClient";
 import {
@@ -382,6 +382,95 @@ describe("GymReviewsSection deletion", () => {
     expect(
       screen.queryByLabelText("Confirmar exclusão de avaliação"),
     ).toBeNull();
+
+    expect(mockedRemove).not.toHaveBeenCalled();
+  });
+  it("accessibility: exposes pending deletion and restores controls after failure", async () => {
+    let rejectDeletion!: (reason: unknown) => void;
+
+    const pending = new Promise<void>((_resolve, reject) => {
+      rejectDeletion = reject;
+    });
+
+    mockedRemove.mockReturnValueOnce(pending);
+
+    await renderSection();
+    await openDeleteConfirmation();
+
+    const confirmLabel = "Confirmar exclus\u00e3o de avalia\u00e7\u00e3o";
+    const cancelLabel = "Cancelar exclus\u00e3o de avalia\u00e7\u00e3o";
+
+    await fireEvent.press(screen.getByLabelText(confirmLabel));
+
+    try {
+      expect(screen.getByLabelText(confirmLabel)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: true, disabled: true }),
+      );
+
+      expect(screen.getByLabelText(cancelLabel)).toBeDisabled();
+
+      await fireEvent.press(screen.getByLabelText(confirmLabel));
+      await fireEvent.press(screen.getByLabelText(cancelLabel));
+
+      expect(mockedRemove).toHaveBeenCalledTimes(1);
+
+      expect(mockedRemove).toHaveBeenCalledWith(ACCESS_TOKEN, "review-123");
+    } finally {
+      await act(async () => {
+        rejectDeletion(
+          new ApiClientError(
+            "Service unavailable.",
+            503,
+            "service_unavailable",
+          ),
+        );
+      });
+    }
+
+    expect(
+      await screen.findByText(
+        "N\u00e3o foi poss\u00edvel excluir sua avalia\u00e7\u00e3o. Tente novamente.",
+      ),
+    ).toBeTruthy();
+
+    expect(screen.getByLabelText(confirmLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    expect(screen.getByLabelText(cancelLabel)).not.toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText(cancelLabel));
+
+    expect(
+      screen.getByLabelText("Excluir minha avalia\u00e7\u00e3o"),
+    ).toBeTruthy();
+
+    expect(mockedRemove).toHaveBeenCalledTimes(1);
+    expect(mockedReviews).toHaveBeenCalledTimes(1);
+  });
+
+  it("accessibility: provides practical own-review action touch targets", async () => {
+    await renderSection();
+
+    expect(
+      await screen.findByLabelText("Editar minha avalia\u00e7\u00e3o"),
+    ).toHaveStyle({ minHeight: 48 });
+
+    expect(
+      screen.getByLabelText("Excluir minha avalia\u00e7\u00e3o"),
+    ).toHaveStyle({ minHeight: 48 });
+
+    await openDeleteConfirmation();
+
+    expect(
+      screen.getByLabelText("Cancelar exclus\u00e3o de avalia\u00e7\u00e3o"),
+    ).toHaveStyle({ minHeight: 48 });
+
+    expect(
+      screen.getByLabelText("Confirmar exclus\u00e3o de avalia\u00e7\u00e3o"),
+    ).toHaveStyle({ minHeight: 48 });
 
     expect(mockedRemove).not.toHaveBeenCalled();
   });
