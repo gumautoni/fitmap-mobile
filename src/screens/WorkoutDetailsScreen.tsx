@@ -1152,8 +1152,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     orderButton: {
-      width: 42,
-      height: 42,
+      width: 48,
+      height: 48,
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,
@@ -1163,8 +1163,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     removeButton: {
-      width: 42,
-      height: 42,
+      width: 48,
+      height: 48,
       alignItems: "center",
       justifyContent: "center",
       borderWidth: 1,

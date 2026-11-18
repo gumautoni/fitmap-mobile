@@ -205,6 +205,13 @@ describe("Workout list accessibility - ACC-02.2", () => {
     jest.restoreAllMocks();
   });
 
+  it("accessibility: provides practical restore touch targets", async () => {
+    await renderWorkouts();
+
+    expect(restoreButton()).toHaveStyle({ minHeight: 48 });
+    expect(otherRestoreButton()).toHaveStyle({ minHeight: 48 });
+  });
+
   it("preserves accessible navigation for active workouts", async () => {
     await renderWorkouts();
 

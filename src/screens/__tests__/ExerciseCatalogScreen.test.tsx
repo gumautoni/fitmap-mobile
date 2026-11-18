@@ -178,6 +178,30 @@ describe("ExerciseCatalogScreen - intelligent catalog search", () => {
     });
   });
 
+  it("accessibility: provides practical catalog touch targets", async () => {
+    await renderCatalog();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Criar exerc\u00edcio personalizado",
+      }),
+    ).toHaveStyle({ width: 48, height: 48 });
+
+    expect(
+      screen.getByRole("button", {
+        name: "Adicionar Puxada frontal na polia alta",
+      }),
+    ).toHaveStyle({ width: 48, height: 48 });
+
+    await openCustomForm();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Cancelar cria\u00e7\u00e3o de exerc\u00edcio personalizado",
+      }),
+    ).toHaveStyle({ width: 48, height: 48 });
+  });
+
   it("filters Portuguese exercise names without accents", async () => {
     await renderCatalog();
 

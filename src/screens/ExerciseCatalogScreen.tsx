@@ -876,8 +876,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     customToggleButton: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: 14,
@@ -1174,8 +1174,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     addButton: {
-      width: 42,
-      height: 42,
+      width: 48,
+      height: 48,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: 14,
