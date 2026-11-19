@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 import * as ImagePicker from "expo-image-picker";
-import { Alert } from "react-native";
+import { AccessibilityInfo, Alert } from "react-native";
 
 import ProgressPhotoCapture from "../ProgressPhotoCapture";
 
@@ -75,9 +75,35 @@ async function chooseSource(
   });
 }
 
+function getPreviewModal() {
+  const heading = screen.getByRole("header", {
+    name: "Confirmar foto de progresso",
+  });
+
+  let node = heading.parent;
+
+  while (node && typeof node.props.animationType !== "string") {
+    node = node.parent;
+  }
+
+  if (!node) {
+    throw new Error("Native preview modal was not found.");
+  }
+
+  return node;
+}
+
 describe("ProgressPhotoCapture", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
+    jest
+      .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+      .mockResolvedValue(true);
+
+    jest
+      .spyOn(AccessibilityInfo, "addEventListener")
+      .mockReturnValue({ remove: jest.fn() });
 
     cameraPermission.mockResolvedValue({ granted: true });
     galleryPermission.mockResolvedValue({ granted: true });
@@ -91,6 +117,11 @@ describe("ProgressPhotoCapture", () => {
       canceled: false,
       assets: [galleryAsset],
     });
+  });
+
+  afterEach(() => {
+    jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockRestore();
+    jest.mocked(AccessibilityInfo.addEventListener).mockRestore();
   });
 
   it("oferece camera e galeria sem iniciar upload", async () => {
@@ -650,4 +681,56 @@ describe("ProgressPhotoCapture", () => {
     expect(onSave).toHaveBeenCalledWith(cameraAsset);
     expect(onSave).not.toHaveBeenCalledWith(galleryAsset);
   });
+
+  it.each([
+    [true, "Tirar foto"],
+    [false, "Tirar foto"],
+    [true, "Escolher da galeria"],
+    [false, "Escolher da galeria"],
+  ] as const)(
+    "accessibility: respects reducedMotion=%s when selecting %s",
+    async (reduceMotion, option) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      const onSave = await mount();
+
+      await chooseSource(option);
+
+      const asset = option === "Tirar foto" ? cameraAsset : galleryAsset;
+
+      const previewLabel = "Pr\u00e9via da foto de progresso";
+
+      const photo = await screen.findByLabelText(previewLabel);
+
+      expect(photo).toHaveProp("source", { uri: asset.uri });
+      expect(onSave).not.toHaveBeenCalled();
+
+      const animationType = getPreviewModal().props.animationType;
+
+      if (option === "Tirar foto") {
+        await fireEvent.press(
+          screen.getByLabelText("Salvar foto de progresso"),
+        );
+
+        await waitFor(() => {
+          expect(onSave).toHaveBeenCalledTimes(1);
+          expect(onSave).toHaveBeenCalledWith(cameraAsset);
+          expect(screen.queryByLabelText(previewLabel)).toBeNull();
+        });
+      } else {
+        await fireEvent.press(screen.getByLabelText("Descartar foto"));
+
+        expect(screen.queryByLabelText(previewLabel)).toBeNull();
+        expect(onSave).not.toHaveBeenCalled();
+      }
+
+      expect(
+        screen.getByLabelText("Adicionar foto de progresso"),
+      ).not.toBeDisabled();
+
+      expect(animationType).toBe(reduceMotion ? "none" : "fade");
+    },
+  );
 });
