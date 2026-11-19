@@ -11,7 +11,7 @@ import {
 } from "../authFormValidation";
 
 const VALID_PASSWORD = "Aa1!bcde";
-const register = (password, confirmation = password) =>
+const register = (password: string, confirmation = password) =>
   validateRegistrationForm(
     "Ana Silva",
     "ana@example.com",
