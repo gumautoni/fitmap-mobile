@@ -413,6 +413,7 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
         style={({ pressed }) => [
           monthly ? styles.monthDay : styles.weekDay,
           pressed && styles.pressed,
+          pressed && !reduceMotion && styles.pressedMotion,
         ]}
       >
         {!monthly ? (
@@ -498,7 +499,11 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
         }
         accessibilityState={{ expanded }}
         onPress={toggleExpanded}
-        style={({ pressed }) => [styles.header, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.header,
+          pressed && styles.pressed,
+          pressed && !reduceMotion && styles.pressedMotion,
+        ]}
       >
         <View style={styles.headerText}>
           <View style={styles.titleRow}>
@@ -726,6 +731,7 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
                           style={({ pressed }) => [
                             styles.sessionRow,
                             pressed && styles.pressed,
+                            pressed && !reduceMotion && styles.pressedMotion,
                           ]}
                         >
                           <View style={styles.sessionIcon}>
@@ -1267,6 +1273,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     pressed: {
       opacity: 0.77,
+    },
+    pressedMotion: {
       transform: [{ scale: 0.985 }],
     },
   });
