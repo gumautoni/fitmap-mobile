@@ -1,5 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
-import React from "react";
+import React, { type ComponentType, type ContextType } from "react";
 import {
   act,
   fireEvent,
@@ -9,11 +8,15 @@ import {
 } from "@testing-library/react-native";
 
 import { AuthContext } from "../../context/AuthContext";
+import type {
+  AuthStackParamList,
+  AuthStackScreenProps,
+} from "../../navigation/types";
 import LoginScreen from "../LoginScreen";
 import RegisterScreen from "../RegisterScreen";
 
 jest.mock("../../context/AuthContext", () => {
-  const React = jest.requireActual("react");
+  const React = jest.requireActual<typeof import("react")>("react");
 
   return {
     AuthContext: React.createContext(null),
@@ -21,12 +24,14 @@ jest.mock("../../context/AuthContext", () => {
 });
 
 jest.mock("../../components/auth/AuthScreenShell", () => {
-  const React = jest.requireActual("react");
-  const { View } = jest.requireActual("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
     __esModule: true,
-    default: ({ children }) => React.createElement(View, null, children),
+    default: ({ children }: { children: import("react").ReactNode }) =>
+      React.createElement(View, null, children),
   };
 });
 
@@ -42,11 +47,13 @@ jest.mock("lucide-react-native", () => ({
 }));
 
 jest.mock("expo-linear-gradient", () => {
-  const React = jest.requireActual("react");
-  const { View } = jest.requireActual("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
-    LinearGradient: ({ children }) => React.createElement(View, null, children),
+    LinearGradient: ({ children }: { children: import("react").ReactNode }) =>
+      React.createElement(View, null, children),
   };
 });
 
@@ -64,36 +71,78 @@ const LEGACY_PASSWORD = "senha";
 const EMAIL = "pessoa@example.com";
 const NAME = "Ana Silva";
 
-function deferred() {
-  let resolve;
-  let reject;
+type AuthValue = NonNullable<ContextType<typeof AuthContext>>;
+type AuthOverrides = Partial<Pick<AuthValue, "login" | "register">>;
 
-  const promise = new Promise((onResolve, onReject) => {
-    resolve = onResolve;
+type AuthRoute = keyof AuthStackParamList;
+
+type NavigationMock = {
+  navigate: jest.Mock<void, [AuthRoute]>;
+};
+
+function makeAuth(overrides: AuthOverrides): AuthValue {
+  return {
+    user: null,
+    accessToken: null,
+    loading: false,
+    login: jest
+      .fn<Promise<void>, Parameters<AuthValue["login"]>>()
+      .mockResolvedValue(undefined),
+    register: jest
+      .fn<Promise<void>, Parameters<AuthValue["register"]>>()
+      .mockResolvedValue(undefined),
+    logout: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    refreshAccessToken: jest.fn<Promise<string>, []>(),
+    runAuthenticatedRequest: async () => {
+      throw new Error("Unexpected authenticated request in auth screen test.");
+    },
+    updateAuthenticatedUser: jest.fn<
+      void,
+      Parameters<AuthValue["updateAuthenticatedUser"]>
+    >(),
+    ...overrides,
+  };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (reason: Error) => void;
+
+  const promise = new Promise<void>((onResolve, onReject) => {
+    resolve = () => onResolve();
     reject = onReject;
   });
 
   return { promise, resolve, reject };
 }
 
-async function mountScreen(Screen, overrides = {}) {
-  const auth = {
-    login: jest.fn().mockResolvedValue(undefined),
-    register: jest.fn().mockResolvedValue(undefined),
-    ...overrides,
+async function mountScreen<R extends AuthRoute>(
+  Screen: ComponentType<AuthStackScreenProps<R>>,
+  routeName: R,
+  overrides: AuthOverrides = {},
+) {
+  const navigation: NavigationMock = {
+    navigate: jest.fn<void, [AuthRoute]>(),
   };
 
-  const navigation = {
-    navigate: jest.fn(),
+  const auth = makeAuth(overrides);
+
+  // Partial navigation mock is isolated at the test boundary.
+  const props: AuthStackScreenProps<R> = {
+    navigation: navigation as unknown as AuthStackScreenProps<R>["navigation"],
+    route: {
+      key: `auth-test-${routeName}`,
+      name: routeName,
+    } as AuthStackScreenProps<R>["route"],
   };
 
   await render(
     <AuthContext.Provider value={auth}>
-      <Screen navigation={navigation} />
+      <Screen {...props} />
     </AuthContext.Provider>,
   );
 
-  return { auth, navigation };
+  return { navigation, auth };
 }
 
 async function fillLogin() {
@@ -124,7 +173,7 @@ async function fillRegister(confirmation = PASSWORD) {
   );
 }
 
-function expectFieldsDisabled(labels, disabled) {
+function expectFieldsDisabled(labels: readonly string[], disabled: boolean) {
   for (const label of labels) {
     const field = screen.getByLabelText(label);
 
@@ -137,7 +186,7 @@ function expectFieldsDisabled(labels, disabled) {
   }
 }
 
-function expectSubmitState(label, busy) {
+function expectSubmitState(label: string, busy: boolean) {
   expect(screen.getByLabelText(label)).toHaveProp(
     "accessibilityState",
     expect.objectContaining({
@@ -149,7 +198,7 @@ function expectSubmitState(label, busy) {
 
 describe("Auth screens accessibility", () => {
   it("preserves login validation without submitting invalid fields", async () => {
-    const { auth } = await mountScreen(LoginScreen);
+    const { auth } = await mountScreen(LoginScreen, "Login");
 
     await fireEvent.press(screen.getByLabelText(LOGIN_ACTION));
 
@@ -170,7 +219,7 @@ describe("Auth screens accessibility", () => {
   });
 
   it("preserves registration validation for mismatched passwords", async () => {
-    const { auth } = await mountScreen(RegisterScreen);
+    const { auth } = await mountScreen(RegisterScreen, "Cadastro");
 
     await fillRegister("Aa1!different");
 
@@ -188,7 +237,7 @@ describe("Auth screens accessibility", () => {
   });
 
   it("preserves accessible password requirement descriptions", async () => {
-    await mountScreen(RegisterScreen);
+    await mountScreen(RegisterScreen, "Cadastro");
 
     await fireEvent.changeText(screen.getByLabelText("Senha"), "abc");
 
@@ -231,11 +280,11 @@ describe("Auth screens accessibility", () => {
     const request = deferred();
 
     const login = jest
-      .fn()
+      .fn<Promise<void>, Parameters<AuthValue["login"]>>()
       .mockImplementationOnce(() => request.promise)
       .mockResolvedValue(undefined);
 
-    await mountScreen(LoginScreen, { login });
+    await mountScreen(LoginScreen, "Login", { login });
 
     await fillLogin();
 
@@ -293,11 +342,11 @@ describe("Auth screens accessibility", () => {
     const request = deferred();
 
     const register = jest
-      .fn()
+      .fn<Promise<void>, Parameters<AuthValue["register"]>>()
       .mockImplementationOnce(() => request.promise)
       .mockResolvedValue(undefined);
 
-    await mountScreen(RegisterScreen, { register });
+    await mountScreen(RegisterScreen, "Cadastro", { register });
 
     await fillRegister();
 
@@ -356,7 +405,7 @@ describe("Auth screens accessibility", () => {
   });
 
   it("accessibility: identifies and toggles registration passwords independently", async () => {
-    await mountScreen(RegisterScreen);
+    await mountScreen(RegisterScreen, "Cadastro");
 
     await fillRegister();
 

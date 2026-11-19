@@ -1,6 +1,5 @@
-import { describe, expect, it, jest } from "@jest/globals";
-import React from "react";
-import { AccessibilityInfo, StyleSheet } from "react-native";
+import React, { type ComponentType, type ContextType } from "react";
+import { AccessibilityInfo, StyleSheet, type ViewStyle } from "react-native";
 import {
   act,
   fireEvent,
@@ -11,12 +10,16 @@ import {
 
 import AuthButton from "../../components/auth/AuthButton";
 import { AuthContext } from "../../context/AuthContext";
+import type {
+  AuthStackParamList,
+  AuthStackScreenProps,
+} from "../../navigation/types";
 import LoginScreen from "../LoginScreen";
 import RegisterScreen from "../RegisterScreen";
 import WelcomeScreen from "../WelcomeScreen";
 
 jest.mock("../../context/AuthContext", () => {
-  const React = jest.requireActual("react");
+  const React = jest.requireActual<typeof import("react")>("react");
 
   return {
     AuthContext: React.createContext(null),
@@ -25,7 +28,10 @@ jest.mock("../../context/AuthContext", () => {
 
 jest.mock("../../theme/ThemeProvider", () => ({
   useAppTheme: () => ({
-    theme: jest.requireActual("../../theme/themes").lightTheme,
+    theme:
+      jest.requireActual<typeof import("../../theme/themes")>(
+        "../../theme/themes",
+      ).lightTheme,
   }),
 }));
 
@@ -35,22 +41,32 @@ jest.mock("../../components/FitMapBrand", () => ({
 }));
 
 jest.mock("../../components/auth/AuthBackground", () => {
-  const React = jest.requireActual("react");
-  const { View } = jest.requireActual("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
     __esModule: true,
-    default: ({ children }) => React.createElement(View, null, children),
+    default: ({ children }: { children: import("react").ReactNode }) =>
+      React.createElement(View, null, children),
   };
 });
 
 jest.mock("react-native-safe-area-context", () => {
-  const React = jest.requireActual("react");
-  const { View } = jest.requireActual("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
-    SafeAreaView: ({ children, style }) =>
-      React.createElement(View, { style }, children),
+    SafeAreaView: ({
+      children,
+      style,
+    }: {
+      children: import("react").ReactNode;
+      style?: import("react-native").StyleProp<
+        import("react-native").ViewStyle
+      >;
+    }) => React.createElement(View, { style }, children),
   };
 });
 
@@ -70,11 +86,13 @@ jest.mock("lucide-react-native", () => ({
 }));
 
 jest.mock("expo-linear-gradient", () => {
-  const React = jest.requireActual("react");
-  const { View } = jest.requireActual("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
-    LinearGradient: ({ children }) => React.createElement(View, null, children),
+    LinearGradient: ({ children }: { children: import("react").ReactNode }) =>
+      React.createElement(View, null, children),
   };
 });
 
@@ -82,44 +100,88 @@ const BACK_LABEL = "Voltar para boas-vindas";
 const LOGIN_ACTION = "Entrar na minha conta";
 const REGISTER_ACTION = "Criar minha conta";
 
-function deferred() {
-  let resolve;
-  let reject;
+type AuthValue = NonNullable<ContextType<typeof AuthContext>>;
+type AuthOverrides = Partial<Pick<AuthValue, "login" | "register">>;
 
-  const promise = new Promise((onResolve, onReject) => {
-    resolve = onResolve;
+type AuthRoute = keyof AuthStackParamList;
+
+type NavigationMock = {
+  navigate: jest.Mock<void, [AuthRoute]>;
+};
+
+function makeAuth(overrides: AuthOverrides): AuthValue {
+  return {
+    user: null,
+    accessToken: null,
+    loading: false,
+    login: jest
+      .fn<Promise<void>, Parameters<AuthValue["login"]>>()
+      .mockResolvedValue(undefined),
+    register: jest
+      .fn<Promise<void>, Parameters<AuthValue["register"]>>()
+      .mockResolvedValue(undefined),
+    logout: jest.fn<Promise<void>, []>().mockResolvedValue(undefined),
+    refreshAccessToken: jest.fn<Promise<string>, []>(),
+    runAuthenticatedRequest: async () => {
+      throw new Error("Unexpected authenticated request in auth screen test.");
+    },
+    updateAuthenticatedUser: jest.fn<
+      void,
+      Parameters<AuthValue["updateAuthenticatedUser"]>
+    >(),
+    ...overrides,
+  };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  let reject!: (reason: Error) => void;
+
+  const promise = new Promise<void>((onResolve, onReject) => {
+    resolve = () => onResolve();
     reject = onReject;
   });
 
   return { promise, resolve, reject };
 }
 
-async function mountScreen(Screen, overrides = {}) {
-  const navigation = { navigate: jest.fn() };
+async function mountScreen<R extends AuthRoute>(
+  Screen: ComponentType<AuthStackScreenProps<R>>,
+  routeName: R,
+  overrides: AuthOverrides = {},
+) {
+  const navigation: NavigationMock = {
+    navigate: jest.fn<void, [AuthRoute]>(),
+  };
 
-  const auth = {
-    login: jest.fn().mockResolvedValue(undefined),
-    register: jest.fn().mockResolvedValue(undefined),
-    ...overrides,
+  const auth = makeAuth(overrides);
+
+  // Partial navigation mock is isolated at the test boundary.
+  const props: AuthStackScreenProps<R> = {
+    navigation: navigation as unknown as AuthStackScreenProps<R>["navigation"],
+    route: {
+      key: `auth-test-${routeName}`,
+      name: routeName,
+    } as AuthStackScreenProps<R>["route"],
   };
 
   await render(
     <AuthContext.Provider value={auth}>
-      <Screen navigation={navigation} />
+      <Screen {...props} />
     </AuthContext.Provider>,
   );
 
   return { navigation, auth };
 }
 
-function expectTouchTarget(label) {
+function expectTouchTarget(label: string) {
   expect(screen.getByRole("button", { name: label })).toHaveStyle({
     minHeight: 48,
     minWidth: 48,
   });
 }
 
-function expectNavigationState(label, disabled) {
+function expectNavigationState(label: string, disabled: boolean) {
   const button = screen.getByRole("button", { name: label });
 
   expect(button).toHaveProp(
@@ -134,7 +196,11 @@ function expectNavigationState(label, disabled) {
   }
 }
 
-async function verifyNavigation(navigation, footer, destination) {
+async function verifyNavigation(
+  navigation: NavigationMock,
+  footer: string,
+  destination: AuthRoute,
+) {
   await fireEvent.press(screen.getByRole("button", { name: BACK_LABEL }));
 
   expect(navigation.navigate).toHaveBeenCalledWith("BoasVindas");
@@ -146,23 +212,35 @@ async function verifyNavigation(navigation, footer, destination) {
   expect(navigation.navigate).toHaveBeenCalledTimes(2);
 }
 
-async function verifyPendingNavigation({
+type PendingNavigationOptions<R extends AuthRoute> = {
+  Screen: ComponentType<AuthStackScreenProps<R>>;
+  routeName: R;
+  method: "login" | "register";
+  action: string;
+  footer: string;
+  destination: AuthRoute;
+  fields: [string, string][];
+  args: string[];
+};
+
+async function verifyPendingNavigation<R extends AuthRoute>({
   Screen,
+  routeName,
   method,
   action,
   footer,
   destination,
   fields,
   args,
-}) {
+}: PendingNavigationOptions<R>) {
   const request = deferred();
 
   const submit = jest
-    .fn()
+    .fn<Promise<void>, string[]>()
     .mockImplementationOnce(() => request.promise)
     .mockResolvedValue(undefined);
 
-  const { navigation } = await mountScreen(Screen, {
+  const { navigation } = await mountScreen(Screen, routeName, {
     [method]: submit,
   });
 
@@ -228,13 +306,13 @@ async function verifyPendingNavigation({
   await verifyNavigation(navigation, footer, destination);
 }
 
-async function pressAndReadFeedback(name, opacity) {
+async function pressAndReadFeedback(name: string, opacity: number) {
   const button = screen.getByRole("button", { name });
-  const initial = StyleSheet.flatten(button.props.style);
+  const initial = StyleSheet.flatten<ViewStyle>(button.props.style);
 
   expect(initial?.opacity).not.toBe(opacity);
 
-  let feedback;
+  const observed: { feedback?: Pick<ViewStyle, "opacity" | "transform"> } = {};
 
   const user = userEvent.setup({
     advanceTimers: (delay) => {
@@ -243,9 +321,9 @@ async function pressAndReadFeedback(name, opacity) {
       }
 
       const pressed = screen.getByRole("button", { name });
-      const style = StyleSheet.flatten(pressed.props.style);
+      const style = StyleSheet.flatten<ViewStyle>(pressed.props.style);
 
-      feedback = {
+      observed.feedback = {
         opacity: style?.opacity,
         transform: style?.transform,
       };
@@ -254,16 +332,16 @@ async function pressAndReadFeedback(name, opacity) {
 
   await user.press(button);
 
-  if (!feedback) {
+  if (!observed.feedback) {
     throw new Error("Pressed feedback was not observed.");
   }
 
-  return feedback;
+  return observed.feedback;
 }
 
 describe("Auth navigation accessibility", () => {
   it("preserves welcome actions and their touch targets", async () => {
-    const { navigation } = await mountScreen(WelcomeScreen);
+    const { navigation } = await mountScreen(WelcomeScreen, "BoasVindas");
 
     const create = screen.getByRole("button", {
       name: "Criar conta no FitMap",
@@ -288,7 +366,7 @@ describe("Auth navigation accessibility", () => {
   });
 
   it("accessibility: preserves login navigation with practical touch targets", async () => {
-    const { navigation } = await mountScreen(LoginScreen);
+    const { navigation } = await mountScreen(LoginScreen, "Login");
 
     await verifyNavigation(navigation, "Criar conta", "Cadastro");
 
@@ -297,7 +375,7 @@ describe("Auth navigation accessibility", () => {
   });
 
   it("accessibility: preserves registration navigation with practical touch targets", async () => {
-    const { navigation } = await mountScreen(RegisterScreen);
+    const { navigation } = await mountScreen(RegisterScreen, "Cadastro");
 
     await verifyNavigation(navigation, "Ir para Login", "Login");
 
@@ -308,6 +386,7 @@ describe("Auth navigation accessibility", () => {
   it("accessibility: disables login navigation while pending and restores it after failure", async () => {
     await verifyPendingNavigation({
       Screen: LoginScreen,
+      routeName: "Login",
       method: "login",
       action: LOGIN_ACTION,
       footer: "Criar conta",
@@ -323,6 +402,7 @@ describe("Auth navigation accessibility", () => {
   it("accessibility: disables registration navigation while pending and restores it after failure", async () => {
     await verifyPendingNavigation({
       Screen: RegisterScreen,
+      routeName: "Cadastro",
       method: "register",
       action: REGISTER_ACTION,
       footer: "Ir para Login",
@@ -349,7 +429,7 @@ describe("Auth navigation accessibility", () => {
         .mockReturnValue({ remove: jest.fn() });
 
       try {
-        const onPress = jest.fn();
+        const onPress = jest.fn<void, []>();
 
         const view = await render(
           <AuthButton title="Confirmar" onPress={onPress} />,
@@ -361,7 +441,7 @@ describe("Auth navigation accessibility", () => {
 
         await view.unmount();
 
-        const { navigation } = await mountScreen(WelcomeScreen);
+        const { navigation } = await mountScreen(WelcomeScreen, "BoasVindas");
 
         const create = await pressAndReadFeedback("Criar conta no FitMap", 0.8);
 
