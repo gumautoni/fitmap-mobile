@@ -2,6 +2,7 @@ import { lightColors as authColors } from "../../theme/themes";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight } from "lucide-react-native";
 import React from "react";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
 import {
   ActivityIndicator,
   Pressable,
@@ -16,6 +17,7 @@ export default function AuthButton({
   loading = false,
   disabled = false,
 }) {
+  const reduceMotion = useReducedMotion();
   const unavailable = disabled || loading;
 
   return (
@@ -28,6 +30,7 @@ export default function AuthButton({
       style={({ pressed }) => [
         styles.pressable,
         pressed && !unavailable && styles.pressed,
+        pressed && !unavailable && !reduceMotion && styles.pressedMotion,
         unavailable && styles.disabled,
       ]}
     >
@@ -66,6 +69,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   icon: { position: "absolute", right: 18 },
-  pressed: { opacity: 0.84, transform: [{ scale: 0.995 }] },
+  pressed: { opacity: 0.84 },
+  pressedMotion: { transform: [{ scale: 0.995 }] },
   disabled: { opacity: 0.65 },
 });
