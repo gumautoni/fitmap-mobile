@@ -3,10 +3,17 @@ import {
   fireEvent,
   render,
   screen,
+  userEvent,
   waitFor,
 } from "@testing-library/react-native";
 import type { ContextType } from "react";
-import { AccessibilityInfo, LayoutAnimation } from "react-native";
+import {
+  AccessibilityInfo,
+  LayoutAnimation,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
@@ -215,6 +222,43 @@ function summary(days: number, workouts: number): RegExp {
   return new RegExp(
     `^Resumo de .+: ${days} dias ativos e ${workouts} treinos conclu`,
   );
+}
+
+async function pressAndReadFeedback(name: string | RegExp) {
+  const button = screen.getByRole("button", { name });
+  const initial = StyleSheet.flatten(
+    button.props.style as StyleProp<ViewStyle>,
+  );
+
+  expect(initial?.opacity).not.toBe(0.77);
+
+  let feedback: Pick<ViewStyle, "opacity" | "transform"> | undefined;
+
+  const user = userEvent.setup({
+    advanceTimers: (delay) => {
+      if (delay <= 0) {
+        return;
+      }
+
+      const pressed = screen.getByRole("button", { name });
+      const style = StyleSheet.flatten(
+        pressed.props.style as StyleProp<ViewStyle>,
+      );
+
+      feedback = {
+        opacity: style?.opacity,
+        transform: style?.transform,
+      };
+    },
+  });
+
+  await user.press(button);
+
+  if (!feedback) {
+    throw new Error("Pressed feedback was not observed.");
+  }
+
+  return feedback;
 }
 
 describe("PERF-03 WorkoutActivityCalendar pagination", () => {
@@ -552,6 +596,38 @@ describe("PERF-03 WorkoutActivityCalendar pagination", () => {
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(screen.queryByLabelText(RETRY)).toBeNull();
     expect(mockedLegacy).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: lets the month title use available space without shrinking controls", async () => {
+    await mountCalendar();
+    await expandCalendar();
+
+    await screen.findByLabelText(summary(0, 0));
+
+    const monthText = new Intl.DateTimeFormat("pt-BR", {
+      month: "long",
+      year: "numeric",
+    }).format(new Date());
+
+    const monthLabel = monthText.charAt(0).toUpperCase() + monthText.slice(1);
+
+    const heading = screen.getByRole("header", { name: monthLabel });
+
+    expect(heading).toHaveStyle({
+      flex: 1,
+      minWidth: 0,
+      textAlign: "center",
+    });
+
+    expect(heading.props.numberOfLines).toBeUndefined();
+
+    for (const name of [PREVIOUS, NEXT]) {
+      expect(screen.getByRole("button", { name })).toHaveStyle({
+        width: 48,
+        height: 48,
+        flexShrink: 0,
+      });
+    }
   });
 
   it("accessibility: provides practical calendar controls and announces the visible month", async () => {
@@ -908,4 +984,45 @@ describe("PERF-03 WorkoutActivityCalendar pagination", () => {
 
     expect(mockedLegacy).not.toHaveBeenCalled();
   });
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in calendar press feedback",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      await mountCalendar();
+
+      mockedPage.mockResolvedValueOnce({
+        items: [session("motion", 1)],
+        nextCursor: null,
+      });
+
+      const header = await pressAndReadFeedback(EXPAND);
+
+      await screen.findByLabelText(summary(1, 1));
+
+      const day = await pressAndReadFeedback(/^1 de .+\. 1 treino/);
+
+      const workout = await pressAndReadFeedback(
+        "Ver detalhes do treino Treino motion",
+      );
+
+      expect(openWorkout).toHaveBeenCalledWith("motion");
+      expect(mockedPage).toHaveBeenCalledTimes(2);
+      expect(mockedLegacy).not.toHaveBeenCalled();
+
+      const expectedFeedback = {
+        opacity: 0.77,
+        transform: reduceMotion ? undefined : [{ scale: 0.985 }],
+      };
+
+      expect({ header, day, workout }).toEqual({
+        header: expectedFeedback,
+        day: expectedFeedback,
+        workout: expectedFeedback,
+      });
+    },
+  );
 });

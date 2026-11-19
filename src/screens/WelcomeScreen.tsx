@@ -1,3 +1,4 @@
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight, Dumbbell, MapPin, TrendingUp } from "lucide-react-native";
 import { useMemo } from "react";
@@ -25,6 +26,7 @@ const BACKGROUND = authColors.background;
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
   const { height } = useWindowDimensions();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const artworkHeight = Math.min(360, Math.max(260, height * 0.4));
@@ -116,6 +118,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             style={({ pressed }) => [
               styles.primaryButton,
               pressed && styles.pressedButton,
+              pressed && !reduceMotion && styles.pressedButtonMotion,
             ]}
           >
             <Text style={styles.primaryButtonText}>Criar conta</Text>
@@ -129,6 +132,7 @@ export default function WelcomeScreen({ navigation }: Props) {
             style={({ pressed }) => [
               styles.secondaryButton,
               pressed && styles.pressedButton,
+              pressed && !reduceMotion && styles.pressedButtonMotion,
             ]}
           >
             <Text style={styles.secondaryButtonText}>Entrar</Text>
@@ -300,6 +304,8 @@ function createStyles(theme: AppTheme) {
     },
     pressedButton: {
       opacity: 0.8,
+    },
+    pressedButtonMotion: {
       transform: [{ scale: 0.99 }],
     },
   });

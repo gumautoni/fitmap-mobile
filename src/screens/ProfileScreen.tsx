@@ -11,7 +11,14 @@ import {
   Target,
   UserRound,
 } from "lucide-react-native";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +32,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import ProfileHeightEditor from "../components/ProfileHeightEditor";
+import SelectionModal, {
+  type SelectionModalContent,
+} from "../components/SelectionModal";
 import { AuthContext } from "../context/AuthContext";
 import type { AppStackScreenProps } from "../navigation/types";
 import {
@@ -37,6 +47,7 @@ import {
   type UserProfile,
 } from "../services/profile";
 import { useAppTheme } from "../theme/ThemeProvider";
+import type { ThemePreference } from "../theme/themes";
 
 type ProfileScreenProps = AppStackScreenProps<"Perfil">;
 
@@ -116,6 +127,12 @@ const MEASUREMENT_SYSTEM_OPTIONS: SelectionOption<MeasurementSystem>[] = [
   },
 ];
 
+const APPEARANCE_OPTIONS: SelectionOption<ThemePreference>[] = [
+  { label: "Claro", value: "light" },
+  { label: "Escuro", value: "dark" },
+  { label: "Seguir sistema", value: "system" },
+];
+
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
 
@@ -191,6 +208,11 @@ export default function ProfileScreen(_: ProfileScreenProps) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAppearance, setSavingAppearance] = useState(false);
+  const appearanceSavingRef = useRef(false);
+  const [selection, setSelection] = useState<SelectionModalContent | null>(
+    null,
+  );
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -284,91 +306,116 @@ export default function ProfileScreen(_: ProfileScreenProps) {
   function showSelection<T>(
     title: string,
     options: SelectionOption<T>[],
+    selectedValue: T | null,
     onSelect: (value: T) => void,
+    description = "Selecione uma op\u00e7\u00e3o.",
   ): void {
-    Alert.alert(title, "Selecione uma opção.", [
-      ...options.map((option) => ({
-        text: option.label,
-        onPress: () => {
-          onSelect(option.value);
-        },
+    setSelection({
+      title,
+      description,
+      options: options.map((option) => ({
+        label: option.label,
+        checked: option.value === selectedValue,
+        onSelect: () => onSelect(option.value),
       })),
-      {
-        text: "Cancelar",
-        style: "cancel" as const,
-      },
-    ]);
+    });
+  }
+
+  function showProfileSelection<T>(
+    title: string,
+    options: SelectionOption<T>[],
+    selectedValue: T | null,
+    buildPatch: (value: T) => UpdateProfileInput,
+  ): void {
+    if (!profile || saving) {
+      return;
+    }
+
+    showSelection(title, options, selectedValue, (value) => {
+      void persistProfileUpdate(buildPatch(value));
+    });
   }
 
   function openFitnessGoalSelector(): void {
-    showSelection("Objetivo principal", FITNESS_GOAL_OPTIONS, (value) => {
-      void persistProfileUpdate({
-        fitnessGoal: value,
-      });
-    });
-  }
-
-  function openExperienceLevelSelector(): void {
-    showSelection("Nível de experiência", EXPERIENCE_LEVEL_OPTIONS, (value) => {
-      void persistProfileUpdate({
-        experienceLevel: value,
-      });
-    });
-  }
-
-  function openWeeklyGoalSelector(): void {
-    showSelection("Meta semanal", WEEKLY_GOAL_OPTIONS, (value) => {
-      void persistProfileUpdate({
-        weeklyWorkoutGoal: value,
-      });
-    });
-  }
-
-  function openDurationSelector(): void {
-    showSelection("Duração preferida", DURATION_OPTIONS, (value) => {
-      void persistProfileUpdate({
-        preferredWorkoutDurationMinutes: value,
-      });
-    });
-  }
-
-  function openMeasurementSystemSelector(): void {
-    showSelection(
-      "Sistema de unidades",
-      MEASUREMENT_SYSTEM_OPTIONS,
-      (value) => {
-        void persistProfileUpdate({
-          measurementSystem: value,
-        });
-      },
+    showProfileSelection(
+      "Objetivo principal",
+      FITNESS_GOAL_OPTIONS,
+      profile?.fitnessGoal ?? null,
+      (value) => ({ fitnessGoal: value }),
     );
   }
 
+  function openExperienceLevelSelector(): void {
+    showProfileSelection(
+      "N\u00edvel de experi\u00eancia",
+      EXPERIENCE_LEVEL_OPTIONS,
+      profile?.experienceLevel ?? null,
+      (value) => ({ experienceLevel: value }),
+    );
+  }
+
+  function openWeeklyGoalSelector(): void {
+    showProfileSelection(
+      "Meta semanal",
+      WEEKLY_GOAL_OPTIONS,
+      profile?.weeklyWorkoutGoal ?? null,
+      (value) => ({ weeklyWorkoutGoal: value }),
+    );
+  }
+
+  function openDurationSelector(): void {
+    showProfileSelection(
+      "Dura\u00e7\u00e3o preferida",
+      DURATION_OPTIONS,
+      profile?.preferredWorkoutDurationMinutes ?? null,
+      (value) => ({ preferredWorkoutDurationMinutes: value }),
+    );
+  }
+
+  function openMeasurementSystemSelector(): void {
+    showProfileSelection(
+      "Sistema de unidades",
+      MEASUREMENT_SYSTEM_OPTIONS,
+      profile?.measurementSystem ?? null,
+      (value) => ({ measurementSystem: value }),
+    );
+  }
+
+  async function saveAppearance(value: ThemePreference): Promise<void> {
+    if (appearanceSavingRef.current) {
+      return;
+    }
+
+    appearanceSavingRef.current = true;
+    setSavingAppearance(true);
+
+    try {
+      await setPreference(value);
+    } catch (appearanceError: unknown) {
+      Alert.alert(
+        "N\u00e3o foi poss\u00edvel alterar a apar\u00eancia",
+        getErrorMessage(appearanceError),
+      );
+    } finally {
+      appearanceSavingRef.current = false;
+      setSavingAppearance(false);
+    }
+  }
+
   function openAppearanceSelector(): void {
-    Alert.alert("Aparência", "Escolha como o FitMap deve aparecer.", [
-      {
-        text: "Claro",
-        onPress: () => {
-          void setPreference("light");
-        },
+    if (appearanceSavingRef.current) {
+      return;
+    }
+
+    showSelection(
+      "Apar\u00eancia",
+      APPEARANCE_OPTIONS,
+      preference,
+      (value) => {
+        void saveAppearance(value);
       },
-      {
-        text: "Escuro",
-        onPress: () => {
-          void setPreference("dark");
-        },
-      },
-      {
-        text: "Seguir sistema",
-        onPress: () => {
-          void setPreference("system");
-        },
-      },
-      {
-        text: "Cancelar",
-        style: "cancel",
-      },
-    ]);
+      "Escolha como o FitMap deve aparecer.",
+    );
   }
 
   async function saveName(): Promise<void> {
@@ -511,6 +558,8 @@ export default function ProfileScreen(_: ProfileScreenProps) {
     <SafeAreaView style={styles.safeArea} edges={["bottom"]}>
       <ScreenGradient theme={theme} />
       <ScrollView
+        accessibilityElementsHidden={selection !== null}
+        importantForAccessibility={selection ? "no-hide-descendants" : "auto"}
         style={styles.container}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -767,6 +816,8 @@ export default function ProfileScreen(_: ProfileScreenProps) {
               }
               title="Aparência"
               value={appearanceLabel}
+              disabled={savingAppearance}
+              busy={savingAppearance}
               onPress={openAppearanceSelector}
               styles={styles}
               theme={theme}
@@ -810,6 +861,13 @@ export default function ProfileScreen(_: ProfileScreenProps) {
           FitMap • Seu treino, suas escolhas.
         </Text>
       </ScrollView>
+
+      {selection ? (
+        <SelectionModal
+          selection={selection}
+          onClose={() => setSelection(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -820,6 +878,7 @@ interface SettingRowProps {
   value: string;
   onPress: () => void;
   disabled?: boolean;
+  busy?: boolean;
   last?: boolean;
   styles: ReturnType<typeof createStyles>;
   theme: ReturnType<typeof useAppTheme>["theme"];
@@ -831,6 +890,7 @@ function SettingRow({
   value,
   onPress,
   disabled = false,
+  busy = false,
   last = false,
   styles,
   theme,
@@ -839,7 +899,7 @@ function SettingRow({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${title}: ${value}`}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, busy }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [

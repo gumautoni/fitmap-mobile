@@ -25,6 +25,7 @@ import WorkoutHistoryDetailsScreen from "../screens/WorkoutHistoryDetailsScreen"
 import WorkoutHistoryScreen from "../screens/WorkoutHistoryScreen";
 import WorkoutSessionScreen from "../screens/WorkoutSessionScreen";
 import WorkoutsScreen from "../screens/WorkoutsScreen";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useAppTheme } from "../theme/ThemeProvider";
 import type { AppStackParamList, MainTabParamList } from "./types";
 
@@ -188,6 +189,7 @@ function MainTabsNavigator() {
 
 export default function AppNavigator() {
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   return (
     <Stack.Navigator
@@ -205,7 +207,7 @@ export default function AppNavigator() {
         contentStyle: {
           backgroundColor: theme.colors.background,
         },
-        animation: "slide_from_right",
+        animation: reduceMotion ? "none" : "slide_from_right",
       }}
     >
       <Stack.Screen

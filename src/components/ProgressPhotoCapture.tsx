@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 type PhotoSource = "camera" | "gallery";
@@ -23,6 +24,7 @@ interface Props {
 
 export default function ProgressPhotoCapture({ uploading, onSave }: Props) {
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [selecting, setSelecting] = useState(false);
@@ -156,7 +158,7 @@ export default function ProgressPhotoCapture({ uploading, onSave }: Props) {
         <Modal
           visible
           transparent
-          animationType="fade"
+          animationType={reduceMotion ? "none" : "fade"}
           onRequestClose={discardPreview}
         >
           <View accessibilityViewIsModal style={styles.overlay}>

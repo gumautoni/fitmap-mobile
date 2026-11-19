@@ -10,8 +10,11 @@ import {
   waitFor,
 } from "@testing-library/react-native";
 
+import { AccessibilityInfo } from "react-native";
+
 import AppNavigator from "../AppNavigator";
-import type { AppStackParamList } from "../types";
+import AuthNavigator from "../AuthNavigator";
+import type { AppStackParamList, AuthStackParamList } from "../types";
 
 // Substitui somente o conteudo das telas.
 // Os navegadores reais continuam sendo utilizados.
@@ -102,6 +105,36 @@ jest.mock("../../screens/GymDetailsScreen", () => ({
   __esModule: true,
   default: mockScreen("Conteudo DetalhesAcademia"),
 }));
+
+jest.mock("../../screens/WelcomeScreen", () => ({
+  __esModule: true,
+  default: mockScreen("Conteudo BoasVindas"),
+}));
+
+jest.mock("../../screens/LoginScreen", () => ({
+  __esModule: true,
+  default: mockScreen("Conteudo Login"),
+}));
+
+jest.mock("../../screens/RegisterScreen", () => ({
+  __esModule: true,
+  default: mockScreen("Conteudo Cadastro"),
+}));
+
+beforeEach(() => {
+  jest
+    .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+    .mockResolvedValue(true);
+
+  jest
+    .spyOn(AccessibilityInfo, "addEventListener")
+    .mockReturnValue({ remove: jest.fn() });
+});
+
+afterEach(() => {
+  jest.mocked(AccessibilityInfo.isReduceMotionEnabled).mockRestore();
+  jest.mocked(AccessibilityInfo.addEventListener).mockRestore();
+});
 
 function renderNavigator() {
   return render(
@@ -453,5 +486,242 @@ describe("ACC-02.4 navigation accessibility", () => {
     await waitFor(() => {
       expectSelectedTab(2);
     });
+  });
+});
+
+function getStackAnimation(options: object | undefined): unknown {
+  if (options && "animation" in options) {
+    return options.animation;
+  }
+
+  return undefined;
+}
+
+async function renderAuthWithStackReference() {
+  const navigation = createNavigationContainerRef<AuthStackParamList>();
+
+  await render(
+    <NavigationContainer ref={navigation}>
+      <AuthNavigator />
+    </NavigationContainer>,
+  );
+
+  await screen.findByText("Conteudo BoasVindas");
+
+  return navigation;
+}
+
+async function changeMotionPreference(enabled: boolean) {
+  const subscriptions = jest.mocked(AccessibilityInfo.addEventListener).mock
+    .calls;
+
+  await act(async () => {
+    for (const [event, listener] of subscriptions) {
+      if (event === "reduceMotionChanged") {
+        (listener as (value: boolean) => void)(enabled);
+      }
+    }
+  });
+}
+
+describe("ACC-02.5 native navigation motion", () => {
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in authenticated stack transitions",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      const navigation = await renderWithStackReference();
+
+      await act(async () => {
+        navigation.navigate("Perfil");
+      });
+
+      await screen.findByText("Conteudo Perfil");
+
+      expect(navigation.getCurrentRoute()?.name).toBe("Perfil");
+
+      const profileAnimation = getStackAnimation(
+        navigation.getCurrentOptions(),
+      );
+
+      await act(async () => {
+        navigation.navigate("DetalhesTreino", {
+          workoutId: "motion-workout-test",
+        });
+      });
+
+      await screen.findByText("Conteudo DetalhesTreino");
+
+      expect(navigation.getCurrentRoute()).toMatchObject({
+        name: "DetalhesTreino",
+        params: { workoutId: "motion-workout-test" },
+      });
+
+      const workoutAnimation = getStackAnimation(
+        navigation.getCurrentOptions(),
+      );
+
+      await act(async () => {
+        navigation.goBack();
+      });
+
+      await screen.findByText("Conteudo Perfil");
+
+      await act(async () => {
+        navigation.goBack();
+      });
+
+      await screen.findByText("Conteudo Home");
+
+      expect(navigation.getCurrentRoute()?.name).toBe("Home");
+
+      const expected = reduceMotion ? "none" : "slide_from_right";
+
+      expect([profileAnimation, workoutAnimation]).toEqual([
+        expected,
+        expected,
+      ]);
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in authentication stack transitions",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      const navigation = await renderAuthWithStackReference();
+
+      await act(async () => {
+        navigation.navigate("Login");
+      });
+
+      await screen.findByText("Conteudo Login");
+
+      expect(navigation.getCurrentRoute()?.name).toBe("Login");
+
+      const loginAnimation = getStackAnimation(navigation.getCurrentOptions());
+
+      await act(async () => {
+        navigation.navigate("Cadastro");
+      });
+
+      await screen.findByText("Conteudo Cadastro");
+
+      expect(navigation.getCurrentRoute()?.name).toBe("Cadastro");
+
+      const registerAnimation = getStackAnimation(
+        navigation.getCurrentOptions(),
+      );
+
+      await act(async () => {
+        navigation.goBack();
+      });
+
+      await screen.findByText("Conteudo Login");
+
+      await act(async () => {
+        navigation.goBack();
+      });
+
+      await screen.findByText("Conteudo BoasVindas");
+
+      expect(navigation.getCurrentRoute()?.name).toBe("BoasVindas");
+
+      const expected = reduceMotion ? "none" : "slide_from_right";
+
+      expect([loginAnimation, registerAnimation]).toEqual([expected, expected]);
+    },
+  );
+
+  it("accessibility: updates authenticated stack motion without resetting navigation", async () => {
+    jest
+      .mocked(AccessibilityInfo.isReduceMotionEnabled)
+      .mockResolvedValue(false);
+
+    const navigation = await renderWithStackReference();
+
+    await act(async () => {
+      navigation.navigate("DetalhesTreino", {
+        workoutId: "live-motion-workout",
+      });
+    });
+
+    await screen.findByText("Conteudo DetalhesTreino");
+
+    const route = navigation.getCurrentRoute();
+
+    expect(getStackAnimation(navigation.getCurrentOptions())).toBe(
+      "slide_from_right",
+    );
+
+    await changeMotionPreference(true);
+
+    expect(navigation.getCurrentRoute()).toEqual(route);
+
+    const reducedAnimation = getStackAnimation(navigation.getCurrentOptions());
+
+    await changeMotionPreference(false);
+
+    expect(navigation.getCurrentRoute()).toEqual(route);
+
+    const restoredAnimation = getStackAnimation(navigation.getCurrentOptions());
+
+    await act(async () => {
+      navigation.goBack();
+    });
+
+    await screen.findByText("Conteudo Home");
+
+    expect([reducedAnimation, restoredAnimation]).toEqual([
+      "none",
+      "slide_from_right",
+    ]);
+  });
+
+  it("accessibility: updates authentication stack motion without resetting navigation", async () => {
+    jest
+      .mocked(AccessibilityInfo.isReduceMotionEnabled)
+      .mockResolvedValue(false);
+
+    const navigation = await renderAuthWithStackReference();
+
+    await act(async () => {
+      navigation.navigate("Login");
+    });
+
+    await screen.findByText("Conteudo Login");
+
+    const route = navigation.getCurrentRoute();
+
+    expect(getStackAnimation(navigation.getCurrentOptions())).toBe(
+      "slide_from_right",
+    );
+
+    await changeMotionPreference(true);
+
+    expect(navigation.getCurrentRoute()).toEqual(route);
+
+    const reducedAnimation = getStackAnimation(navigation.getCurrentOptions());
+
+    await changeMotionPreference(false);
+
+    expect(navigation.getCurrentRoute()).toEqual(route);
+
+    const restoredAnimation = getStackAnimation(navigation.getCurrentOptions());
+
+    await act(async () => {
+      navigation.goBack();
+    });
+
+    await screen.findByText("Conteudo BoasVindas");
+
+    expect([reducedAnimation, restoredAnimation]).toEqual([
+      "none",
+      "slide_from_right",
+    ]);
   });
 });

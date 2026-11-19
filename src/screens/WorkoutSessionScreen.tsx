@@ -17,7 +17,6 @@ import {
   useState,
 } from "react";
 import {
-  AccessibilityInfo,
   ActivityIndicator,
   Alert,
   Animated,
@@ -35,6 +34,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import WorkoutNoteEditor from "../components/WorkoutNoteEditor";
 import { AuthContext } from "../context/AuthContext";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import type { AppStackScreenProps } from "../navigation/types";
 import { ApiClientError } from "../services/apiClient";
 import type { LoadUnit } from "../services/training";
@@ -258,6 +258,7 @@ export default function WorkoutSessionScreen({
 
   usePreventRemove(unsavedNotes, showUnsavedNotesWarning);
 
+  const reduceMotion = useReducedMotion();
   const [animatedCompletion] = useState(() => new Animated.Value(0));
 
   const totalExercises = workoutSession?.exercises.length ?? 0;
@@ -270,42 +271,26 @@ export default function WorkoutSessionScreen({
     totalExercises > 0 ? completedExercises / totalExercises : 0;
 
   useEffect(() => {
-    let active = true;
-    let transition: Animated.CompositeAnimation | null = null;
+    animatedCompletion.stopAnimation();
 
-    void AccessibilityInfo.isReduceMotionEnabled()
-      .then((reduceMotion) => {
-        if (!active) {
-          return;
-        }
+    if (reduceMotion) {
+      animatedCompletion.setValue(completionRatio);
+      return;
+    }
 
-        animatedCompletion.stopAnimation();
+    const transition = Animated.timing(animatedCompletion, {
+      toValue: completionRatio,
+      duration: 340,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    });
 
-        if (reduceMotion) {
-          animatedCompletion.setValue(completionRatio);
-          return;
-        }
-
-        transition = Animated.timing(animatedCompletion, {
-          toValue: completionRatio,
-          duration: 340,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: false,
-        });
-
-        transition.start();
-      })
-      .catch(() => {
-        if (active) {
-          animatedCompletion.setValue(completionRatio);
-        }
-      });
+    transition.start();
 
     return () => {
-      active = false;
-      transition?.stop();
+      transition.stop();
     };
-  }, [animatedCompletion, completionRatio]);
+  }, [animatedCompletion, completionRatio, reduceMotion]);
 
   const completionWidth = animatedCompletion.interpolate({
     inputRange: [0, 1],
