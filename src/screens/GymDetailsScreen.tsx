@@ -1,3 +1,4 @@
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   AlertCircle,
@@ -113,6 +114,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
   const { width: windowWidth } = useWindowDimensions();
 
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -361,6 +363,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
           style={({ pressed }) => [
             styles.errorButton,
             pressed && styles.buttonPressed,
+            pressed && !reduceMotion && styles.buttonPressedMotion,
           ]}
         >
           <ArrowLeft
@@ -595,6 +598,10 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
             favorite && styles.favoriteActionActive,
             favoriteActionDisabled && styles.actionDisabled,
             pressed && !favoriteActionDisabled && styles.buttonPressed,
+            pressed &&
+              !favoriteActionDisabled &&
+              !reduceMotion &&
+              styles.buttonPressedMotion,
           ]}
         >
           <View
@@ -668,6 +675,9 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
                   style={({ pressed }) => [
                     styles.favoriteRetryButton,
                     pressed && styles.secondaryActionPressed,
+                    pressed &&
+                      !reduceMotion &&
+                      styles.secondaryActionPressedMotion,
                   ]}
                 >
                   <Text style={styles.favoriteRetryText}>Tentar novamente</Text>
@@ -687,6 +697,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
             style={({ pressed }) => [
               styles.primaryAction,
               pressed && styles.buttonPressed,
+              pressed && !reduceMotion && styles.buttonPressedMotion,
             ]}
           >
             <View style={styles.primaryActionIcon}>
@@ -725,6 +736,9 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
                 style={({ pressed }) => [
                   styles.secondaryAction,
                   pressed && styles.secondaryActionPressed,
+                  pressed &&
+                    !reduceMotion &&
+                    styles.secondaryActionPressedMotion,
                 ]}
               >
                 <View style={styles.secondaryActionIcon}>
@@ -749,6 +763,9 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
                 style={({ pressed }) => [
                   styles.secondaryAction,
                   pressed && styles.secondaryActionPressed,
+                  pressed &&
+                    !reduceMotion &&
+                    styles.secondaryActionPressedMotion,
                 ]}
               >
                 <View style={styles.secondaryActionIcon}>
@@ -901,6 +918,7 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
         style={({ pressed }) => [
           styles.backButton,
           pressed && styles.secondaryActionPressed,
+          pressed && !reduceMotion && styles.secondaryActionPressedMotion,
         ]}
       >
         <ArrowLeft
@@ -1388,6 +1406,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     secondaryActionPressed: {
       opacity: 0.72,
+    },
+
+    secondaryActionPressedMotion: {
       transform: [
         {
           scale: 0.98,
@@ -1412,6 +1433,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     buttonPressed: {
       opacity: 0.86,
+    },
+
+    buttonPressedMotion: {
       transform: [
         {
           scale: 0.985,

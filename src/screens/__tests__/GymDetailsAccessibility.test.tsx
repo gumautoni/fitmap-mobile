@@ -3,10 +3,17 @@ import {
   fireEvent,
   render,
   screen,
+  userEvent,
   waitFor,
 } from "@testing-library/react-native";
 import type { ComponentProps, ContextType } from "react";
-import { Linking } from "react-native";
+import {
+  AccessibilityInfo,
+  Linking,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
@@ -140,7 +147,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-async function renderDetails(): Promise<void> {
+async function renderDetails(waitForGym = true): Promise<void> {
   await render(
     <AuthContext.Provider value={authValue}>
       <GymDetailsScreen
@@ -162,7 +169,9 @@ async function renderDetails(): Promise<void> {
     </AuthContext.Provider>,
   );
 
-  await screen.findByText(gym.name);
+  if (waitForGym) {
+    await screen.findByText(gym.name);
+  }
 }
 
 async function waitForReady(label: string): Promise<void> {
@@ -182,9 +191,64 @@ function assertFavoriteState(
   );
 }
 
+async function pressAndReadFeedback(name: string, opacity: number) {
+  const button = screen.getByRole("button", { name });
+
+  const initial = StyleSheet.flatten(
+    button.props.style as StyleProp<ViewStyle>,
+  );
+
+  expect(initial?.opacity).not.toBe(opacity);
+
+  let feedback: Pick<ViewStyle, "opacity" | "transform"> | undefined;
+
+  const user = userEvent.setup({
+    advanceTimers: (delay) => {
+      if (delay <= 0) return;
+
+      const style = StyleSheet.flatten(
+        screen.getByRole("button", { name }).props
+          .style as StyleProp<ViewStyle>,
+      );
+
+      feedback = {
+        opacity: style?.opacity,
+        transform: style?.transform,
+      };
+    },
+  });
+
+  await user.press(button);
+
+  if (!feedback) {
+    throw new Error("Pressed feedback was not observed.");
+  }
+
+  return feedback;
+}
+
+function expectedFeedback(
+  reduceMotion: boolean,
+  opacity: number,
+  scale: number,
+) {
+  return {
+    opacity,
+    transform: reduceMotion ? undefined : [{ scale }],
+  };
+}
+
 describe("GymDetailsScreen - accessibility", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
+    jest
+      .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+      .mockResolvedValue(true);
+
+    jest
+      .spyOn(AccessibilityInfo, "addEventListener")
+      .mockReturnValue({ remove: jest.fn() });
 
     mockedDetails.mockReset();
     mockedFavorites.mockReset();
@@ -444,4 +508,127 @@ describe("GymDetailsScreen - accessibility", () => {
     expect(mockedAdd).not.toHaveBeenCalled();
     expect(mockedRemove).not.toHaveBeenCalled();
   });
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in gym detail actions",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      const openURL = jest
+        .spyOn(Linking, "openURL")
+        .mockResolvedValue(undefined);
+
+      await renderDetails();
+      await waitForReady(ADD_LABEL);
+
+      const route = await pressAndReadFeedback(
+        "Abrir rota para a academia",
+        0.86,
+      );
+
+      const phone = await pressAndReadFeedback("Ligar para a academia", 0.72);
+
+      const website = await pressAndReadFeedback(
+        "Abrir site da academia",
+        0.72,
+      );
+
+      const add = await pressAndReadFeedback(ADD_LABEL, 0.86);
+
+      await waitForReady(REMOVE_LABEL);
+
+      const remove = await pressAndReadFeedback(REMOVE_LABEL, 0.86);
+
+      await waitForReady(ADD_LABEL);
+
+      const back = await pressAndReadFeedback("Voltar ao mapa", 0.72);
+
+      expect(openURL.mock.calls).toEqual([
+        [
+          "https://www.google.com/maps/dir/?api=1&destination=-22.471%2C-43.825",
+        ],
+        ["tel:24999991234"],
+        ["https://academia.example.com"],
+      ]);
+
+      expect(mockedAdd).toHaveBeenCalledTimes(1);
+      expect(mockedAdd).toHaveBeenCalledWith(TOKEN, EXTERNAL_ID, "tomtom");
+
+      expect(mockedRemove).toHaveBeenCalledTimes(1);
+      expect(mockedRemove).toHaveBeenCalledWith(TOKEN, INTERNAL_ID);
+
+      expect(navigation.goBack).toHaveBeenCalledTimes(1);
+
+      expect(mockedDetails).toHaveBeenCalledTimes(1);
+
+      const primary = expectedFeedback(reduceMotion, 0.86, 0.985);
+      const secondary = expectedFeedback(reduceMotion, 0.72, 0.98);
+
+      expect({ route, phone, website, add, remove, back }).toEqual({
+        route: primary,
+        phone: secondary,
+        website: secondary,
+        add: primary,
+        remove: primary,
+        back: secondary,
+      });
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in favorite retry feedback",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      mockedFavorites.mockRejectedValueOnce(
+        new Error("Test synchronization failure"),
+      );
+
+      await renderDetails();
+      await screen.findByText(FAVORITE_ERROR);
+
+      expect(screen.getByLabelText(ADD_LABEL)).toBeDisabled();
+
+      const feedback = await pressAndReadFeedback(RETRY_LABEL, 0.72);
+
+      await waitForReady(ADD_LABEL);
+
+      expect(mockedFavorites).toHaveBeenCalledTimes(2);
+      expect(mockedAdd).not.toHaveBeenCalled();
+      expect(mockedRemove).not.toHaveBeenCalled();
+
+      expect(feedback).toEqual(expectedFeedback(reduceMotion, 0.72, 0.98));
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in error navigation feedback",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      mockedDetails.mockRejectedValueOnce(
+        new Error("Test gym loading failure"),
+      );
+
+      await renderDetails(false);
+
+      await screen.findByRole("button", {
+        name: "Voltar ao mapa",
+      });
+
+      const feedback = await pressAndReadFeedback("Voltar ao mapa", 0.86);
+
+      expect(navigation.goBack).toHaveBeenCalledTimes(1);
+      expect(mockedAdd).not.toHaveBeenCalled();
+      expect(mockedRemove).not.toHaveBeenCalled();
+
+      expect(feedback).toEqual(expectedFeedback(reduceMotion, 0.86, 0.985));
+    },
+  );
 });
