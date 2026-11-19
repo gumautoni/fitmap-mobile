@@ -1,3 +1,4 @@
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   AlertCircle,
@@ -175,6 +176,7 @@ export default function WorkoutHistoryScreen({
   const { runAuthenticatedRequest } = auth;
 
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [history, setHistory] = useState<WorkoutHistoryItem[]>([]);
@@ -694,6 +696,7 @@ export default function WorkoutHistoryScreen({
                   style={({ pressed }) => [
                     styles.historyCard,
                     pressed && styles.cardPressed,
+                    pressed && !reduceMotion && styles.cardPressedMotion,
                   ]}
                 >
                   <View style={styles.historyIcon}>
@@ -1083,6 +1086,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     cardPressed: {
       opacity: 0.72,
+    },
+
+    cardPressedMotion: {
       transform: [
         {
           scale: 0.995,
