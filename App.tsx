@@ -15,17 +15,18 @@ import * as SplashScreen from "expo-splash-screen";
 import { useContext, useMemo } from "react";
 import {
   ActivityIndicator,
-  Image,
   StatusBar,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
+import FitMapBrand from "./src/components/FitMapBrand";
 import { AuthContext, AuthProvider } from "./src/context/AuthContext";
 import AppNavigator from "./src/navigation/AppNavigator";
 import AuthNavigator from "./src/navigation/AuthNavigator";
 import { ThemeProvider, useAppTheme } from "./src/theme/ThemeProvider";
+import type { AppTheme } from "./src/theme/themes";
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -36,17 +37,12 @@ function LoadingScreen() {
 
   return (
     <View style={styles.loadingContainer}>
-      <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={theme.colors.background}
-      />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       <View style={styles.logoBox}>
-        <Image
-          source={require("./assets/images/logo-fitmap.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <View style={styles.logo}>
+          <FitMapBrand variant="full" mode={theme.mode} width={220} />
+        </View>
       </View>
 
       <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -57,7 +53,7 @@ function LoadingScreen() {
 }
 
 function Routes() {
-  const { user, loading } = useContext(AuthContext);
+  const auth = useContext(AuthContext);
   const { theme, isDark } = useAppTheme();
 
   const navigationTheme = useMemo(() => {
@@ -77,16 +73,19 @@ function Routes() {
     };
   }, [isDark, theme]);
 
+  if (!auth) {
+    throw new Error("Routes must be used inside AuthProvider.");
+  }
+
+  const { user, loading } = auth;
+
   if (loading) {
     return <LoadingScreen />;
   }
 
   return (
     <>
-      <StatusBar
-        barStyle={isDark ? "light-content" : "dark-content"}
-        backgroundColor={theme.colors.background}
-      />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       <NavigationContainer theme={navigationTheme}>
         {user ? <AppNavigator /> : <AuthNavigator />}
@@ -127,7 +126,7 @@ export default function App() {
   return <AppContent />;
 }
 
-function createStyles(theme) {
+function createStyles(theme: AppTheme) {
   return StyleSheet.create({
     loadingContainer: {
       flex: 1,
@@ -152,6 +151,8 @@ function createStyles(theme) {
     logo: {
       width: 220,
       height: 140,
+      alignItems: "center",
+      justifyContent: "center",
     },
 
     loadingText: {

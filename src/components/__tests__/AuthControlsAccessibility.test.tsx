@@ -1,10 +1,9 @@
-import { describe, expect, it, jest } from "@jest/globals";
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { View } from "react-native";
 
 import AuthButton from "../auth/AuthButton";
-import AuthField from "../auth/AuthField";
+import AuthField, { type AuthFieldProps } from "../auth/AuthField";
 
 jest.mock("lucide-react-native", () => ({
   ArrowRight: () => null,
@@ -13,20 +12,24 @@ jest.mock("lucide-react-native", () => ({
 }));
 
 jest.mock("expo-linear-gradient", () => {
-  const React = jest.requireActual("react");
-  const { View } = jest.requireActual("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { View } =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
   return {
-    LinearGradient: ({ children }) => React.createElement(View, null, children),
+    LinearGradient: ({ children }: { children: import("react").ReactNode }) =>
+      React.createElement(View, null, children),
   };
 });
 
-function passwordProps(overrides = {}) {
+function passwordProps(
+  overrides: Partial<AuthFieldProps> = {},
+): AuthFieldProps {
   return {
     label: "Senha",
     placeholder: "Digite sua senha",
     value: "SyntheticPassword!123",
-    onChangeText: jest.fn(),
+    onChangeText: jest.fn<void, [string]>(),
     secure: true,
     ...overrides,
   };
@@ -48,7 +51,7 @@ describe("Auth controls accessibility", () => {
   });
 
   it("preserves the submit label and blocks duplicate submission", async () => {
-    const onPress = jest.fn();
+    const onPress = jest.fn<void, []>();
 
     const view = await render(
       <AuthButton title="Entrar" onPress={onPress} loading />,

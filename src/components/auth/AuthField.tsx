@@ -1,9 +1,27 @@
 import { lightColors as authColors } from "../../theme/themes";
 import { Eye, EyeOff } from "lucide-react-native";
 import React, { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  type TextInputProps,
+  View,
+} from "react-native";
 
 const PRIMARY = authColors.primary;
+
+export type AuthFieldProps = Omit<TextInputProps, "value" | "onChangeText"> & {
+  label: string;
+  icon?: typeof Eye;
+  value: string;
+  onChangeText: (value: string) => void;
+  secure?: boolean;
+  visibilityLabel?: string;
+  error?: string;
+  helper?: string;
+};
 
 export default function AuthField({
   label,
@@ -17,7 +35,7 @@ export default function AuthField({
   error,
   helper,
   ...inputProps
-}) {
+}: AuthFieldProps) {
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
 

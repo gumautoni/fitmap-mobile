@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   act,
   fireEvent,
@@ -6,16 +5,23 @@ import {
   screen,
   userEvent,
 } from "@testing-library/react-native";
-import { Animated, StyleSheet } from "react-native";
-import React from "react";
+import { Animated, StyleSheet, type ViewStyle } from "react-native";
+import React, { type ComponentProps, type ContextType } from "react";
 
 import { AuthContext } from "../../context/AuthContext";
-import { getWorkouts } from "../../services/training";
-import { getActiveWorkoutSession } from "../../services/trainingSessions";
+import { getWorkouts, type WorkoutSummary } from "../../services/training";
+import type {
+  AppStackParamList,
+  MainTabParamList,
+} from "../../navigation/types";
+import {
+  getActiveWorkoutSession,
+  type WorkoutSession,
+} from "../../services/trainingSessions";
 import HomeScreen from "../HomeScreen";
 
 jest.mock("../../context/AuthContext", () => {
-  const React = jest.requireActual("react");
+  const React = jest.requireActual<typeof import("react")>("react");
 
   return {
     AuthContext: React.createContext(null),
@@ -23,10 +29,10 @@ jest.mock("../../context/AuthContext", () => {
 });
 
 jest.mock("@react-navigation/native", () => {
-  const React = jest.requireActual("react");
+  const React = jest.requireActual<typeof import("react")>("react");
 
   return {
-    useFocusEffect(callback) {
+    useFocusEffect(callback: () => void | (() => void)) {
       React.useEffect(callback, [callback]);
     },
   };
@@ -34,7 +40,10 @@ jest.mock("@react-navigation/native", () => {
 
 jest.mock("../../theme/ThemeProvider", () => ({
   useAppTheme: () => ({
-    theme: jest.requireActual("../../theme/themes").lightTheme,
+    theme:
+      jest.requireActual<typeof import("../../theme/themes")>(
+        "../../theme/themes",
+      ).lightTheme,
   }),
 }));
 
@@ -46,7 +55,9 @@ jest.mock("../../hooks/useReducedMotion", () => ({
 
 jest.mock(
   "../../components/MotionScrollView",
-  () => jest.requireActual("react-native").ScrollView,
+  () =>
+    jest.requireActual<typeof import("react-native")>("react-native")
+      .ScrollView,
 );
 
 jest.mock("../../components/ScreenGradient", () => () => null);
@@ -55,7 +66,8 @@ jest.mock("../../components/FitMapBrand", () => () => null);
 jest.mock("../../components/FitMapLocationGymPin3D", () => () => null);
 
 jest.mock("expo-linear-gradient", () => ({
-  LinearGradient: jest.requireActual("react-native").View,
+  LinearGradient:
+    jest.requireActual<typeof import("react-native")>("react-native").View,
 }));
 
 jest.mock("lucide-react-native", () => ({
@@ -66,10 +78,15 @@ jest.mock("lucide-react-native", () => ({
 }));
 
 jest.mock("../../components/WorkoutActivityCalendar", () => {
-  const React = jest.requireActual("react");
-  const { Pressable, Text } = jest.requireActual("react-native");
+  const React = jest.requireActual<typeof import("react")>("react");
+  const { Pressable, Text } =
+    jest.requireActual<typeof import("react-native")>("react-native");
 
-  return function MockCalendar({ onOpenWorkout }) {
+  return function MockCalendar({
+    onOpenWorkout,
+  }: {
+    onOpenWorkout: (sessionId: string) => void;
+  }) {
     return React.createElement(
       Pressable,
       {
@@ -90,32 +107,83 @@ jest.mock("../../services/trainingSessions", () => ({
   getActiveWorkoutSession: jest.fn(),
 }));
 
+type AuthValue = NonNullable<ContextType<typeof AuthContext>>;
+
+type HomeRoute = keyof AppStackParamList | keyof MainTabParamList;
+
 const navigation = {
-  navigate: jest.fn(),
+  navigate: jest.fn<void, [HomeRoute, ...unknown[]]>(),
 };
 
 const token = "home-test-token";
+const timestamp = "2026-11-19T12:00:00Z";
 
-const auth = {
+const auth: AuthValue = {
   user: {
+    id: "home-test-user",
     name: "Ana Souza",
+    email: "ana@example.com",
+    createdAt: timestamp,
   },
+  accessToken: token,
+  loading: false,
+  login: jest.fn<Promise<void>, Parameters<AuthValue["login"]>>(),
+  register: jest.fn<Promise<void>, Parameters<AuthValue["register"]>>(),
+  logout: jest.fn<Promise<void>, []>(),
+  refreshAccessToken: jest.fn<Promise<string>, []>(),
   runAuthenticatedRequest: (request) => request(token),
+  updateAuthenticatedUser: jest.fn<
+    void,
+    Parameters<AuthValue["updateAuthenticatedUser"]>
+  >(),
 };
+
+const workout: WorkoutSummary = {
+  id: "workout-test",
+  name: "Treino de teste",
+  isArchived: false,
+  archivedAt: null,
+  createdAt: timestamp,
+  updatedAt: timestamp,
+};
+
+const activeSession: WorkoutSession = {
+  id: "active-session-test",
+  sourceWorkoutId: "active-workout-id",
+  workoutName: "Treino A",
+  status: "active",
+  notes: null,
+  startedAt: timestamp,
+  completedAt: null,
+  cancelledAt: null,
+  exercises: [],
+  createdAt: timestamp,
+  updatedAt: timestamp,
+};
+
+const mockedActiveSession = jest.mocked(getActiveWorkoutSession);
+const mockedWorkouts = jest.mocked(getWorkouts);
 
 async function mountHome() {
   return render(
     <AuthContext.Provider value={auth}>
-      <HomeScreen navigation={navigation} />
+      <HomeScreen
+        navigation={
+          navigation as unknown as ComponentProps<
+            typeof HomeScreen
+          >["navigation"]
+        }
+        route={{ key: "home-test", name: "Home" }}
+      />
     </AuthContext.Provider>,
   );
 }
 
-async function pressAction(label) {
+async function pressAction(label: string) {
   await fireEvent.press(screen.getByRole("button", { name: label }));
 }
 
-function expectTrainingCalls(workoutCalls) {
+function expectTrainingCalls(workoutCalls: number) {
   expect(getActiveWorkoutSession).toHaveBeenCalledTimes(1);
   expect(getActiveWorkoutSession).toHaveBeenCalledWith(token);
   expect(getWorkouts).toHaveBeenCalledTimes(workoutCalls);
@@ -130,8 +198,8 @@ describe("ACC-02.4 Home accessibility", () => {
     jest.resetAllMocks();
     mockReduceMotion = true;
 
-    getActiveWorkoutSession.mockResolvedValue(null);
-    getWorkouts.mockResolvedValue([{ id: "workout-test" }]);
+    mockedActiveSession.mockResolvedValue(null);
+    mockedWorkouts.mockResolvedValue([workout]);
   });
 
   it("accessibility: exposes headings, distinct shortcuts and practical touch targets", async () => {
@@ -201,10 +269,7 @@ describe("ACC-02.4 Home accessibility", () => {
   });
 
   it("accessibility: identifies the active workout and preserves resume navigation", async () => {
-    getActiveWorkoutSession.mockResolvedValueOnce({
-      sourceWorkoutId: "active-workout-id",
-      workoutName: "Treino A",
-    });
+    mockedActiveSession.mockResolvedValueOnce(activeSession);
 
     await mountHome();
 
@@ -267,7 +332,7 @@ describe("ACC-02.4 Home accessibility", () => {
   });
 
   it("accessibility: describes the empty workout state and preserves creation navigation", async () => {
-    getWorkouts.mockResolvedValueOnce([]);
+    mockedWorkouts.mockResolvedValueOnce([]);
 
     await mountHome();
 
@@ -296,9 +361,7 @@ describe("ACC-02.4 Home accessibility", () => {
   });
 
   it("accessibility: explains overview failure and preserves the fallback action", async () => {
-    getActiveWorkoutSession.mockRejectedValueOnce(
-      new Error("Connection failed"),
-    );
+    mockedActiveSession.mockRejectedValueOnce(new Error("Connection failed"));
 
     await mountHome();
 
@@ -329,13 +392,13 @@ describe("ACC-02.4 Home accessibility", () => {
   });
 
   it("accessibility: announces workout loading without disabling the existing shortcut", async () => {
-    let resolveSession;
+    let resolveSession!: (session: WorkoutSession | null) => void;
 
-    const pending = new Promise((resolve) => {
+    const pending = new Promise<WorkoutSession | null>((resolve) => {
       resolveSession = resolve;
     });
 
-    getActiveWorkoutSession.mockReturnValueOnce(pending);
+    mockedActiveSession.mockReturnValueOnce(pending);
 
     await mountHome();
 
@@ -425,15 +488,17 @@ describe("ACC-02.4 Home accessibility", () => {
         const name = "Abrir meu perfil";
         const button = screen.getByRole("button", { name });
 
-        expect(StyleSheet.flatten(button.props.style)?.opacity).not.toBe(0.76);
+        expect(
+          StyleSheet.flatten<ViewStyle>(button.props.style)?.opacity,
+        ).not.toBe(0.76);
 
-        let feedback;
+        let feedback: Pick<ViewStyle, "opacity" | "transform"> | undefined;
 
         const user = userEvent.setup({
           advanceTimers: (delay) => {
             if (delay <= 0) return;
 
-            const style = StyleSheet.flatten(
+            const style = StyleSheet.flatten<ViewStyle>(
               screen.getByRole("button", { name }).props.style,
             );
 

@@ -21,12 +21,26 @@ import FitMapBrand from "../components/FitMapBrand";
 import FitMapLocationGymPin3D from "../components/FitMapLocationGymPin3D";
 import WorkoutActivityCalendar from "../components/WorkoutActivityCalendar";
 import { AuthContext } from "../context/AuthContext";
+import type { AppTabScreenProps } from "../navigation/types";
 import { getWorkouts } from "../services/training";
-import { getActiveWorkoutSession } from "../services/trainingSessions";
+import {
+  getActiveWorkoutSession,
+  type WorkoutSession,
+} from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
 import { brandColors } from "../theme/tokens";
+import type { AppTheme } from "../theme/themes";
 
-function getInitials(name) {
+type Props = AppTabScreenProps<"Home">;
+
+type WorkoutOverview =
+  | { status: "active"; session: WorkoutSession }
+  | {
+      status: "loading" | "available" | "empty" | "error";
+      session: null;
+    };
+
+function getInitials(name?: string): string {
   const parts = name?.trim()?.split(/\s+/)?.filter(Boolean);
 
   if (!parts?.length) {
@@ -40,7 +54,7 @@ function getInitials(name) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation }: Props) {
   const auth = useContext(AuthContext);
 
   const user = auth?.user ?? null;
@@ -57,7 +71,7 @@ export default function HomeScreen({ navigation }) {
   const firstName = user?.name?.trim()?.split(" ")[0] || "usuário";
   const initials = getInitials(user?.name);
 
-  const [workoutOverview, setWorkoutOverview] = useState({
+  const [workoutOverview, setWorkoutOverview] = useState<WorkoutOverview>({
     status: "loading",
     session: null,
   });
@@ -67,7 +81,7 @@ export default function HomeScreen({ navigation }) {
       let active = true;
       setWorkoutOverview({ status: "loading", session: null });
 
-      async function loadWorkoutOverview() {
+      async function loadWorkoutOverview(): Promise<void> {
         if (!runAuthenticatedRequest) {
           if (active) {
             setWorkoutOverview({ status: "error", session: null });
@@ -142,7 +156,7 @@ export default function HomeScreen({ navigation }) {
       break;
   }
 
-  function openTrainingAction() {
+  function openTrainingAction(): void {
     if (workoutOverview.status === "active") {
       navigation.navigate("ExecutarTreino", {
         workoutId: workoutOverview.session.sourceWorkoutId ?? undefined,
@@ -150,9 +164,11 @@ export default function HomeScreen({ navigation }) {
       return;
     }
 
-    navigation.navigate(
-      workoutOverview.status === "empty" ? "NovoTreino" : "Treinos",
-    );
+    if (workoutOverview.status === "empty") {
+      navigation.navigate("NovoTreino");
+    } else {
+      navigation.navigate("Treinos");
+    }
   }
 
   useFocusEffect(
@@ -585,7 +601,7 @@ export default function HomeScreen({ navigation }) {
   );
 }
 
-function createStyles(theme) {
+function createStyles(theme: AppTheme) {
   const homeBackground = theme.colors.background;
   const homeSurface = theme.colors.surface;
 
@@ -690,7 +706,7 @@ function createStyles(theme) {
     },
 
     heroBackground: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       opacity: 0.9,
     },
 
@@ -912,7 +928,7 @@ function createStyles(theme) {
       },
       elevation: 2,
       ...lightSurfaceDepth(theme, "featured"),
-      ...(theme.mode === "light" ? { overflow: "visible" } : {}),
+      ...(theme.mode === "light" ? { overflow: "visible" as const } : {}),
     },
 
     trainingAccent: {
@@ -1021,7 +1037,7 @@ function createStyles(theme) {
       },
       elevation: 2,
       ...lightSurfaceDepth(theme, "featured"),
-      ...(theme.mode === "light" ? { overflow: "visible" } : {}),
+      ...(theme.mode === "light" ? { overflow: "visible" as const } : {}),
     },
 
     progressAccent: {

@@ -1,10 +1,11 @@
 import { lightColors as authColors } from "../../theme/themes";
 import { ArrowLeft } from "lucide-react-native";
-import React from "react";
+import React, { type ReactNode } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  type PressableProps,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -24,6 +25,15 @@ const COLORS = {
   border: authColors.border,
 };
 
+export type AuthScreenShellProps = {
+  title: string;
+  subtitle: string;
+  eyebrow: string;
+  onBack: NonNullable<PressableProps["onPress"]>;
+  backDisabled?: boolean;
+  children: ReactNode;
+};
+
 /**
  * Estrutura compartilhada para manter Login e Cadastro visualmente consistentes.
  * A fita aprovada aparece como imagem de fundo, e o formulario fica acima dela.
@@ -35,7 +45,7 @@ export default function AuthScreenShell({
   onBack,
   backDisabled = false,
   children,
-}) {
+}: AuthScreenShellProps) {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" />
