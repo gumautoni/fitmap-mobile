@@ -17,6 +17,11 @@ ADRs document technical decisions that have meaningful architectural consequence
 | [0007](0007-store-private-media-object-storage.md) | Store private media in object storage | Accepted |
 | [0008](0008-define-rest-api-design-versioning.md) | Define REST API design and versioning | Accepted |
 | [0009](0009-define-deployment-containers-cicd.md) | Define deployment, containers and CI/CD strategy | Accepted |
+| [0010](0010-establish-safe-password-recovery-foundation.md) | Establish a safe password recovery foundation | Accepted (foundation only) |
+
+The password recovery foundation originally reused number 0006.
+It was renumbered to 0010 during CLEAN-01 as an editorial correction,
+preserving the original architectural decision and its history.
 
 ## Naming convention
 
