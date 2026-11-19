@@ -3,11 +3,18 @@ import {
   fireEvent,
   render,
   screen,
+  userEvent,
   waitFor,
   within,
 } from "@testing-library/react-native";
 import * as Location from "expo-location";
 import type { ComponentProps, ContextType } from "react";
+import {
+  AccessibilityInfo,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
@@ -192,9 +199,64 @@ async function loadResults(): Promise<void> {
   await screen.findByTestId("map-marker-Academia Aurora");
 }
 
+async function pressAndReadFeedback(name: string, opacity: number) {
+  const button = screen.getByLabelText(name);
+
+  const initial = StyleSheet.flatten(
+    button.props.style as StyleProp<ViewStyle>,
+  );
+
+  expect(initial?.opacity).not.toBe(opacity);
+  expect(button).not.toBeDisabled();
+
+  let feedback: Pick<ViewStyle, "opacity" | "transform"> | undefined;
+
+  const user = userEvent.setup({
+    advanceTimers: (delay) => {
+      if (delay <= 0) return;
+
+      const style = StyleSheet.flatten(
+        screen.getByLabelText(name).props.style as StyleProp<ViewStyle>,
+      );
+
+      feedback = {
+        opacity: style?.opacity,
+        transform: style?.transform,
+      };
+    },
+  });
+
+  await user.press(button);
+
+  if (!feedback) {
+    throw new Error("Pressed feedback was not observed.");
+  }
+
+  return feedback;
+}
+
+function expectedFeedback(
+  reduceMotion: boolean,
+  opacity: number,
+  scale: number,
+) {
+  return {
+    opacity,
+    transform: reduceMotion ? undefined : [{ scale }],
+  };
+}
+
 describe("MapScreen - previa de academia selecionada", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
+    jest
+      .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+      .mockResolvedValue(true);
+
+    jest
+      .spyOn(AccessibilityInfo, "addEventListener")
+      .mockReturnValue({ remove: jest.fn() });
 
     mockedFavorites.mockResolvedValue([]);
     mockedSearch.mockResolvedValue(gyms);
@@ -210,6 +272,10 @@ describe("MapScreen - previa de academia selecionada", () => {
         longitude: -43.82633,
       },
     });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("accessibility: keeps long gym results readable", async () => {
@@ -2196,4 +2262,162 @@ describe("MapScreen - previa de academia selecionada", () => {
     expect(mockedFavorites).toHaveBeenCalledTimes(favoriteCalls);
     expect(mockedSearch).toHaveBeenCalledTimes(1);
   });
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in gym search and results",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      await mountMap();
+
+      await fireEvent.changeText(
+        screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+        "Barra do Pira\u00ed",
+      );
+
+      const search = await pressAndReadFeedback("Buscar academias", 0.9);
+
+      await screen.findByTestId("map-marker-Academia Aurora");
+
+      const card = await pressAndReadFeedback(
+        "Selecionar Academia Aurora",
+        0.83,
+      );
+
+      expect(screen.getByLabelText("Selecionar Academia Aurora")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      expect(navigation.navigate).not.toHaveBeenCalled();
+
+      const preview = await pressAndReadFeedback(
+        "Ver detalhes de Academia Aurora no mapa",
+        0.8,
+      );
+
+      const details = await pressAndReadFeedback(
+        "Ver detalhes de Academia Atlas",
+        0.82,
+      );
+
+      expect(navigation.navigate.mock.calls).toEqual([
+        [
+          "DetalhesAcademia",
+          {
+            gymId: "gym-aurora",
+            providerName: "geoapify",
+            distanceKm: null,
+          },
+        ],
+        [
+          "DetalhesAcademia",
+          {
+            gymId: "gym-atlas",
+            providerName: "geoapify",
+            distanceKm: null,
+          },
+        ],
+      ]);
+
+      expect(screen.getByLabelText("Selecionar Academia Atlas")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      expect(mockedSearch).toHaveBeenCalledTimes(1);
+      expect(mockedSearch).toHaveBeenCalledWith("Barra do Pira\u00ed");
+      expect(mockedNearby).not.toHaveBeenCalled();
+
+      expect({ search, card, preview, details }).toEqual({
+        search: expectedFeedback(reduceMotion, 0.9, 0.96),
+        card: expectedFeedback(reduceMotion, 0.83, 0.995),
+        preview: expectedFeedback(reduceMotion, 0.8, 0.98),
+        details: expectedFeedback(reduceMotion, 0.82, 0.97),
+      });
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in favorite card feedback",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      mockedFavorites.mockResolvedValueOnce([
+        {
+          id: "favorite-motion",
+          gymId: "internal-motion",
+          providerName: "tomtom",
+          externalId: "external-motion",
+          name: "Academia Favorita",
+          coordinates: null,
+          address: null,
+          favoritedAt: "2026-11-06T12:00:00Z",
+        },
+      ]);
+
+      await mountMap();
+
+      const label = "Abrir academia favorita Academia Favorita";
+
+      await screen.findByLabelText(label);
+
+      const feedback = await pressAndReadFeedback(label, 0.8);
+
+      expect(navigation.navigate.mock.calls).toEqual([
+        [
+          "DetalhesAcademia",
+          {
+            gymId: "external-motion",
+            providerName: "tomtom",
+            distanceKm: null,
+          },
+        ],
+      ]);
+
+      expect(mockedFavorites).toHaveBeenCalledTimes(1);
+      expect(mockedSearch).not.toHaveBeenCalled();
+      expect(mockedNearby).not.toHaveBeenCalled();
+
+      expect(feedback).toEqual(expectedFeedback(reduceMotion, 0.8, 0.99));
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in location feedback",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      mockedNearby.mockResolvedValueOnce(gyms);
+
+      await mountMap();
+
+      const label = "Usar minha localiza\u00e7\u00e3o";
+
+      const feedback = await pressAndReadFeedback(label, 0.75);
+
+      await screen.findByTestId("map-marker-Academia Aurora");
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(label)).not.toBeDisabled();
+      });
+
+      expect(mockedPermissions).toHaveBeenCalledTimes(1);
+      expect(mockedCurrentPosition).toHaveBeenCalledTimes(1);
+
+      expect(mockedNearby).toHaveBeenCalledTimes(1);
+      expect(mockedNearby).toHaveBeenCalledWith(-22.47034, -43.82633, 5_000);
+
+      expect(mockedSearch).not.toHaveBeenCalled();
+      expect(navigation.navigate).not.toHaveBeenCalled();
+
+      expect(feedback).toEqual(expectedFeedback(reduceMotion, 0.75, 0.995));
+    },
+  );
 });

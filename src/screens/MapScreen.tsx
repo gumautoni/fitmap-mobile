@@ -1,3 +1,4 @@
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { lightSurfaceDepth } from "../theme/surfaces";
 import ScreenGradient from "../components/ScreenGradient";
 import { useFocusEffect } from "@react-navigation/native";
@@ -211,6 +212,7 @@ export default function MapScreen({ navigation }: Props) {
   const { runAuthenticatedRequest } = auth;
 
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -757,6 +759,7 @@ export default function MapScreen({ navigation }: Props) {
                 style={({ pressed }) => [
                   styles.favoriteCard,
                   pressed && styles.favoriteCardPressed,
+                  pressed && !reduceMotion && styles.favoriteCardPressedMotion,
                 ]}
               >
                 <View style={styles.favoriteCardHeader}>
@@ -830,6 +833,10 @@ export default function MapScreen({ navigation }: Props) {
               styles.searchButton,
               loading && styles.buttonDisabled,
               pressed && !loading && styles.buttonPressed,
+              pressed &&
+                !loading &&
+                !reduceMotion &&
+                styles.buttonPressedMotion,
             ]}
           >
             {loadingAction === "text" ? (
@@ -907,6 +914,10 @@ export default function MapScreen({ navigation }: Props) {
             styles.locationAction,
             loading && styles.buttonDisabled,
             pressed && !loading && styles.locationActionPressed,
+            pressed &&
+              !loading &&
+              !reduceMotion &&
+              styles.locationActionPressedMotion,
           ]}
         >
           <View style={styles.locationIcon}>
@@ -1061,6 +1072,9 @@ export default function MapScreen({ navigation }: Props) {
               style={({ pressed }) => [
                 styles.selectedMapPreviewAction,
                 pressed && styles.selectedMapPreviewActionPressed,
+                pressed &&
+                  !reduceMotion &&
+                  styles.selectedMapPreviewActionPressedMotion,
               ]}
             >
               <Text style={styles.selectedMapPreviewActionText}>Detalhes</Text>
@@ -1321,6 +1335,7 @@ export default function MapScreen({ navigation }: Props) {
                 styles.gymCard,
                 isSelected && styles.gymCardSelected,
                 pressed && styles.gymCardPressed,
+                pressed && !reduceMotion && styles.gymCardPressedMotion,
               ]}
             >
               {isSelected ? <View style={styles.selectedAccent} /> : null}
@@ -1428,6 +1443,9 @@ export default function MapScreen({ navigation }: Props) {
                   style={({ pressed }) => [
                     styles.detailsButton,
                     pressed && styles.detailsButtonPressed,
+                    pressed &&
+                      !reduceMotion &&
+                      styles.detailsButtonPressedMotion,
                   ]}
                 >
                   <Text style={styles.detailsButtonText}>Ver detalhes</Text>
@@ -1703,6 +1721,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     favoriteCardPressed: {
       opacity: 0.8,
+    },
+
+    favoriteCardPressedMotion: {
       transform: [
         {
           scale: 0.99,
@@ -1801,12 +1822,15 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     buttonPressed: {
+      opacity: 0.9,
+    },
+
+    buttonPressedMotion: {
       transform: [
         {
           scale: 0.96,
         },
       ],
-      opacity: 0.9,
     },
 
     locationSuggestions: {
@@ -1869,6 +1893,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     locationActionPressed: {
       opacity: 0.75,
+    },
+
+    locationActionPressedMotion: {
       transform: [
         {
           scale: 0.995,
@@ -2030,6 +2057,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     selectedMapPreviewActionPressed: {
       opacity: 0.8,
+    },
+
+    selectedMapPreviewActionPressedMotion: {
       transform: [
         {
           scale: 0.98,
@@ -2338,6 +2368,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     gymCardPressed: {
       opacity: 0.83,
+    },
+
+    gymCardPressedMotion: {
       transform: [
         {
           scale: 0.995,
@@ -2495,6 +2528,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     detailsButtonPressed: {
       opacity: 0.82,
+    },
+
+    detailsButtonPressedMotion: {
       transform: [
         {
           scale: 0.97,
