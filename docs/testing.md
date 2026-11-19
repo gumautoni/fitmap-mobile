@@ -993,6 +993,176 @@ Os resultados não constituem certificação formal WCAG.
 A integração permanece condicionada à resolução do bloqueio
 de segurança da Issue #84 e à aprovação dos checks de CI.
 
+### 5.7. Acessibilidade transversal (ACC-02.5)
+
+A entrega consolidou as melhorias transversais
+de acessibilidade em quatro frentes.
+
+#### Cobertura automatizada
+
+| Frente | Novos testes |
+| --- | ---: |
+| ACC-02.5-A: áreas de toque | 3 |
+| ACC-02.5-B: legibilidade e responsividade | 6 |
+| ACC-02.5-C: redução de movimento | 43 |
+| ACC-02.5-D: seletores multiplataforma | 15 |
+| Total | 67 |
+
+A estratégia incremental utilizou etapas Red e Green,
+preservação dos testes existentes, regressões direcionadas
+e regressões completas antes da publicação dos checkpoints.
+
+Os testes dos seletores preservam os contratos
+de persistência anteriormente avaliados pelos alertas.
+
+A cobertura complementar verifica temas, movimento,
+cancelamento, opções selecionadas, isolamento acessível,
+concorrência e acionamentos duplicados.
+
+A regressão completa da etapa D, em 19/11/2026,
+registrou:
+
+* 933 testes mobile aprovados em 56 suítes;
+* 866 testes da baseline ACC-02.4 preservados;
+* 67 novos testes aprovados;
+* 71 testes direcionados da etapa D em seis suítes;
+* TypeScript, ESLint e Prettier aprovados;
+* integridade dos diffs aprovada;
+* duração da regressão completa: 31,384 segundos.
+
+A regressão final de consolidação documental,
+também em 19/11/2026, confirmou os 933 testes
+mobile em 56 suítes, com duração de 36,413 segundos
+e TypeScript, ESLint e Prettier aprovados.
+
+O checkpoint de implementação validado foi b4bb8b6,
+na branch feat/accessibility-transversal-acc02.
+
+O Gitleaks 8.30.0 aprovou o histórico de 17 commits
+e o snapshot de 413 arquivos, sem findings.
+
+Não houve nova regressão backend durante a ACC-02.5.
+A última regressão backend permanece com 1.206 testes
+aprovados.
+
+#### Ambiente da validação física
+
+Em 19/11/2026, o desenvolvedor confirmou os cenários
+abaixo no iPhone via Expo Go, com backend local.
+
+O ambiente utilizou:
+
+* Node.js 22.23.4 e npm 10.9.9;
+* Expo 58.0.25 e React Native 0.88.1;
+* react-native-maps 1.29.11;
+* PostgreSQL de desenvolvimento e S3Mock;
+* FastAPI com endpoints health e ready aprovados.
+
+O schema Alembic correspondia ao head do repositório.
+Nenhuma migration foi executada durante a preparação.
+
+A comunicação mobile utilizou a rede local com
+configuração temporária da URL da API, sem modificar
+os arquivos dotenv.
+
+O modelo exato do iPhone e a versão do iOS
+não foram registrados nesta validação.
+
+#### Cenários físicos aprovados
+
+Áreas de toque:
+
+1. Seleção de exercícios no catálogo.
+2. Reordenação dos exercícios.
+3. Remoção de exercício.
+4. Restauração de treino arquivado.
+
+Legibilidade com texto ampliado:
+
+5. Sugestões e resultados do catálogo.
+6. Nomes e endereços dos resultados de academias.
+7. Nomes e endereços das academias favoritas.
+8. Sugestões de localidades.
+9. Endereço e site nos detalhes da academia.
+10. Cabeçalho e navegação mensal do calendário.
+11. Utilização das sete colunas do calendário.
+12. Observações de treino.
+
+Redução de movimento:
+
+13. Autenticação.
+14. Home e elementos decorativos.
+15. Expansão e seleção no calendário.
+16. Execução e conclusão de treino.
+17. Histórico e detalhes de academias.
+18. Captura, confirmação e visualização de fotos.
+19. Navegação entre telas.
+20. Câmera do mapa durante pesquisa e seleção.
+21. Câmera do mapa durante localização atual.
+22. Restauração das animações no modo normal.
+
+Seletores do perfil:
+
+23. Objetivo principal.
+24. Experiência.
+25. Meta semanal.
+26. Duração preferida e rolagem.
+27. Unidades de medida.
+28. Aparência, temas e persistência.
+29. VoiceOver, seleção e cancelamento.
+30. Persistência das preferências após novo login.
+
+Resultado: 30 de 30 verificações aprovadas,
+sem ressalvas relatadas pelo desenvolvedor.
+
+#### Consolidação da ACC-02
+
+| Etapa | Novos testes | Verificações físicas aprovadas |
+| --- | ---: | ---: |
+| ACC-02.1 | 8 | 12 |
+| ACC-02.2 | 36 | 25 |
+| ACC-02.3 | 25 | 30 |
+| ACC-02.4 | 83 | 36 |
+| ACC-02.5 | 67 | 30 |
+| Total | 219 | 133 |
+
+A baseline anterior à ACC-02 possuía 714 testes mobile.
+
+A consolidação registra 933 testes mobile aprovados
+e 1.206 testes backend previamente aprovados,
+totalizando 2.139 testes automatizados acumulados.
+
+As 133 verificações físicas correspondem aos roteiros
+confirmados pelo desenvolvedor, não a uma matriz
+exaustiva de dispositivos e configurações.
+
+#### Limitações e integração
+
+A validação física no iPhone via Expo Go não comprova
+o comportamento de Android, TalkBack ou builds nativos.
+
+Os testes não constituem certificação WCAG nem
+medição exaustiva de todos os controles.
+
+A limpeza dos registros utilizados na validação
+física não foi confirmada.
+
+O aviso intermitente React act do VirtualizedList
+em MapGymPreview.test.tsx ocorreu em regressões
+intermediárias, não ocorreu na regressão
+da etapa D e reapareceu na regressão final
+de consolidação documental.
+
+Todos os testes foram aprovados, apesar do aviso.
+Sua ausência em uma execução não representa correção.
+A investigação permanece na QUALITY-01.
+
+A validação local não substitui os checks de CI.
+
+A integração das branches empilhadas permanece
+condicionada à resolução da Issue #84 e à aprovação
+dos checks obrigatórios.
+
 ## 6. Verificações de qualidade
 
 ### 6.1. Backend
