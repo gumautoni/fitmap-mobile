@@ -16,6 +16,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -30,6 +31,7 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
 } from "react-native";
 import MapView, { Marker, type Region } from "react-native-maps";
 
@@ -217,6 +219,17 @@ export default function MapScreen({ navigation }: Props) {
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const mapRef = useRef<MapView | null>(null);
+  const mapReadyRef = useRef(false);
+  const mapLayoutReadyRef = useRef(false);
+  const reduceMotionRef = useRef(reduceMotion);
+  const pendingCameraMoveRef = useRef<{
+    region: Region;
+    duration: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    reduceMotionRef.current = reduceMotion;
+  }, [reduceMotion]);
 
   const favoritesRequestIdRef = useRef(0);
   const suggestionsRequestIdRef = useRef(0);
@@ -414,6 +427,75 @@ export default function MapScreen({ navigation }: Props) {
     );
   }
 
+  const flushPendingCameraMove = useCallback((): void => {
+    const map = mapRef.current;
+    const pending = pendingCameraMoveRef.current;
+
+    if (
+      !map ||
+      !pending ||
+      !mapReadyRef.current ||
+      !mapLayoutReadyRef.current
+    ) {
+      return;
+    }
+
+    pendingCameraMoveRef.current = null;
+
+    const { region, duration } = pending;
+
+    if (!reduceMotionRef.current) {
+      map.animateToRegion(region, duration);
+      return;
+    }
+
+    const halfLatitudeDelta = region.latitudeDelta / 2;
+    const halfLongitudeDelta = region.longitudeDelta / 2;
+
+    map.fitToCoordinates(
+      [
+        {
+          latitude: Math.max(-90, region.latitude - halfLatitudeDelta),
+          longitude: Math.max(-180, region.longitude - halfLongitudeDelta),
+        },
+        {
+          latitude: Math.min(90, region.latitude + halfLatitudeDelta),
+          longitude: Math.min(180, region.longitude + halfLongitudeDelta),
+        },
+      ],
+      {
+        animated: false,
+        edgePadding: {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+        },
+      },
+    );
+  }, []);
+
+  const handleMapReady = useCallback((): void => {
+    mapReadyRef.current = true;
+    flushPendingCameraMove();
+  }, [flushPendingCameraMove]);
+
+  const handleMapLayout = useCallback(
+    (event: LayoutChangeEvent): void => {
+      const { width, height } = event.nativeEvent.layout;
+
+      mapLayoutReadyRef.current = width > 0 && height > 0;
+
+      flushPendingCameraMove();
+    },
+    [flushPendingCameraMove],
+  );
+
+  function moveCameraToRegion(region: Region, duration: number): void {
+    pendingCameraMoveRef.current = { region, duration };
+    flushPendingCameraMove();
+  }
+
   function focusSearchResults(
     results: GymSearchResult[],
     fallbackCoordinates?: UserCoordinates,
@@ -426,17 +508,14 @@ export default function MapScreen({ navigation }: Props) {
       const nextRegion = getGymRegion(firstGymWithCoordinates);
 
       if (nextRegion) {
-        mapRef.current?.animateToRegion(nextRegion, 800);
+        moveCameraToRegion(nextRegion, 800);
       }
 
       return;
     }
 
     if (fallbackCoordinates && hasValidGymCoordinates(fallbackCoordinates)) {
-      mapRef.current?.animateToRegion(
-        getCoordinatesRegion(fallbackCoordinates),
-        800,
-      );
+      moveCameraToRegion(getCoordinatesRegion(fallbackCoordinates), 800);
     }
   }
 
@@ -452,6 +531,7 @@ export default function MapScreen({ navigation }: Props) {
     }
 
     try {
+      pendingCameraMoveRef.current = null;
       setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
@@ -485,6 +565,7 @@ export default function MapScreen({ navigation }: Props) {
     setQuery(suggestion.label);
 
     try {
+      pendingCameraMoveRef.current = null;
       setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
@@ -557,6 +638,7 @@ export default function MapScreen({ navigation }: Props) {
     }
 
     try {
+      pendingCameraMoveRef.current = null;
       setLoadingAction("location");
       setGyms([]);
       setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
@@ -582,10 +664,7 @@ export default function MapScreen({ navigation }: Props) {
       setHasSearched(true);
       setErrorMessage(getSearchErrorMessage(error));
 
-      mapRef.current?.animateToRegion(
-        getCoordinatesRegion(currentCoordinates),
-        800,
-      );
+      moveCameraToRegion(getCoordinatesRegion(currentCoordinates), 800);
     } finally {
       setLoadingAction(null);
     }
@@ -597,7 +676,9 @@ export default function MapScreen({ navigation }: Props) {
     const nextRegion = getGymRegion(gym);
 
     if (nextRegion) {
-      mapRef.current?.animateToRegion(nextRegion, 500);
+      moveCameraToRegion(nextRegion, 500);
+    } else {
+      pendingCameraMoveRef.current = null;
     }
   }
 
@@ -967,7 +1048,14 @@ export default function MapScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.mapCard}>
-        <MapView ref={mapRef} style={styles.map} initialRegion={INITIAL_REGION}>
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={INITIAL_REGION}
+          onMapReady={handleMapReady}
+          onLayout={handleMapLayout}
+          moveOnMarkerPress={!reduceMotion}
+        >
           {hasValidGymCoordinates(userCoordinates) ? (
             <Marker
               coordinate={userCoordinates}

@@ -72,18 +72,65 @@ jest.mock("expo-location", () => ({
   getCurrentPositionAsync: jest.fn(),
 }));
 
+type MockLayoutEvent = {
+  nativeEvent: {
+    layout: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+  };
+};
+
+const mockAnimateToRegion = jest.fn();
+const mockFitToCoordinates = jest.fn();
+
+const mockMapLifecycle: {
+  ready: (() => void) | undefined;
+  layout: ((event: MockLayoutEvent) => void) | undefined;
+  moveOnMarkerPress: boolean;
+} = {
+  ready: undefined,
+  layout: undefined,
+  moveOnMarkerPress: true,
+};
+
 jest.mock("react-native-maps", () => {
   const React = jest.requireActual<typeof import("react")>("react");
   const { Pressable, View } =
     jest.requireActual<typeof import("react-native")>("react-native");
 
   const MockMapView = React.forwardRef<
-    { animateToRegion: (...args: unknown[]) => void },
-    { children?: React.ReactNode }
-  >(function MockMapView({ children }, ref) {
+    {
+      animateToRegion: (...args: unknown[]) => void;
+      fitToCoordinates: (...args: unknown[]) => void;
+    },
+    {
+      children?: React.ReactNode;
+      onMapReady?: () => void;
+      onLayout?: (event: MockLayoutEvent) => void;
+      moveOnMarkerPress?: boolean;
+    }
+  >(function MockMapView(
+    { children, onMapReady, onLayout, moveOnMarkerPress = true },
+    ref,
+  ) {
     React.useImperativeHandle(ref, () => ({
-      animateToRegion: jest.fn(),
+      animateToRegion: mockAnimateToRegion,
+      fitToCoordinates: mockFitToCoordinates,
     }));
+
+    React.useEffect(() => {
+      mockMapLifecycle.ready = onMapReady;
+      mockMapLifecycle.layout = onLayout;
+      mockMapLifecycle.moveOnMarkerPress = moveOnMarkerPress;
+
+      return () => {
+        mockMapLifecycle.ready = undefined;
+        mockMapLifecycle.layout = undefined;
+      };
+    }, [onMapReady, onLayout, moveOnMarkerPress]);
 
     return React.createElement(View, { testID: "mock-map" }, children);
   });
@@ -168,7 +215,84 @@ const authValue: NonNullable<ContextType<typeof AuthContext>> = {
   updateAuthenticatedUser: jest.fn(),
 };
 
-async function mountMap(): Promise<void> {
+async function notifyMapLayout() {
+  await act(async () => {
+    mockMapLifecycle.layout?.({
+      nativeEvent: {
+        layout: {
+          x: 0,
+          y: 0,
+          width: 320,
+          height: 280,
+        },
+      },
+    });
+  });
+}
+
+async function notifyMapReady() {
+  await act(async () => {
+    mockMapLifecycle.ready?.();
+  });
+}
+
+function cameraRegion(latitude: number, longitude: number) {
+  return {
+    latitude,
+    longitude,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  };
+}
+
+type CameraRegion = ReturnType<typeof cameraRegion>;
+
+function expectedFit(region: CameraRegion) {
+  return [
+    [
+      {
+        latitude: region.latitude - region.latitudeDelta / 2,
+        longitude: region.longitude - region.longitudeDelta / 2,
+      },
+      {
+        latitude: region.latitude + region.latitudeDelta / 2,
+        longitude: region.longitude + region.longitudeDelta / 2,
+      },
+    ],
+    {
+      animated: false,
+      edgePadding: {
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      },
+    },
+  ];
+}
+
+function expectCameraMoves(reduced: boolean, moves: [CameraRegion, number][]) {
+  expect(mockAnimateToRegion.mock.calls).toEqual(reduced ? [] : moves);
+
+  expect(mockFitToCoordinates.mock.calls).toEqual(
+    reduced ? moves.map(([region]) => expectedFit(region)) : [],
+  );
+}
+
+async function changeCameraMotionPreference(enabled: boolean) {
+  const subscriptions = jest.mocked(AccessibilityInfo.addEventListener).mock
+    .calls;
+
+  await act(async () => {
+    for (const [event, listener] of subscriptions) {
+      if (event === "reduceMotionChanged") {
+        (listener as (value: boolean) => void)(enabled);
+      }
+    }
+  });
+}
+
+async function mountMap(ready = true): Promise<void> {
   await render(
     <AuthContext.Provider value={authValue}>
       <MapScreen
@@ -181,6 +305,11 @@ async function mountMap(): Promise<void> {
       />
     </AuthContext.Provider>,
   );
+
+  if (ready) {
+    await notifyMapLayout();
+    await notifyMapReady();
+  }
 }
 
 async function searchForGyms(query = "Barra do Piraí"): Promise<void> {
@@ -2420,4 +2549,265 @@ describe("MapScreen - previa de academia selecionada", () => {
       expect(feedback).toEqual(expectedFeedback(reduceMotion, 0.75, 0.995));
     },
   );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in search and gym camera selection",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      await loadResults();
+
+      await fireEvent.press(screen.getByTestId("map-marker-Academia Atlas"));
+
+      expect(screen.getByLabelText("Selecionar Academia Atlas")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      await fireEvent.press(
+        screen.getByLabelText("Selecionar Academia Aurora"),
+      );
+
+      expect(screen.getByLabelText("Selecionar Academia Aurora")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      expect(navigation.navigate).not.toHaveBeenCalled();
+      expect(mockedSearch).toHaveBeenCalledTimes(1);
+
+      expectCameraMoves(reduceMotion, [
+        [cameraRegion(-22.471, -43.825), 800],
+        [cameraRegion(-22.472, -43.824), 500],
+        [cameraRegion(-22.471, -43.825), 500],
+      ]);
+
+      expect(mockMapLifecycle.moveOnMarkerPress).toBe(!reduceMotion);
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in location success and fallback",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      mockedNearby
+        .mockResolvedValueOnce(gyms)
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce(new Error("Camera search failure"));
+
+      await mountMap();
+
+      const label = "Usar minha localiza\u00e7\u00e3o";
+
+      await fireEvent.press(screen.getByLabelText(label));
+
+      await screen.findByTestId("map-marker-Academia Aurora");
+
+      await fireEvent.press(screen.getByLabelText(label));
+
+      await screen.findByText("Nenhuma academia encontrada");
+
+      await fireEvent.press(screen.getByLabelText(label));
+
+      await screen.findByText(/N\u00e3o foi poss\u00edvel conectar ao backend/);
+
+      expect(screen.getByLabelText(label)).not.toBeDisabled();
+
+      expect(mockedNearby.mock.calls).toEqual([
+        [-22.47034, -43.82633, 5000],
+        [-22.47034, -43.82633, 5000],
+        [-22.47034, -43.82633, 5000],
+      ]);
+
+      expect(mockedSearch).not.toHaveBeenCalled();
+      expect(navigation.navigate).not.toHaveBeenCalled();
+
+      expectCameraMoves(reduceMotion, [
+        [cameraRegion(-22.471, -43.825), 800],
+        [cameraRegion(-22.47034, -43.82633), 800],
+        [cameraRegion(-22.47034, -43.82633), 800],
+      ]);
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in location suggestion fallback",
+    async (reduceMotion) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(reduceMotion);
+
+      const suggestion: LocationSuggestion = {
+        label: "Centro, Volta Redonda, RJ, Brasil",
+        query: "Centro, Volta Redonda, RJ, Brasil",
+        coordinates: {
+          latitude: -22.512419,
+          longitude: -44.0905846,
+        },
+      };
+
+      mockedSuggestions.mockResolvedValueOnce([suggestion]);
+      mockedNearby.mockResolvedValueOnce([]);
+
+      await mountMap();
+
+      await fireEvent.changeText(
+        screen.getByPlaceholderText("Cidade, bairro ou regi\u00e3o"),
+        "Centro, Volta Redonda",
+      );
+
+      await fireEvent.press(
+        await screen.findByLabelText(
+          `Selecionar localidade ${suggestion.label}`,
+          {},
+          { timeout: 3000 },
+        ),
+      );
+
+      await screen.findByText("Nenhuma academia encontrada");
+
+      expect(mockedNearby).toHaveBeenCalledTimes(1);
+
+      expect(mockedNearby).toHaveBeenCalledWith(
+        -22.512419,
+        -44.0905846,
+        10_000,
+      );
+
+      expect(mockedSearch).not.toHaveBeenCalled();
+
+      expectCameraMoves(reduceMotion, [
+        [cameraRegion(-22.512419, -44.0905846), 800],
+      ]);
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: uses latest reducedMotion=%s after a pending search",
+    async (finalPreference) => {
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(!finalPreference);
+
+      let resolveSearch!: (results: GymSearchResult[]) => void;
+
+      mockedSearch.mockReturnValueOnce(
+        new Promise<GymSearchResult[]>((resolve) => {
+          resolveSearch = resolve;
+        }),
+      );
+
+      await mountMap();
+      await searchForGyms();
+
+      try {
+        expect(mockedSearch).toHaveBeenCalledTimes(1);
+        expect(mockAnimateToRegion).not.toHaveBeenCalled();
+        expect(mockFitToCoordinates).not.toHaveBeenCalled();
+
+        await changeCameraMotionPreference(finalPreference);
+      } finally {
+        await act(async () => {
+          resolveSearch(gyms);
+        });
+      }
+
+      await screen.findByTestId("map-marker-Academia Aurora");
+
+      expect(mockedSearch).toHaveBeenCalledTimes(1);
+
+      expectCameraMoves(finalPreference, [
+        [cameraRegion(-22.471, -43.825), 800],
+      ]);
+    },
+  );
+
+  it.each([true, false])(
+    "accessibility: waits for map readiness and layout, readyFirst=%s",
+    async (readyFirst) => {
+      await mountMap(false);
+
+      await searchForGyms();
+
+      await screen.findByTestId("map-marker-Academia Aurora");
+
+      await fireEvent.press(screen.getByLabelText("Selecionar Academia Atlas"));
+
+      if (readyFirst) {
+        await notifyMapReady();
+      } else {
+        await notifyMapLayout();
+      }
+
+      const beforeReady = {
+        animated: mockAnimateToRegion.mock.calls.slice(),
+        instant: mockFitToCoordinates.mock.calls.slice(),
+      };
+
+      if (readyFirst) {
+        await notifyMapLayout();
+      } else {
+        await notifyMapReady();
+      }
+
+      expect(beforeReady).toEqual({
+        animated: [],
+        instant: [],
+      });
+
+      expectCameraMoves(true, [[cameraRegion(-22.472, -43.824), 500]]);
+
+      expect(screen.getByLabelText("Selecionar Academia Atlas")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true }),
+      );
+
+      expect(mockedSearch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("accessibility: does not move the camera without valid coordinates", async () => {
+    mockedSearch.mockResolvedValueOnce([
+      {
+        ...gyms[0],
+        coordinates: null,
+      },
+      {
+        ...gyms[1],
+        coordinates: {
+          latitude: 91,
+          longitude: 0,
+        },
+      },
+    ]);
+
+    mockedPermissions.mockResolvedValueOnce({
+      status: "denied",
+    });
+
+    await mountMap();
+    await searchForGyms();
+
+    await fireEvent.press(
+      await screen.findByLabelText("Selecionar Academia Aurora"),
+    );
+
+    await fireEvent.press(screen.getByLabelText("Selecionar Academia Atlas"));
+
+    await fireEvent.press(
+      screen.getByLabelText("Usar minha localiza\u00e7\u00e3o"),
+    );
+
+    await screen.findByText(/Permiss\u00e3o de localiza\u00e7\u00e3o negada/);
+
+    expect(mockedNearby).not.toHaveBeenCalled();
+
+    expect(mockAnimateToRegion).not.toHaveBeenCalled();
+    expect(mockFitToCoordinates).not.toHaveBeenCalled();
+  });
 });
