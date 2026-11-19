@@ -1,5 +1,6 @@
 import {
   act,
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -341,17 +342,21 @@ async function pressAndReadFeedback(name: string, opacity: number) {
   let feedback: Pick<ViewStyle, "opacity" | "transform"> | undefined;
 
   const user = userEvent.setup({
-    advanceTimers: (delay) => {
-      if (delay <= 0) return;
+    advanceTimers: async (delay) => {
+      if (delay > 0) {
+        const style = StyleSheet.flatten(
+          screen.getByLabelText(name).props.style as StyleProp<ViewStyle>,
+        );
 
-      const style = StyleSheet.flatten(
-        screen.getByLabelText(name).props.style as StyleProp<ViewStyle>,
-      );
+        feedback = {
+          opacity: style?.opacity,
+          transform: style?.transform,
+        };
+      }
 
-      feedback = {
-        opacity: style?.opacity,
-        transform: style?.transform,
-      };
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(delay);
+      });
     },
   });
 
@@ -377,6 +382,7 @@ function expectedFeedback(
 
 describe("MapScreen - previa de academia selecionada", () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
 
     jest
@@ -403,8 +409,17 @@ describe("MapScreen - previa de academia selecionada", () => {
     });
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
+  afterEach(async () => {
+    try {
+      await cleanup();
+
+      await act(async () => {
+        await jest.runOnlyPendingTimersAsync();
+      });
+    } finally {
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    }
   });
 
   it("accessibility: keeps long gym results readable", async () => {
