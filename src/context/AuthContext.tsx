@@ -123,7 +123,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const assertCurrentGeneration = useCallback(
     (generation: number): void => {
       if (!isCurrentGeneration(generation)) {
-        throw new Error("Sua sess?o expirou. Entre novamente.");
+        throw new Error("Sua sessão expirou. Entre novamente.");
       }
     },
     [isCurrentGeneration],
@@ -332,7 +332,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       if (!currentGeneration) {
-        throw new Error("Sua sess?o expirou. Entre novamente.");
+        throw new Error("Sua sessão expirou. Entre novamente.");
       }
 
       throw normalizeAuthError(error);
@@ -367,7 +367,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         assertCurrentGeneration(generation);
 
         if (!storedRefreshToken) {
-          throw new Error("Sua sess?o expirou. Entre novamente.");
+          throw new Error("Sua sessão expirou. Entre novamente.");
         }
 
         const tokens = await refreshSession(storedRefreshToken);
@@ -400,7 +400,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
 
         if (!currentGeneration) {
-          throw new Error("Sua sess?o expirou. Entre novamente.");
+          throw new Error("Sua sessão expirou. Entre novamente.");
         }
 
         throw normalizeAuthError(error);
@@ -418,7 +418,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const refreshAccessToken = useCallback(async (): Promise<string> => {
     if (!accessTokenRef.current) {
-      throw new Error("Sua sess?o expirou. Entre novamente.");
+      throw new Error("Sua sessão expirou. Entre novamente.");
     }
 
     if (refreshPromiseRef.current) {
@@ -451,7 +451,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const requestAccessToken = accessTokenRef.current;
 
       if (!requestAccessToken) {
-        throw new Error("Sua sess?o expirou. Entre novamente.");
+        throw new Error("Sua sessão expirou. Entre novamente.");
       }
 
       async function execute(token: string): Promise<T> {
@@ -542,7 +542,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     );
 
     if (!localDeletionSucceeded && !backendLogoutSucceeded) {
-      throw new Error("N?o foi poss?vel encerrar a sess?o com seguran?a.");
+      throw new Error("Não foi possível encerrar a sessão com segurança.");
     }
   }
 

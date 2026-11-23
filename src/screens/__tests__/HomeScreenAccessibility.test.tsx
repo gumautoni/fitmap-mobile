@@ -313,7 +313,7 @@ describe("ACC-02.4 Home accessibility", () => {
 
     expect(action).toHaveProp(
       "accessibilityHint",
-      "Seus treinos estao prontos. Escolha um para comecar.",
+      "Seus treinos estão prontos. Escolha um para começar.",
     );
 
     expect(action).toHaveProp(
@@ -342,7 +342,7 @@ describe("ACC-02.4 Home accessibility", () => {
 
     expect(action).toHaveProp(
       "accessibilityHint",
-      "Crie um treino para organizar exercicios e acompanhar sua evolucao.",
+      "Crie um treino para organizar exercícios e acompanhar sua evolução.",
     );
 
     expect(action).toHaveProp(
@@ -366,7 +366,7 @@ describe("ACC-02.4 Home accessibility", () => {
     await mountHome();
 
     const guidance =
-      "Nao foi possivel consultar os treinos agora. Acesse sua lista para tentar novamente.";
+      "Não foi possível consultar os treinos agora. Acesse sua lista para tentar novamente.";
 
     await screen.findByText(guidance);
 

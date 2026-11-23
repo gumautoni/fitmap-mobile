@@ -25,6 +25,10 @@ import {
   type WorkoutExercise,
 } from "../services/training";
 import { useAppTheme } from "../theme/ThemeProvider";
+import {
+  WORKOUT_LOAD_PATTERN,
+  WORKOUT_LOAD_GUIDANCE,
+} from "../utils/workoutLoad";
 
 type WorkoutExerciseConfigScreenProps =
   AppStackScreenProps<"ConfigurarExercicioTreino">;
@@ -95,10 +99,8 @@ function parseOptionalLoad(value: string): string | null {
     return null;
   }
 
-  if (!/^\d{1,6}(?:\.\d{1,2})?$/.test(normalized)) {
-    throw new Error(
-      "A carga deve ter até 6 dígitos inteiros e no máximo 2 casas decimais.",
-    );
+  if (!WORKOUT_LOAD_PATTERN.test(normalized)) {
+    throw new Error(WORKOUT_LOAD_GUIDANCE);
   }
 
   return normalized;
