@@ -137,20 +137,20 @@ export default function HomeScreen({ navigation }: Props) {
       trainingAction = "Continuar treino";
       break;
     case "available":
-      trainingTitle = "Seu proximo treino";
+      trainingTitle = "Seu próximo treino";
       trainingDescription =
-        "Seus treinos estao prontos. Escolha um para comecar.";
+        "Seus treinos estão prontos. Escolha um para começar.";
       trainingAction = "Escolher treino";
       break;
     case "empty":
       trainingTitle = "Seu primeiro treino";
       trainingDescription =
-        "Crie um treino para organizar exercicios e acompanhar sua evolucao.";
+        "Crie um treino para organizar exercícios e acompanhar sua evolução.";
       trainingAction = "Criar primeiro treino";
       break;
     case "error":
       trainingDescription =
-        "Nao foi possivel consultar os treinos agora. Acesse sua lista para tentar novamente.";
+        "Não foi possível consultar os treinos agora. Acesse sua lista para tentar novamente.";
       break;
     default:
       break;

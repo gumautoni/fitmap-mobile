@@ -891,7 +891,7 @@ describe("AuthProvider session lifecycle", () => {
 
     await act(async () => {
       await expect(auth().logout()).rejects.toThrow(
-        "N?o foi poss?vel encerrar a sess?o com seguran?a.",
+        "Não foi possível encerrar a sessão com segurança.",
       );
     });
 

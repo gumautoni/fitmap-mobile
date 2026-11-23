@@ -202,6 +202,7 @@ export default function ProgressScreen() {
   const reduceMotion = useReducedMotion();
   const [loading, setLoading] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [goalsRefreshVersion, setGoalsRefreshVersion] = useState(0);
   const [bmiRefreshVersion, setBmiRefreshVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -779,12 +780,13 @@ export default function ProgressScreen() {
         <BmiCard refreshVersion={bmiRefreshVersion} />
 
         <BodyMetricsSection
+          onMetricSaved={() => setGoalsRefreshVersion((current) => current + 1)}
           onWeightSaved={() => {
             setBmiRefreshVersion((current) => current + 1);
           }}
         />
 
-        <FitnessGoalsSection />
+        <FitnessGoalsSection refreshVersion={goalsRefreshVersion} />
 
         <View style={styles.photoSection}>
           <View style={styles.sectionHeader}>

@@ -105,10 +105,12 @@ function validateValue(input: string): string | null {
 }
 
 interface BodyMetricsSectionProps {
+  onMetricSaved?: () => void;
   onWeightSaved?: () => void;
 }
 
 export default function BodyMetricsSection({
+  onMetricSaved,
   onWeightSaved,
 }: BodyMetricsSectionProps) {
   const auth = useContext(AuthContext);
@@ -221,6 +223,8 @@ export default function BodyMetricsSection({
       ]);
 
       setValue("");
+
+      onMetricSaved?.();
 
       if (created.metricType === "weight") {
         onWeightSaved?.();

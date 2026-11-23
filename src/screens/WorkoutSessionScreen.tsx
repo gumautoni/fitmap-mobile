@@ -55,6 +55,10 @@ import {
 } from "../services/trainingSessions";
 import { useAppTheme } from "../theme/ThemeProvider";
 import {
+  WORKOUT_LOAD_PATTERN,
+  WORKOUT_LOAD_GUIDANCE,
+} from "../utils/workoutLoad";
+import {
   getWorkoutNoteDraft,
   hasUnsavedWorkoutNotes,
   isWorkoutNoteDirty,
@@ -547,13 +551,8 @@ export default function WorkoutSessionScreen({
     };
 
     if (normalizedLoad) {
-      const loadValue = Number(normalizedLoad);
-
-      if (!Number.isFinite(loadValue) || loadValue < 0) {
-        Alert.alert(
-          "Carga inválida",
-          "Informe uma carga válida ou deixe o campo vazio.",
-        );
+      if (!WORKOUT_LOAD_PATTERN.test(normalizedLoad)) {
+        Alert.alert("Carga inválida", WORKOUT_LOAD_GUIDANCE);
 
         return;
       }

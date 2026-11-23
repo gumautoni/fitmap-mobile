@@ -1405,6 +1405,47 @@ describe("WorkoutSessionScreen - navegacao apos encerramento", () => {
       expect(screen.queryByText("kg \u2713")).toBeNull();
     });
 
+    it.each([
+      ["", null],
+      ["0", "0"],
+      ["15,50", "15.50"],
+      ["999999.99", "999999.99"],
+    ])("registers an optional executed load of %j", async (input, expected) => {
+      mockedAdd.mockResolvedValue(session);
+      await renderSession();
+      await fireEvent.changeText(
+        screen.getByLabelText(`Carga de ${exerciseName}`),
+        input,
+      );
+      await fireEvent.press(screen.getByLabelText(addLabel));
+      expect(mockedAdd).toHaveBeenCalledWith(
+        "test-access-token",
+        session.id,
+        session.exercises[0].id,
+        {
+          repetitions: 10,
+          ...(expected === null ? {} : { load: expected, loadUnit: "kg" }),
+        },
+      );
+    });
+
+    it.each(["-1", "1.234", "12,345", "1000000", "1e3", "2,3.4", "abc"])(
+      "rejects invalid executed load %j before submitting the set",
+      async (input) => {
+        await renderSession();
+        await fireEvent.changeText(
+          screen.getByLabelText(`Carga de ${exerciseName}`),
+          input,
+        );
+        await fireEvent.press(screen.getByLabelText(addLabel));
+        expect(alertSpy).toHaveBeenCalledWith(
+          "Carga inválida",
+          expect.stringContaining("2 casas decimais"),
+        );
+        expect(mockedAdd).not.toHaveBeenCalled();
+      },
+    );
+
     it("accessibility: announces set registration and restores inputs after failure", async () => {
       const request = pendingFailure();
 

@@ -1,6 +1,13 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { Plus, RefreshCw, Target, TrendingUp } from "lucide-react-native";
-import { useCallback, useContext, useMemo, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -171,7 +178,11 @@ function getProgressPercentage(
   return Math.max(0, Math.min(100, percentage));
 }
 
-export default function FitnessGoalsSection() {
+export default function FitnessGoalsSection({
+  refreshVersion = 0,
+}: {
+  refreshVersion?: number;
+}) {
   const auth = useContext(AuthContext);
 
   if (!auth) {
@@ -195,6 +206,9 @@ export default function FitnessGoalsSection() {
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const lastRefreshVersion = useRef(refreshVersion);
+  const latestRequest = useRef<symbol | null>(null);
+
   const fetchGoalItems = useCallback(async (): Promise<GoalItem[]> => {
     const goals = await runAuthenticatedRequest((accessToken) =>
       getFitnessGoals(accessToken),
@@ -215,49 +229,46 @@ export default function FitnessGoalsSection() {
     );
   }, [runAuthenticatedRequest]);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-
-      setLoading(true);
-      setError(null);
-
-      fetchGoalItems()
-        .then((loadedItems) => {
-          if (active) {
-            setItems(loadedItems);
-          }
-        })
-        .catch((loadError: unknown) => {
-          if (active) {
-            setError(getErrorMessage(loadError));
-          }
-        })
-        .finally(() => {
-          if (active) {
-            setLoading(false);
-          }
-        });
-
-      return () => {
-        active = false;
-      };
-    }, [fetchGoalItems]),
-  );
-
   const refreshGoals = useCallback(async (): Promise<void> => {
+    const request = Symbol();
+    latestRequest.current = request;
     setLoading(true);
     setError(null);
 
     try {
       const loadedItems = await fetchGoalItems();
-      setItems(loadedItems);
+      if (latestRequest.current === request) {
+        setItems(loadedItems);
+      }
     } catch (loadError) {
-      setError(getErrorMessage(loadError));
+      if (latestRequest.current === request) {
+        setError(getErrorMessage(loadError));
+      }
     } finally {
-      setLoading(false);
+      if (latestRequest.current === request) {
+        setLoading(false);
+      }
     }
   }, [fetchGoalItems]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshGoals();
+      return () => {
+        latestRequest.current = null;
+      };
+    }, [refreshGoals]),
+  );
+
+  useEffect(() => {
+    if (lastRefreshVersion.current === refreshVersion) {
+      return;
+    }
+    lastRefreshVersion.current = refreshVersion;
+    if (latestRequest.current !== null) {
+      void refreshGoals();
+    }
+  }, [refreshVersion, refreshGoals]);
 
   function selectMetricType(type: BodyMetricType): void {
     if (saving) {
@@ -312,15 +323,10 @@ export default function FitnessGoalsSection() {
     setTargetValue("");
     setSuccessMessage("Meta registrada com sucesso.");
 
-    try {
-      const updatedItems = await fetchGoalItems();
-      setItems(updatedItems);
-      setError(null);
-    } catch (loadError) {
-      setError(getErrorMessage(loadError));
-    } finally {
-      setSaving(false);
+    if (latestRequest.current !== null) {
+      await refreshGoals();
     }
+    setSaving(false);
   }
 
   const allowedUnits = getAllowedUnits(selectedType);
