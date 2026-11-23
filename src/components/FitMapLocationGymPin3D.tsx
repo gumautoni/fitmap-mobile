@@ -11,12 +11,19 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 
+export type FitMapLocationGymPin3DProps = {
+  size?: number;
+  primary?: string;
+  primaryDark?: string;
+  accent?: string;
+};
+
 export default function FitMapLocationGymPin3D({
   size = 194,
   primary = "#FF5722",
   primaryDark = "#C2410C",
   accent = "#2DD4BF",
-}) {
+}: FitMapLocationGymPin3DProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 260 260" fill="none">
       <Defs>

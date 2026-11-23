@@ -1,22 +1,42 @@
+export type LoginFormErrors = {
+  email?: string;
+  password?: string;
+};
+
+export type RegistrationFormErrors = LoginFormErrors & {
+  name?: string;
+  confirmPassword?: string;
+};
+
+export type PasswordRequirements = {
+  length: boolean;
+  uppercase: boolean;
+  lowercase: boolean;
+  number: boolean;
+  special: boolean;
+};
+
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 128;
 
 // Mesmos símbolos ASCII aceitos no RegisterRequest do backend (string.punctuation).
 const SPECIAL_CHARACTERS = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
 
-export function normalizeEmail(email) {
+export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export function normalizeName(name) {
+export function normalizeName(name: string): string {
   return name.trim().replace(/\s+/g, " ");
 }
 
-export function isValidEmail(email) {
+export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-export function getPasswordRequirements(password) {
+export function getPasswordRequirements(
+  password: string,
+): PasswordRequirements {
   const characters = Array.from(password);
   return {
     length:
@@ -31,8 +51,11 @@ export function getPasswordRequirements(password) {
   };
 }
 
-export function validateLoginForm(email, password) {
-  const errors = {};
+export function validateLoginForm(
+  email: string,
+  password: string,
+): LoginFormErrors {
+  const errors: LoginFormErrors = {};
   if (!email) {
     errors.email = "Informe seu e-mail.";
   } else if (!isValidEmail(email)) {
@@ -45,12 +68,12 @@ export function validateLoginForm(email, password) {
 }
 
 export function validateRegistrationForm(
-  name,
-  email,
-  password,
-  confirmPassword,
-) {
-  const errors = {};
+  name: string,
+  email: string,
+  password: string,
+  confirmPassword: string,
+): RegistrationFormErrors {
+  const errors: RegistrationFormErrors = {};
   if (!name) {
     errors.name = "Informe seu nome completo.";
   } else if (name.length < 3) {

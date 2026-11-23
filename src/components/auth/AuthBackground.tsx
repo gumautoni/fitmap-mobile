@@ -1,4 +1,4 @@
-import React from "react";
+import React, { type ReactNode } from "react";
 import { ImageBackground, StyleSheet } from "react-native";
 
 /**
@@ -6,7 +6,11 @@ import { ImageBackground, StyleSheet } from "react-native";
  * Nao existe SVG absoluto sobre o formulario nem disputa de zIndex.
  * A fita e a mesma arte aprovada no 22-C3.3, sem esfera.
  */
-export default function AuthBackground({ children }) {
+export type AuthBackgroundProps = {
+  children: ReactNode;
+};
+
+export default function AuthBackground({ children }: AuthBackgroundProps) {
   return (
     <ImageBackground
       source={require("../../../assets/images/brand/auth-ribbon-orange.png")}

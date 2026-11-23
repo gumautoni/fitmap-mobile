@@ -13,6 +13,7 @@ import AuthButton from "../components/auth/AuthButton";
 import AuthField from "../components/auth/AuthField";
 import AuthScreenShell from "../components/auth/AuthScreenShell";
 import { AuthContext } from "../context/AuthContext";
+import type { AuthStackScreenProps } from "../navigation/types";
 import {
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
@@ -20,9 +21,18 @@ import {
   normalizeEmail,
   normalizeName,
   validateRegistrationForm,
+  type RegistrationFormErrors,
+  type PasswordRequirements as PasswordRequirementFlags,
 } from "../utils/authFormValidation";
 
-const PASSWORD_RULES = [
+type Props = AuthStackScreenProps<"Cadastro">;
+
+type PasswordRule = {
+  key: keyof PasswordRequirementFlags;
+  label: string;
+};
+
+const PASSWORD_RULES: readonly PasswordRule[] = [
   {
     key: "length",
     label: `${MIN_PASSWORD_LENGTH} a ${MAX_PASSWORD_LENGTH} caracteres`,
@@ -33,7 +43,7 @@ const PASSWORD_RULES = [
   { key: "special", label: "Um símbolo (!, @, #...)" },
 ];
 
-function PasswordRequirements({ password }) {
+function PasswordRequirements({ password }: { password: string }) {
   if (!password) return null;
   const requirements = getPasswordRequirements(password);
 
@@ -65,24 +75,28 @@ function PasswordRequirements({ password }) {
   );
 }
 
-export default function RegisterScreen({ navigation }) {
+export default function RegisterScreen({ navigation }: Props) {
   const auth = useContext(AuthContext);
   const submittingRef = useRef(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<RegistrationFormErrors>({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function updateField(field, value, setter) {
+  function updateField(
+    field: keyof RegistrationFormErrors,
+    value: string,
+    setter: (value: string) => void,
+  ) {
     setter(value);
     setErrors((previous) => ({ ...previous, [field]: undefined }));
     setFormError("");
   }
 
-  async function handleRegister() {
+  async function handleRegister(): Promise<void> {
     if (submittingRef.current) return;
     Keyboard.dismiss();
 

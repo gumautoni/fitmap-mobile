@@ -6,17 +6,25 @@ import { useReducedMotion } from "../../hooks/useReducedMotion";
 import {
   ActivityIndicator,
   Pressable,
+  type PressableProps,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+
+export type AuthButtonProps = {
+  title: string;
+  onPress: NonNullable<PressableProps["onPress"]>;
+  loading?: boolean;
+  disabled?: boolean;
+};
 
 export default function AuthButton({
   title,
   onPress,
   loading = false,
   disabled = false,
-}) {
+}: AuthButtonProps) {
   const reduceMotion = useReducedMotion();
   const unavailable = disabled || loading;
 

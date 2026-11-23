@@ -7,30 +7,37 @@ import AuthButton from "../components/auth/AuthButton";
 import AuthField from "../components/auth/AuthField";
 import AuthScreenShell from "../components/auth/AuthScreenShell";
 import { AuthContext } from "../context/AuthContext";
-import { normalizeEmail, validateLoginForm } from "../utils/authFormValidation";
+import type { AuthStackScreenProps } from "../navigation/types";
+import {
+  normalizeEmail,
+  validateLoginForm,
+  type LoginFormErrors,
+} from "../utils/authFormValidation";
 
-export default function LoginScreen({ navigation }) {
+type Props = AuthStackScreenProps<"Login">;
+
+export default function LoginScreen({ navigation }: Props) {
   const auth = useContext(AuthContext);
   const submittingRef = useRef(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<LoginFormErrors>({});
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  function updateEmail(value) {
+  function updateEmail(value: string) {
     setEmail(value);
     setErrors((previous) => ({ ...previous, email: undefined }));
     setFormError("");
   }
 
-  function updatePassword(value) {
+  function updatePassword(value: string) {
     setPassword(value);
     setErrors((previous) => ({ ...previous, password: undefined }));
     setFormError("");
   }
 
-  async function handleLogin() {
+  async function handleLogin(): Promise<void> {
     if (submittingRef.current) return;
     Keyboard.dismiss();
 
