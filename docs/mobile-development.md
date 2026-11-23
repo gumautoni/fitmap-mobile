@@ -416,6 +416,69 @@ com todos os dispositivos ou configurações.
 Leitores de tela, ampliação de texto, áreas de toque
 e outros requisitos permanecem previstos para a ACC-02.
 
+## Acessibilidade dos formulários de treino (ACC-02.1)
+
+A primeira etapa da ACC-02 abrange a criação de treinos
+e a configuração dos exercícios.
+
+A implementação contribui para os requisitos NFR-ACC-001,
+NFR-ACC-002 e NFR-ACC-006. Os requisitos NFR-ACC-004
+e NFR-ACC-005 foram avaliados no escopo dos formulários.
+
+### Implementação
+
+Arquivos envolvidos:
+
+* `src/screens/CreateWorkoutScreen.tsx`;
+* `src/screens/WorkoutExerciseConfigScreen.tsx`.
+
+Foram implementados:
+
+* rótulos acessíveis para os cinco campos de texto;
+* estado acessível de desabilitação durante o salvamento;
+* nomes acessíveis permanentes nos botões de criação
+  e salvamento;
+* estado `busy` durante as respectivas solicitações;
+* estado `selected` nos seletores de unidade kg e lb;
+* indicador visual de confirmação na unidade selecionada,
+  sem depender exclusivamente de diferenças de cor.
+
+Os principais controles já possuíam alturas mínimas
+entre 48 e 54 unidades lógicas do React Native.
+Essas dimensões foram preservadas.
+
+A lógica de negócio, os contratos da API, a navegação,
+as dependências e a identidade Orange Fusion
+permaneceram inalterados.
+
+### Validação
+
+A entrega adicionou oito testes automatizados na suíte
+`WorkoutFormsAccessibility.test.tsx`.
+
+A regressão mobile registrou 722 testes aprovados
+em 46 suítes, com TypeScript, ESLint e Prettier aprovados.
+
+Em 17/11/2026, o desenvolvedor confirmou 12 verificações
+físicas aprovadas no iPhone, incluindo VoiceOver,
+ampliação de texto, seleção de unidade e persistência
+da configuração.
+
+### Limitações
+
+A validação física abrangeu os dois formulários
+no dispositivo e na configuração utilizados.
+
+Os resultados não constituem certificação integral
+de conformidade WCAG, nem comprovam todas as
+configurações de acessibilidade, dispositivos ou
+builds nativos.
+
+Os demais fluxos permanecem no escopo das etapas
+seguintes da ACC-02.
+
+---
+
 ## Filtros de descoberta de academias
 
 A implementação da FUNC-05 atende ao requisito funcional
