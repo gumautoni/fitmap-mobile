@@ -4,12 +4,14 @@ import type { AuthStackParamList } from "./types";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 import WelcomeScreen from "../screens/WelcomeScreen";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export default function AuthNavigator() {
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   return (
     <Stack.Navigator
@@ -28,7 +30,7 @@ export default function AuthNavigator() {
         contentStyle: {
           backgroundColor: theme.colors.background,
         },
-        animation: "slide_from_right",
+        animation: reduceMotion ? "none" : "slide_from_right",
       }}
     >
       <Stack.Screen name="BoasVindas" component={WelcomeScreen} />

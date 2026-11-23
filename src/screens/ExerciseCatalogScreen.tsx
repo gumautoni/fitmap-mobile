@@ -492,9 +492,7 @@ export default function ExerciseCatalogScreen({
                         busy && styles.buttonDisabled,
                       ]}
                     >
-                      <Text numberOfLines={2} style={styles.suggestionName}>
-                        {exercise.name}
-                      </Text>
+                      <Text style={styles.suggestionName}>{exercise.name}</Text>
 
                       <Plus
                         size={18}
@@ -876,8 +874,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     customToggleButton: {
-      width: 44,
-      height: 44,
+      width: 48,
+      height: 48,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: 14,
@@ -935,7 +933,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     suggestionRow: {
-      minHeight: 44,
+      minHeight: 48,
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing.sm,
@@ -1174,8 +1172,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     addButton: {
-      width: 42,
-      height: 42,
+      width: 48,
+      height: 48,
       alignItems: "center",
       justifyContent: "center",
       borderRadius: 14,

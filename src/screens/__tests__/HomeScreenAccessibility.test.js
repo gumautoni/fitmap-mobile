@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  userEvent,
+} from "@testing-library/react-native";
+import { Animated, StyleSheet } from "react-native";
 import React from "react";
 
 import { AuthContext } from "../../context/AuthContext";
@@ -31,8 +38,10 @@ jest.mock("../../theme/ThemeProvider", () => ({
   }),
 }));
 
+let mockReduceMotion = true;
+
 jest.mock("../../hooks/useReducedMotion", () => ({
-  useReducedMotion: () => true,
+  useReducedMotion: () => mockReduceMotion,
 }));
 
 jest.mock(
@@ -119,6 +128,7 @@ function expectTrainingCalls(workoutCalls) {
 describe("ACC-02.4 Home accessibility", () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    mockReduceMotion = true;
 
     getActiveWorkoutSession.mockResolvedValue(null);
     getWorkouts.mockResolvedValue([{ id: "workout-test" }]);
@@ -393,4 +403,59 @@ describe("ACC-02.4 Home accessibility", () => {
 
     expectTrainingCalls(1);
   });
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in profile press feedback",
+    async (reduceMotion) => {
+      mockReduceMotion = reduceMotion;
+
+      const loops = jest.spyOn(Animated, "loop").mockImplementation(() => ({
+        start: jest.fn(),
+        stop: jest.fn(),
+        reset: jest.fn(),
+      }));
+
+      try {
+        await mountHome();
+
+        await screen.findByRole("button", {
+          name: "Escolher treino",
+        });
+
+        const name = "Abrir meu perfil";
+        const button = screen.getByRole("button", { name });
+
+        expect(StyleSheet.flatten(button.props.style)?.opacity).not.toBe(0.76);
+
+        let feedback;
+
+        const user = userEvent.setup({
+          advanceTimers: (delay) => {
+            if (delay <= 0) return;
+
+            const style = StyleSheet.flatten(
+              screen.getByRole("button", { name }).props.style,
+            );
+
+            feedback = {
+              opacity: style?.opacity,
+              transform: style?.transform,
+            };
+          },
+        });
+
+        await user.press(button);
+
+        expect(navigation.navigate.mock.calls).toEqual([["Perfil"]]);
+        expectTrainingCalls(1);
+
+        expect(feedback).toEqual({
+          opacity: 0.76,
+          transform: reduceMotion ? undefined : [{ scale: 0.96 }],
+        });
+      } finally {
+        loops.mockRestore();
+      }
+    },
+  );
 });

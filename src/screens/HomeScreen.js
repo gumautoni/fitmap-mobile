@@ -280,6 +280,7 @@ export default function HomeScreen({ navigation }) {
             style={({ pressed }) => [
               styles.profileButton,
               pressed && styles.profileButtonPressed,
+              pressed && !reduceMotion && styles.profileButtonPressedMotion,
             ]}
           >
             <Text style={styles.profileButtonText}>{initials}</Text>
@@ -633,6 +634,9 @@ function createStyles(theme) {
 
     profileButtonPressed: {
       opacity: 0.76,
+    },
+
+    profileButtonPressedMotion: {
       transform: [
         {
           scale: 0.96,

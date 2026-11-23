@@ -7,7 +7,7 @@ import {
 } from "@testing-library/react-native";
 import { usePreventRemove } from "@react-navigation/native";
 import type { ComponentProps, ContextType } from "react";
-import { AccessibilityInfo, Alert } from "react-native";
+import { AccessibilityInfo, Alert, Animated } from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
@@ -182,6 +182,10 @@ describe("WorkoutSessionScreen - navegacao apos encerramento", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    jest
+      .spyOn(AccessibilityInfo, "addEventListener")
+      .mockImplementation(() => ({ remove: jest.fn() }));
+
     mockedActive.mockResolvedValue(session);
     mockedFinish.mockResolvedValue(session);
     mockedCancel.mockResolvedValue(session);
@@ -334,6 +338,160 @@ describe("WorkoutSessionScreen - navegacao apos encerramento", () => {
         expect(mockedUpdate).not.toHaveBeenCalled();
       },
     );
+
+    it("accessibility: responds to reduced-motion changes during a workout", async () => {
+      const start = jest.fn();
+      const stop = jest.fn();
+      const remove = jest.fn();
+
+      const subscription = jest
+        .spyOn(AccessibilityInfo, "addEventListener")
+        .mockReturnValue({ remove });
+
+      const timing = jest.spyOn(Animated, "timing").mockImplementation(() => ({
+        start,
+        stop,
+        reset: jest.fn(),
+      }));
+
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockResolvedValue(false);
+
+      mockedActive.mockResolvedValue(buildProgressSession(2, 1));
+      mockedUpdate.mockResolvedValue(buildProgressSession(2, 2));
+
+      try {
+        await renderSession();
+
+        await waitFor(() => {
+          expectProgress(1, 2, 50);
+
+          expect(timing).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+              toValue: 0.5,
+              duration: 340,
+              useNativeDriver: false,
+            }),
+          );
+        });
+
+        const call = subscription.mock.calls.find(
+          ([event]) => event === "reduceMotionChanged",
+        );
+
+        expect(call).toBeDefined();
+
+        const listener = call?.[1] as (enabled: boolean) => void;
+
+        timing.mockClear();
+        stop.mockClear();
+
+        await act(async () => {
+          listener(true);
+        });
+
+        expect(stop).toHaveBeenCalled();
+        expect(timing).not.toHaveBeenCalled();
+
+        await fireEvent.press(
+          screen.getByLabelText("Concluir exerc\u00edcio Exerc\u00edcio 2"),
+        );
+
+        await waitFor(() => {
+          expectProgress(2, 2, 100);
+        });
+
+        expect(timing).not.toHaveBeenCalled();
+
+        await act(async () => {
+          listener(false);
+        });
+
+        expect(timing).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            toValue: 1,
+            duration: 340,
+            useNativeDriver: false,
+          }),
+        );
+
+        expect(mockedUpdate).toHaveBeenCalledTimes(1);
+
+        expect(AccessibilityInfo.isReduceMotionEnabled).toHaveBeenCalledTimes(
+          1,
+        );
+      } finally {
+        jest
+          .mocked(AccessibilityInfo.isReduceMotionEnabled)
+          .mockResolvedValue(true);
+
+        timing.mockRestore();
+        subscription.mockRestore();
+      }
+    });
+
+    it("accessibility: ignores stale motion preference responses during a workout", async () => {
+      let resolve!: (enabled: boolean) => void;
+
+      const preference = new Promise<boolean>((done) => {
+        resolve = done;
+      });
+
+      const subscription = jest
+        .spyOn(AccessibilityInfo, "addEventListener")
+        .mockReturnValue({ remove: jest.fn() });
+
+      const timing = jest.spyOn(Animated, "timing").mockImplementation(() => ({
+        start: jest.fn(),
+        stop: jest.fn(),
+        reset: jest.fn(),
+      }));
+
+      jest
+        .mocked(AccessibilityInfo.isReduceMotionEnabled)
+        .mockReturnValueOnce(preference);
+
+      mockedActive.mockResolvedValue(buildProgressSession(2, 1));
+
+      try {
+        await renderSession();
+
+        expectProgress(1, 2, 50);
+        expect(timing).not.toHaveBeenCalled();
+
+        const call = subscription.mock.calls.find(
+          ([event]) => event === "reduceMotionChanged",
+        );
+
+        expect(call).toBeDefined();
+
+        const listener = call?.[1] as (enabled: boolean) => void;
+
+        await act(async () => {
+          listener(true);
+          resolve(false);
+        });
+
+        expect(timing).not.toHaveBeenCalled();
+        expectProgress(1, 2, 50);
+
+        expect(AccessibilityInfo.isReduceMotionEnabled).toHaveBeenCalledTimes(
+          1,
+        );
+
+        expect(mockedUpdate).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => {
+          resolve(true);
+        });
+
+        timing.mockRestore();
+        subscription.mockRestore();
+      }
+    });
 
     it("atualiza o progresso apos o backend confirmar a conclusao", async () => {
       mockedActive.mockResolvedValue(buildProgressSession(2, 0));

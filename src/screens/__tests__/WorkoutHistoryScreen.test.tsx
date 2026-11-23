@@ -3,9 +3,16 @@ import {
   fireEvent,
   render,
   screen,
+  userEvent,
   waitFor,
 } from "@testing-library/react-native";
 import type { ComponentProps, ContextType } from "react";
+import {
+  AccessibilityInfo,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import { ApiClientError } from "../../services/apiClient";
@@ -216,6 +223,20 @@ const historyFixture = jest.fn<
   Parameters<typeof getWorkoutHistory>
 >();
 
+beforeEach(() => {
+  jest
+    .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+    .mockResolvedValue(true);
+
+  jest
+    .spyOn(AccessibilityInfo, "addEventListener")
+    .mockReturnValue({ remove: jest.fn() });
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
 describe("WorkoutHistoryScreen filters", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -233,6 +254,67 @@ describe("WorkoutHistoryScreen filters", () => {
       nextCursor: null,
     }));
   });
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in history card feedback",
+    async (reduceMotion) => {
+      const preference = jest
+        .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+        .mockResolvedValue(reduceMotion);
+
+      const subscription = jest
+        .spyOn(AccessibilityInfo, "addEventListener")
+        .mockReturnValue({ remove: jest.fn() });
+
+      try {
+        await mountLoadedHistory();
+
+        const name = `Abrir hist\u00f3rico do treino ${COSTAS}`;
+        const button = screen.getByRole("button", { name });
+
+        const initial = StyleSheet.flatten(
+          button.props.style as StyleProp<ViewStyle>,
+        );
+
+        expect(initial?.opacity).not.toBe(0.72);
+
+        let feedback: Pick<ViewStyle, "opacity" | "transform"> | undefined;
+
+        const user = userEvent.setup({
+          advanceTimers: (delay) => {
+            if (delay <= 0) return;
+
+            const pressed = screen.getByRole("button", { name });
+            const style = StyleSheet.flatten(
+              pressed.props.style as StyleProp<ViewStyle>,
+            );
+
+            feedback = {
+              opacity: style?.opacity,
+              transform: style?.transform,
+            };
+          },
+        });
+
+        await user.press(button);
+
+        expect(navigation.navigate.mock.calls).toEqual([
+          ["DetalhesHistoricoTreino", { workoutSessionId: "recent" }],
+        ]);
+
+        expect(mockedHistoryPage).toHaveBeenCalledTimes(1);
+        expect(mockedHistory).not.toHaveBeenCalled();
+
+        expect(feedback).toEqual({
+          opacity: 0.72,
+          transform: reduceMotion ? undefined : [{ scale: 0.995 }],
+        });
+      } finally {
+        preference.mockRestore();
+        subscription.mockRestore();
+      }
+    },
+  );
 
   it("shows initial loading before displaying the history", async () => {
     const pending = deferredHistory();

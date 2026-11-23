@@ -869,7 +869,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     restoreButton: {
-      minHeight: 46,
+      minHeight: 48,
       marginTop: theme.spacing.lg,
       flexDirection: "row",
       alignItems: "center",

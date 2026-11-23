@@ -217,6 +217,26 @@ describe("Workout details accessibility - ACC-02.2", () => {
     jest.restoreAllMocks();
   });
 
+  it("accessibility: provides practical workout action touch targets", async () => {
+    await renderDetails();
+
+    const labels = [
+      "Mover Supino reto para cima",
+      "Mover Supino reto para baixo",
+      "Mover Remada baixa para cima",
+      "Mover Remada baixa para baixo",
+      "Remover Supino reto",
+      "Remover Remada baixa",
+    ];
+
+    for (const name of labels) {
+      expect(screen.getByRole("button", { name })).toHaveStyle({
+        width: 48,
+        height: 48,
+      });
+    }
+  });
+
   it("preserves existing navigation and movement boundaries", async () => {
     await renderDetails();
 

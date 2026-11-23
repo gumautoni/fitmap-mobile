@@ -1,5 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import React from "react";
+import { AccessibilityInfo, StyleSheet } from "react-native";
 import {
   act,
   fireEvent,
@@ -8,6 +9,7 @@ import {
   userEvent,
 } from "@testing-library/react-native";
 
+import AuthButton from "../../components/auth/AuthButton";
 import { AuthContext } from "../../context/AuthContext";
 import LoginScreen from "../LoginScreen";
 import RegisterScreen from "../RegisterScreen";
@@ -226,6 +228,39 @@ async function verifyPendingNavigation({
   await verifyNavigation(navigation, footer, destination);
 }
 
+async function pressAndReadFeedback(name, opacity) {
+  const button = screen.getByRole("button", { name });
+  const initial = StyleSheet.flatten(button.props.style);
+
+  expect(initial?.opacity).not.toBe(opacity);
+
+  let feedback;
+
+  const user = userEvent.setup({
+    advanceTimers: (delay) => {
+      if (delay <= 0) {
+        return;
+      }
+
+      const pressed = screen.getByRole("button", { name });
+      const style = StyleSheet.flatten(pressed.props.style);
+
+      feedback = {
+        opacity: style?.opacity,
+        transform: style?.transform,
+      };
+    },
+  });
+
+  await user.press(button);
+
+  if (!feedback) {
+    throw new Error("Pressed feedback was not observed.");
+  }
+
+  return feedback;
+}
+
 describe("Auth navigation accessibility", () => {
   it("preserves welcome actions and their touch targets", async () => {
     const { navigation } = await mountScreen(WelcomeScreen);
@@ -301,4 +336,61 @@ describe("Auth navigation accessibility", () => {
       args: ["Ana Silva", "pessoa@example.com", "Aa1!bcde"],
     });
   });
+
+  it.each([true, false])(
+    "accessibility: respects reducedMotion=%s in auth press feedback",
+    async (reduceMotion) => {
+      const preference = jest
+        .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+        .mockResolvedValue(reduceMotion);
+
+      const subscription = jest
+        .spyOn(AccessibilityInfo, "addEventListener")
+        .mockReturnValue({ remove: jest.fn() });
+
+      try {
+        const onPress = jest.fn();
+
+        const view = await render(
+          <AuthButton title="Confirmar" onPress={onPress} />,
+        );
+
+        const submit = await pressAndReadFeedback("Confirmar", 0.84);
+
+        expect(onPress).toHaveBeenCalledTimes(1);
+
+        await view.unmount();
+
+        const { navigation } = await mountScreen(WelcomeScreen);
+
+        const create = await pressAndReadFeedback("Criar conta no FitMap", 0.8);
+
+        const login = await pressAndReadFeedback(LOGIN_ACTION, 0.8);
+
+        expect(navigation.navigate.mock.calls).toEqual([
+          ["Cadastro"],
+          ["Login"],
+        ]);
+
+        const expectedSubmit = {
+          opacity: 0.84,
+          transform: reduceMotion ? undefined : [{ scale: 0.995 }],
+        };
+
+        const expectedWelcome = {
+          opacity: 0.8,
+          transform: reduceMotion ? undefined : [{ scale: 0.99 }],
+        };
+
+        expect({ submit, create, login }).toEqual({
+          submit: expectedSubmit,
+          create: expectedWelcome,
+          login: expectedWelcome,
+        });
+      } finally {
+        preference.mockRestore();
+        subscription.mockRestore();
+      }
+    },
+  );
 });

@@ -961,6 +961,181 @@ e à aprovação dos checks obrigatórios de CI.
 
 ---
 
+## Acessibilidade transversal (ACC-02.5)
+
+A etapa transversal consolida as melhorias de acessibilidade
+das quatro entregas anteriores, considerando os requisitos
+NFR-ACC-001 a NFR-ACC-006 sem declarar conformidade integral.
+
+### Áreas de toque (ACC-02.5-A)
+
+Foram ampliadas as dimensões de controles do catálogo,
+da reordenação e remoção de exercícios e da restauração
+de treinos arquivados.
+
+Os controles avaliados possuem dimensões mínimas
+ou áreas de interação adequadas ao contexto mobile.
+
+As regras de criação, edição e restauração
+de treinos foram preservadas.
+
+### Legibilidade e responsividade (ACC-02.5-B)
+
+Foram removidos limites desnecessários de linhas
+nos resultados e sugestões do catálogo, nos endereços
+e sites de academias, nos favoritos e nas sugestões
+de localidades do mapa.
+
+As sugestões do catálogo também receberam uma
+área de toque mínima de 48 unidades de layout.
+
+O cabeçalho do calendário permite quebra de linha
+e preserva as dimensões dos controles de navegação.
+
+As prévias compactas do mapa mantêm seus limites
+intencionais de linhas. As sete colunas do calendário
+continuam condicionadas à largura disponível.
+
+### Redução de movimento (ACC-02.5-C)
+
+O hook compartilhado useReducedMotion consulta
+a preferência do dispositivo e acompanha alterações
+durante a utilização do aplicativo.
+
+Enquanto a preferência não é conhecida, ou quando
+sua consulta falha, a redução de movimento permanece
+ativa por precaução.
+
+A proteção contra respostas assíncronas obsoletas
+e a remoção dos listeners foram preservadas.
+
+A etapa amplia o respeito a essa preferência para:
+
+* execução de treinos;
+* calendário de atividades;
+* controles de autenticação;
+* Home e histórico de treinos;
+* detalhes e ações relacionadas a academias;
+* controles pressionáveis do mapa;
+* captura e confirmação de fotos de progresso;
+* visualização ampliada de fotos;
+* transições das pilhas de navegação;
+* movimentos programáticos da câmera do mapa.
+
+Os elementos decorativos 3D e a identidade Orange Fusion
+permanecem disponíveis. As animações opcionais
+são preservadas quando permitidas pelo dispositivo.
+
+Indicadores funcionais de carregamento e representações
+visuais de estados selecionados continuam disponíveis.
+
+Nos movimentos programáticos da câmera, o mapa utiliza
+animateToRegion no modo normal e fitToCoordinates
+com animated: false no modo reduzido.
+
+Os movimentos pendentes aguardam a disponibilidade
+do mapa e de seu layout, preservando a solicitação
+mais recente e a preferência de movimento vigente.
+
+A movimentação automática ao pressionar marcadores
+também é desabilitada no modo reduzido.
+
+### Seletores multiplataforma (ACC-02.5-D)
+
+O componente reutilizável SelectionModal substitui
+os alertas de múltiplas opções do perfil.
+
+A mudança evita depender do limite de três botões
+do Alert.alert no Android:
+
+* objetivo principal: cinco opções;
+* experiência: três opções;
+* meta semanal: sete opções;
+* duração preferida: nove opções;
+* unidades de medida: duas opções;
+* aparência: três opções.
+
+O componente utiliza Modal, ScrollView e Pressable
+do React Native, sem novas dependências.
+
+As opções apresentam semântica radio, estado checked,
+indicador visual da seleção, dimensões mínimas de
+48 por 48 unidades de layout e suporte a texto ampliado.
+
+O cancelamento permanece disponível no rodapé,
+com suporte ao onRequestClose e onAccessibilityEscape.
+
+A tela de fundo é ocultada das tecnologias assistivas
+enquanto o seletor está aberto.
+
+O componente respeita os temas e a redução de movimento
+e protege contra acionamentos duplicados.
+
+As preferências esportivas continuam persistidas pela API.
+A aparência permanece armazenada pelo ThemeProvider.
+
+O salvamento da aparência possui controle independente
+de concorrência, estado de processamento e tratamento
+de falhas, sem bloquear as preferências esportivas.
+
+Os alertas de validação, erros e confirmação de logout
+permanecem preservados.
+
+### Validação
+
+A ACC-02.5 acrescentou 67 testes automatizados:
+
+| Frente | Novos testes |
+| --- | ---: |
+| Áreas de toque | 3 |
+| Legibilidade e responsividade | 6 |
+| Redução de movimento | 43 |
+| Seletores multiplataforma | 15 |
+| Total | 67 |
+
+A regressão de 19/11/2026 aprovou 933 testes mobile
+em 56 suítes, com TypeScript, ESLint e Prettier aprovados.
+
+A validação física de 19/11/2026 foi confirmada
+pelo desenvolvedor no iPhone via Expo Go, com backend
+local: 30 de 30 verificações aprovadas, sem ressalvas
+relatadas.
+
+O roteiro e os resultados consolidados estão
+na seção 5.7 de [Testes](testing.md).
+
+### Limitações e riscos residuais
+
+Os testes automatizados validam contratos de interface,
+estilos, estados e comandos de movimento, mas não
+substituem a validação nativa.
+
+A avaliação física representa a configuração testada.
+Não constitui certificação WCAG, medição exaustiva
+dos alvos de toque ou cobertura de todas as escalas de texto.
+
+Android, TalkBack, diferentes dimensões de tela
+e builds nativos continuam sem validação física
+específica nesta etapa.
+
+O enquadramento reduzido do mapa pode apresentar
+diferenças de posicionamento conforme o provedor nativo,
+o viewport e os limites geográficos.
+
+A alteração da preferência não garante o cancelamento
+imediato de uma animação nativa já iniciada.
+
+A remoção dos dados utilizados na validação física
+não foi confirmada.
+
+O aviso intermitente de VirtualizedList permanece
+registrado para QUALITY-01.
+
+A integração depende da resolução da Issue #84
+e da aprovação dos checks obrigatórios de CI.
+
+---
+
 ## Filtros de descoberta de academias
 
 A implementação da FUNC-05 atende ao requisito funcional

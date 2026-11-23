@@ -1,3 +1,4 @@
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { lightSurfaceDepth } from "../theme/surfaces";
 import ScreenGradient from "../components/ScreenGradient";
 import { useFocusEffect } from "@react-navigation/native";
@@ -15,6 +16,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -29,6 +31,7 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
 } from "react-native";
 import MapView, { Marker, type Region } from "react-native-maps";
 
@@ -211,10 +214,22 @@ export default function MapScreen({ navigation }: Props) {
   const { runAuthenticatedRequest } = auth;
 
   const { theme } = useAppTheme();
+  const reduceMotion = useReducedMotion();
 
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const mapRef = useRef<MapView | null>(null);
+  const mapReadyRef = useRef(false);
+  const mapLayoutReadyRef = useRef(false);
+  const reduceMotionRef = useRef(reduceMotion);
+  const pendingCameraMoveRef = useRef<{
+    region: Region;
+    duration: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    reduceMotionRef.current = reduceMotion;
+  }, [reduceMotion]);
 
   const favoritesRequestIdRef = useRef(0);
   const suggestionsRequestIdRef = useRef(0);
@@ -412,6 +427,75 @@ export default function MapScreen({ navigation }: Props) {
     );
   }
 
+  const flushPendingCameraMove = useCallback((): void => {
+    const map = mapRef.current;
+    const pending = pendingCameraMoveRef.current;
+
+    if (
+      !map ||
+      !pending ||
+      !mapReadyRef.current ||
+      !mapLayoutReadyRef.current
+    ) {
+      return;
+    }
+
+    pendingCameraMoveRef.current = null;
+
+    const { region, duration } = pending;
+
+    if (!reduceMotionRef.current) {
+      map.animateToRegion(region, duration);
+      return;
+    }
+
+    const halfLatitudeDelta = region.latitudeDelta / 2;
+    const halfLongitudeDelta = region.longitudeDelta / 2;
+
+    map.fitToCoordinates(
+      [
+        {
+          latitude: Math.max(-90, region.latitude - halfLatitudeDelta),
+          longitude: Math.max(-180, region.longitude - halfLongitudeDelta),
+        },
+        {
+          latitude: Math.min(90, region.latitude + halfLatitudeDelta),
+          longitude: Math.min(180, region.longitude + halfLongitudeDelta),
+        },
+      ],
+      {
+        animated: false,
+        edgePadding: {
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+        },
+      },
+    );
+  }, []);
+
+  const handleMapReady = useCallback((): void => {
+    mapReadyRef.current = true;
+    flushPendingCameraMove();
+  }, [flushPendingCameraMove]);
+
+  const handleMapLayout = useCallback(
+    (event: LayoutChangeEvent): void => {
+      const { width, height } = event.nativeEvent.layout;
+
+      mapLayoutReadyRef.current = width > 0 && height > 0;
+
+      flushPendingCameraMove();
+    },
+    [flushPendingCameraMove],
+  );
+
+  function moveCameraToRegion(region: Region, duration: number): void {
+    pendingCameraMoveRef.current = { region, duration };
+    flushPendingCameraMove();
+  }
+
   function focusSearchResults(
     results: GymSearchResult[],
     fallbackCoordinates?: UserCoordinates,
@@ -424,17 +508,14 @@ export default function MapScreen({ navigation }: Props) {
       const nextRegion = getGymRegion(firstGymWithCoordinates);
 
       if (nextRegion) {
-        mapRef.current?.animateToRegion(nextRegion, 800);
+        moveCameraToRegion(nextRegion, 800);
       }
 
       return;
     }
 
     if (fallbackCoordinates && hasValidGymCoordinates(fallbackCoordinates)) {
-      mapRef.current?.animateToRegion(
-        getCoordinatesRegion(fallbackCoordinates),
-        800,
-      );
+      moveCameraToRegion(getCoordinatesRegion(fallbackCoordinates), 800);
     }
   }
 
@@ -450,6 +531,7 @@ export default function MapScreen({ navigation }: Props) {
     }
 
     try {
+      pendingCameraMoveRef.current = null;
       setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
@@ -483,6 +565,7 @@ export default function MapScreen({ navigation }: Props) {
     setQuery(suggestion.label);
 
     try {
+      pendingCameraMoveRef.current = null;
       setLoadingAction("text");
       setErrorMessage(null);
       setGyms([]);
@@ -555,6 +638,7 @@ export default function MapScreen({ navigation }: Props) {
     }
 
     try {
+      pendingCameraMoveRef.current = null;
       setLoadingAction("location");
       setGyms([]);
       setGymFilters(DEFAULT_GYM_RESULT_FILTERS);
@@ -580,10 +664,7 @@ export default function MapScreen({ navigation }: Props) {
       setHasSearched(true);
       setErrorMessage(getSearchErrorMessage(error));
 
-      mapRef.current?.animateToRegion(
-        getCoordinatesRegion(currentCoordinates),
-        800,
-      );
+      moveCameraToRegion(getCoordinatesRegion(currentCoordinates), 800);
     } finally {
       setLoadingAction(null);
     }
@@ -595,7 +676,9 @@ export default function MapScreen({ navigation }: Props) {
     const nextRegion = getGymRegion(gym);
 
     if (nextRegion) {
-      mapRef.current?.animateToRegion(nextRegion, 500);
+      moveCameraToRegion(nextRegion, 500);
+    } else {
+      pendingCameraMoveRef.current = null;
     }
   }
 
@@ -757,6 +840,7 @@ export default function MapScreen({ navigation }: Props) {
                 style={({ pressed }) => [
                   styles.favoriteCard,
                   pressed && styles.favoriteCardPressed,
+                  pressed && !reduceMotion && styles.favoriteCardPressedMotion,
                 ]}
               >
                 <View style={styles.favoriteCardHeader}>
@@ -770,11 +854,9 @@ export default function MapScreen({ navigation }: Props) {
                   </View>
 
                   <View style={styles.favoriteCardCopy}>
-                    <Text style={styles.favoriteCardName} numberOfLines={2}>
-                      {favorite.name}
-                    </Text>
+                    <Text style={styles.favoriteCardName}>{favorite.name}</Text>
 
-                    <Text style={styles.favoriteCardAddress} numberOfLines={2}>
+                    <Text style={styles.favoriteCardAddress}>
                       {favorite.address ?? "Endereço não informado"}
                     </Text>
                   </View>
@@ -832,6 +914,10 @@ export default function MapScreen({ navigation }: Props) {
               styles.searchButton,
               loading && styles.buttonDisabled,
               pressed && !loading && styles.buttonPressed,
+              pressed &&
+                !loading &&
+                !reduceMotion &&
+                styles.buttonPressedMotion,
             ]}
           >
             {loadingAction === "text" ? (
@@ -885,7 +971,7 @@ export default function MapScreen({ navigation }: Props) {
                   ]}
                 >
                   <MapPin size={17} color={theme.colors.primary} />
-                  <Text style={styles.locationSuggestionText} numberOfLines={2}>
+                  <Text style={styles.locationSuggestionText}>
                     {suggestion.label}
                   </Text>
                 </Pressable>
@@ -909,6 +995,10 @@ export default function MapScreen({ navigation }: Props) {
             styles.locationAction,
             loading && styles.buttonDisabled,
             pressed && !loading && styles.locationActionPressed,
+            pressed &&
+              !loading &&
+              !reduceMotion &&
+              styles.locationActionPressedMotion,
           ]}
         >
           <View style={styles.locationIcon}>
@@ -958,7 +1048,14 @@ export default function MapScreen({ navigation }: Props) {
       </View>
 
       <View style={styles.mapCard}>
-        <MapView ref={mapRef} style={styles.map} initialRegion={INITIAL_REGION}>
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={INITIAL_REGION}
+          onMapReady={handleMapReady}
+          onLayout={handleMapLayout}
+          moveOnMarkerPress={!reduceMotion}
+        >
           {hasValidGymCoordinates(userCoordinates) ? (
             <Marker
               coordinate={userCoordinates}
@@ -1063,6 +1160,9 @@ export default function MapScreen({ navigation }: Props) {
               style={({ pressed }) => [
                 styles.selectedMapPreviewAction,
                 pressed && styles.selectedMapPreviewActionPressed,
+                pressed &&
+                  !reduceMotion &&
+                  styles.selectedMapPreviewActionPressedMotion,
               ]}
             >
               <Text style={styles.selectedMapPreviewActionText}>Detalhes</Text>
@@ -1323,6 +1423,7 @@ export default function MapScreen({ navigation }: Props) {
                 styles.gymCard,
                 isSelected && styles.gymCardSelected,
                 pressed && styles.gymCardPressed,
+                pressed && !reduceMotion && styles.gymCardPressedMotion,
               ]}
             >
               {isSelected ? <View style={styles.selectedAccent} /> : null}
@@ -1341,9 +1442,7 @@ export default function MapScreen({ navigation }: Props) {
                 </View>
 
                 <View style={styles.gymTitleArea}>
-                  <Text style={styles.gymName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
+                  <Text style={styles.gymName}>{item.name}</Text>
 
                   {isSelected || isFavorite ? (
                     <View style={styles.gymBadgesRow}>
@@ -1380,7 +1479,7 @@ export default function MapScreen({ navigation }: Props) {
                     color={theme.colors.textMuted}
                   />
 
-                  <Text style={styles.gymAddress} numberOfLines={2}>
+                  <Text style={styles.gymAddress}>
                     {item.address ?? "Endereço não informado"}
                   </Text>
                 </View>
@@ -1432,6 +1531,9 @@ export default function MapScreen({ navigation }: Props) {
                   style={({ pressed }) => [
                     styles.detailsButton,
                     pressed && styles.detailsButtonPressed,
+                    pressed &&
+                      !reduceMotion &&
+                      styles.detailsButtonPressedMotion,
                   ]}
                 >
                   <Text style={styles.detailsButtonText}>Ver detalhes</Text>
@@ -1707,6 +1809,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     favoriteCardPressed: {
       opacity: 0.8,
+    },
+
+    favoriteCardPressedMotion: {
       transform: [
         {
           scale: 0.99,
@@ -1805,12 +1910,15 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     buttonPressed: {
+      opacity: 0.9,
+    },
+
+    buttonPressedMotion: {
       transform: [
         {
           scale: 0.96,
         },
       ],
-      opacity: 0.9,
     },
 
     locationSuggestions: {
@@ -1873,6 +1981,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     locationActionPressed: {
       opacity: 0.75,
+    },
+
+    locationActionPressedMotion: {
       transform: [
         {
           scale: 0.995,
@@ -2034,6 +2145,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     selectedMapPreviewActionPressed: {
       opacity: 0.8,
+    },
+
+    selectedMapPreviewActionPressedMotion: {
       transform: [
         {
           scale: 0.98,
@@ -2342,6 +2456,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     gymCardPressed: {
       opacity: 0.83,
+    },
+
+    gymCardPressedMotion: {
       transform: [
         {
           scale: 0.995,
@@ -2499,6 +2616,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
 
     detailsButtonPressed: {
       opacity: 0.82,
+    },
+
+    detailsButtonPressedMotion: {
       transform: [
         {
           scale: 0.97,

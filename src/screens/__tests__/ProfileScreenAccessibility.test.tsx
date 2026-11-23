@@ -1,6 +1,12 @@
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 import type { ComponentProps, ContextType } from "react";
-import { Alert } from "react-native";
+import { AccessibilityInfo, Alert } from "react-native";
 
 import { AuthContext } from "../../context/AuthContext";
 import {
@@ -169,9 +175,90 @@ async function confirmLogout() {
   });
 }
 
+function getSelectorContainer(title: string) {
+  const heading = screen.getByRole("header", { name: title });
+
+  let container = heading.parent;
+
+  while (container && container.props.accessibilityViewIsModal !== true) {
+    container = container.parent;
+  }
+
+  if (!container) {
+    throw new Error("Accessible selection modal not found.");
+  }
+
+  return container;
+}
+
+function expectSelector(
+  title: string,
+  options: readonly string[],
+  selected: string | null,
+) {
+  const container = getSelectorContainer(title);
+  const radios = within(container).getAllByRole("radio");
+
+  expect(radios.map((radio) => radio.props.accessibilityLabel)).toEqual(
+    options,
+  );
+
+  for (const label of options) {
+    const option = within(container).getByRole("radio", {
+      name: label,
+    });
+
+    expect(option).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        checked: label === selected,
+      }),
+    );
+
+    expect(option).not.toBeDisabled();
+
+    expect(option).toHaveStyle({
+      minHeight: 48,
+      minWidth: 48,
+    });
+  }
+
+  const cancel = within(container).getByRole("button", {
+    name: "Cancelar",
+  });
+
+  expect(cancel).not.toBeDisabled();
+
+  expect(cancel).toHaveStyle({
+    minHeight: 48,
+    minWidth: 48,
+  });
+
+  return container;
+}
+
+async function chooseProfileOption(title: string, label: string) {
+  const container = getSelectorContainer(title);
+
+  await fireEvent.press(within(container).getByRole("radio", { name: label }));
+
+  expect(screen.queryByRole("header", { name: title })).toBeNull();
+}
+
 describe("Profile screen accessibility", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
+    mockSetPreference.mockReset();
+    mockSetPreference.mockResolvedValue(undefined);
+
+    jest
+      .spyOn(AccessibilityInfo, "isReduceMotionEnabled")
+      .mockResolvedValue(true);
+
+    jest
+      .spyOn(AccessibilityInfo, "addEventListener")
+      .mockReturnValue({ remove: jest.fn() });
 
     mockedGet.mockReset();
     mockedGet.mockResolvedValue(profile);
@@ -530,26 +617,8 @@ describe("Profile screen accessibility", () => {
 
     await fireEvent.press(screen.getByText("Objetivo principal"));
 
-    const dialog = jest
-      .mocked(Alert.alert)
-      .mock.calls.find(([title]) => title === "Objetivo principal");
-
-    const choice = dialog?.[2]?.find(
-      (button) => button.text === "Aumentar for\u00e7a",
-    );
-
-    expect(choice?.onPress).toBeDefined();
-
-    if (!choice?.onPress) {
-      throw new Error("Fitness goal selection not found.");
-    }
-
-    const onPress = choice.onPress;
-
     try {
-      await act(async () => {
-        onPress();
-      });
+      await chooseProfileOption("Objetivo principal", "Aumentar for\u00e7a");
 
       expect(mockedUpdate).toHaveBeenCalledTimes(1);
 
@@ -570,7 +639,7 @@ describe("Profile screen accessibility", () => {
         await fireEvent.press(button);
       }
 
-      expect(Alert.alert).toHaveBeenCalledTimes(1);
+      expect(Alert.alert).not.toHaveBeenCalled();
 
       expect(mockedUpdate).toHaveBeenCalledTimes(1);
 
@@ -616,7 +685,12 @@ describe("Profile screen accessibility", () => {
       }),
     );
 
-    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).not.toHaveBeenCalled();
+
+    expect(
+      screen.getByRole("header", { name: "Objetivo principal" }),
+    ).toBeTruthy();
+
     expect(mockedUpdate).toHaveBeenCalledTimes(1);
   });
 
@@ -658,23 +732,7 @@ describe("Profile screen accessibility", () => {
       }),
     );
 
-    const dialog = jest
-      .mocked(Alert.alert)
-      .mock.calls.find(([title]) => title === "Objetivo principal");
-
-    const choice = dialog?.[2]?.find(
-      (button) => button.text === "Ganhar massa muscular",
-    );
-
-    if (!choice?.onPress) {
-      throw new Error("Fitness goal selection not found.");
-    }
-
-    const onPress = choice.onPress;
-
-    await act(async () => {
-      onPress();
-    });
+    await chooseProfileOption("Objetivo principal", "Ganhar massa muscular");
 
     expect(
       await screen.findByRole("button", {
@@ -716,36 +774,335 @@ describe("Profile screen accessibility", () => {
 
     await fireEvent.press(appearance);
 
-    const dialog = jest
-      .mocked(Alert.alert)
-      .mock.calls.find(([title]) => title === "Apar\u00eancia");
-
-    expect(dialog?.[2]?.map((button) => button.text)).toEqual([
-      "Claro",
-      "Escuro",
+    expectSelector(
+      "Apar\u00eancia",
+      ["Claro", "Escuro", "Seguir sistema"],
       "Seguir sistema",
-      "Cancelar",
-    ]);
+    );
 
+    expect(Alert.alert).not.toHaveBeenCalled();
     expect(mockSetPreference).not.toHaveBeenCalled();
     expect(mockedUpdate).not.toHaveBeenCalled();
 
-    const dark = dialog?.[2]?.find((button) => button.text === "Escuro");
-
-    if (!dark?.onPress) {
-      throw new Error("Dark appearance selection not found.");
-    }
-
-    const onPress = dark.onPress;
-
-    await act(async () => {
-      onPress();
-    });
+    await chooseProfileOption("Apar\u00eancia", "Escuro");
 
     expect(mockSetPreference).toHaveBeenCalledTimes(1);
     expect(mockSetPreference).toHaveBeenCalledWith("dark");
 
     expect(mockedUpdate).not.toHaveBeenCalled();
     expect(mockedGet).toHaveBeenCalledTimes(1);
+  });
+
+  const configuredProfile: UserProfile = {
+    ...profile,
+    fitnessGoal: "strength",
+    experienceLevel: "intermediate",
+    weeklyWorkoutGoal: 3,
+    preferredWorkoutDurationMinutes: 45,
+    measurementSystem: "metric",
+  };
+
+  it.each([
+    {
+      row: "Objetivo principal: Aumentar for\u00e7a",
+      title: "Objetivo principal",
+      options: [
+        "Ganhar massa muscular",
+        "Aumentar for\u00e7a",
+        "Condicionamento geral",
+        "Melhorar resist\u00eancia",
+        "Reduzir gordura corporal",
+      ],
+      selected: "Aumentar for\u00e7a",
+      choice: "Reduzir gordura corporal",
+      patch: { fitnessGoal: "fat_loss" },
+      updatedRow: "Objetivo principal: Reduzir gordura corporal",
+    },
+    {
+      row: "Experi\u00eancia: Intermedi\u00e1rio",
+      title: "N\u00edvel de experi\u00eancia",
+      options: ["Iniciante", "Intermedi\u00e1rio", "Avan\u00e7ado"],
+      selected: "Intermedi\u00e1rio",
+      choice: "Avan\u00e7ado",
+      patch: { experienceLevel: "advanced" },
+      updatedRow: "Experi\u00eancia: Avan\u00e7ado",
+    },
+    {
+      row: "Meta semanal: 3 treinos por semana",
+      title: "Meta semanal",
+      options: [
+        "1 treino por semana",
+        "2 treinos por semana",
+        "3 treinos por semana",
+        "4 treinos por semana",
+        "5 treinos por semana",
+        "6 treinos por semana",
+        "7 treinos por semana",
+      ],
+      selected: "3 treinos por semana",
+      choice: "7 treinos por semana",
+      patch: { weeklyWorkoutGoal: 7 },
+      updatedRow: "Meta semanal: 7 treinos por semana",
+    },
+    {
+      row: "Dura\u00e7\u00e3o preferida: 45 minutos",
+      title: "Dura\u00e7\u00e3o preferida",
+      options: [
+        "15 minutos",
+        "30 minutos",
+        "45 minutos",
+        "60 minutos",
+        "75 minutos",
+        "90 minutos",
+        "120 minutos",
+        "150 minutos",
+        "180 minutos",
+      ],
+      selected: "45 minutos",
+      choice: "180 minutos",
+      patch: { preferredWorkoutDurationMinutes: 180 },
+      updatedRow: "Dura\u00e7\u00e3o preferida: 180 minutos",
+    },
+    {
+      row: "Unidades: M\u00e9trico \u2014 kg / km",
+      title: "Sistema de unidades",
+      options: ["M\u00e9trico \u2014 kg / km", "Imperial \u2014 lb / mi"],
+      selected: "M\u00e9trico \u2014 kg / km",
+      choice: "Imperial \u2014 lb / mi",
+      patch: { measurementSystem: "imperial" },
+      updatedRow: "Unidades: Imperial \u2014 lb / mi",
+    },
+  ] as const)(
+    "accessibility: exposes every $title option and preserves persistence",
+    async ({ row, title, options, selected, choice, patch, updatedRow }) => {
+      mockedGet.mockResolvedValueOnce(configuredProfile);
+
+      mockedUpdate.mockResolvedValueOnce({
+        ...configuredProfile,
+        ...patch,
+      });
+
+      const auth = await mountProfile();
+
+      await waitForProfile();
+
+      await fireEvent.press(screen.getByRole("button", { name: row }));
+
+      const container = expectSelector(title, options, selected);
+
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+
+      await fireEvent.press(
+        within(container).getByRole("button", {
+          name: "Cancelar",
+        }),
+      );
+
+      expect(screen.queryByRole("header", { name: title })).toBeNull();
+
+      expect(mockedUpdate).not.toHaveBeenCalled();
+      expect(mockSetPreference).not.toHaveBeenCalled();
+
+      await fireEvent.press(screen.getByRole("button", { name: row }));
+
+      expectSelector(title, options, selected);
+
+      await chooseProfileOption(title, choice);
+
+      expect(
+        await screen.findByRole("button", {
+          name: updatedRow,
+        }),
+      ).toBeTruthy();
+
+      expect(mockedUpdate).toHaveBeenCalledTimes(1);
+      expect(mockedUpdate).toHaveBeenCalledWith(TOKEN, patch);
+
+      expect(auth.updateAuthenticatedUser).toHaveBeenCalledTimes(1);
+      expect(mockSetPreference).not.toHaveBeenCalled();
+
+      await fireEvent.press(screen.getByRole("button", { name: updatedRow }));
+
+      expectSelector(title, options, choice);
+
+      expect(mockedUpdate).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["requestClose", "accessibilityEscape"] as const)(
+    "accessibility: cancels a selector through %s without persisting",
+    async (event) => {
+      await mountProfile();
+
+      await waitForProfile();
+
+      const row = "Apar\u00eancia: Seguir sistema";
+      const title = "Apar\u00eancia";
+
+      await fireEvent.press(screen.getByRole("button", { name: row }));
+
+      const container = expectSelector(
+        title,
+        ["Claro", "Escuro", "Seguir sistema"],
+        "Seguir sistema",
+      );
+
+      if (event === "accessibilityEscape") {
+        expect(container).toHaveProp(
+          "onAccessibilityEscape",
+          expect.any(Function),
+        );
+
+        await fireEvent(container, "accessibilityEscape");
+      } else {
+        let modal = container.parent;
+
+        while (modal && typeof modal.props.onRequestClose !== "function") {
+          modal = modal.parent;
+        }
+
+        if (!modal) {
+          throw new Error("Native modal close handler not found.");
+        }
+
+        const close = modal.props.onRequestClose;
+
+        await act(async () => {
+          close();
+        });
+      }
+
+      expect(screen.queryByRole("header", { name: title })).toBeNull();
+
+      expect(mockSetPreference).not.toHaveBeenCalled();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+
+      await fireEvent.press(screen.getByRole("button", { name: row }));
+
+      expectSelector(
+        title,
+        ["Claro", "Escuro", "Seguir sistema"],
+        "Seguir sistema",
+      );
+    },
+  );
+
+  it("accessibility: prevents concurrent theme writes and restores selection after failure", async () => {
+    const request = deferred<void>();
+
+    mockSetPreference
+      .mockReturnValueOnce(request.promise)
+      .mockResolvedValueOnce(undefined);
+
+    await mountProfile();
+
+    await waitForProfile();
+
+    const row = "Apar\u00eancia: Seguir sistema";
+    const title = "Apar\u00eancia";
+
+    await fireEvent.press(screen.getByRole("button", { name: row }));
+
+    try {
+      await chooseProfileOption(title, "Escuro");
+
+      expect(mockSetPreference).toHaveBeenCalledTimes(1);
+      expect(mockSetPreference).toHaveBeenCalledWith("dark");
+
+      const appearance = screen.getByRole("button", {
+        name: row,
+      });
+
+      expect(appearance).toBeDisabled();
+
+      expect(appearance).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: true,
+          disabled: true,
+        }),
+      );
+
+      await fireEvent.press(appearance);
+
+      expect(screen.queryByRole("header", { name: title })).toBeNull();
+
+      expect(mockSetPreference).toHaveBeenCalledTimes(1);
+
+      expect(
+        screen.getByRole("button", {
+          name: "Objetivo principal: N\u00e3o definido",
+        }),
+      ).not.toBeDisabled();
+
+      expect(mockedUpdate).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => {
+        if (mockSetPreference.mock.calls.length > 0) {
+          request.reject(new Error("Falha ao salvar tema."));
+        } else {
+          request.resolve(undefined);
+        }
+      });
+    }
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "N\u00e3o foi poss\u00edvel alterar a apar\u00eancia",
+      "Falha ao salvar tema.",
+    );
+
+    expect(screen.getByRole("button", { name: row })).not.toBeDisabled();
+
+    await fireEvent.press(screen.getByRole("button", { name: row }));
+
+    await chooseProfileOption(title, "Claro");
+
+    expect(mockSetPreference.mock.calls).toEqual([["dark"], ["light"]]);
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("accessibility: hides background controls while a selector is open and restores them after dismissal", async () => {
+    await mountProfile();
+    await waitForProfile();
+
+    const row = "Apar\u00eancia: Seguir sistema";
+    const title = "Apar\u00eancia";
+
+    expect(screen.getByRole("button", { name: LOGOUT })).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole("button", { name: row }));
+
+    const container = expectSelector(
+      title,
+      ["Claro", "Escuro", "Seguir sistema"],
+      "Seguir sistema",
+    );
+
+    expect(screen.queryByRole("button", { name: LOGOUT })).toBeNull();
+
+    expect(screen.queryByLabelText(NAME_LABEL)).toBeNull();
+
+    expect(screen.queryByRole("button", { name: row })).toBeNull();
+
+    await fireEvent.press(
+      within(container).getByRole("button", {
+        name: "Cancelar",
+      }),
+    );
+
+    expect(screen.queryByRole("header", { name: title })).toBeNull();
+
+    expect(screen.getByRole("button", { name: LOGOUT })).not.toBeDisabled();
+
+    expect(screen.getByLabelText(NAME_LABEL)).toHaveProp("editable", true);
+
+    expect(screen.getByRole("button", { name: row })).not.toBeDisabled();
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(mockSetPreference).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
