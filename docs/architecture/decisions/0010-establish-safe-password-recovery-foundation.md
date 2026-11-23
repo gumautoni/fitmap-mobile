@@ -1,4 +1,4 @@
-# ADR 0006 — Establish a safe password recovery foundation
+# ADR 0010 — Establish a safe password recovery foundation
 
 ## Status
 
