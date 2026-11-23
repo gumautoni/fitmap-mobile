@@ -1,6 +1,6 @@
 # FitMap — Situação da implementação para o TCC
 
-**Base auditada:** branch `main`, commit `748dd83` (03/11/2026), antes da limpeza de legado.
+**Referência desta revisão:** `main` em `9f27e5c` (23/11/2026), após o PR #93 de documentação do QA.
 **Objetivo:** diferenciar código implementado, validação automatizada e validação prática pendente.
 
 ## Comportamentos presentes na branch principal
@@ -18,9 +18,10 @@ mobile integrado deve ser comprovado na validação manual antes da apresentaç�
 
 ## Fora do escopo da apresentação
 
-- Verificação de propriedade do e-mail e recuperação de senha por mensagem.
-  O desenvolvimento experimental foi preservado na branch separada
-  `feat/auth-account-recovery-ciclo24` e não será incorporado à `main` do TCC.
+- As rotas de verificação de e-mail e recuperação de senha estão integradas ao backend
+  em `main`. As opções `FITMAP_AUTH_EMAIL_VERIFICATION_ENABLED` e
+  `FITMAP_AUTH_PASSWORD_RECOVERY_ENABLED` vêm desativadas. Esses fluxos ficam
+  fora da demonstração do aplicativo.
 - Fluxo local de tarefas/exercícios do protótipo (telas `Tarefas`, `NovaTarefa`
   e `Camera`, componentes e armazenamento próprios). Removido na limpeza do TCC,
   pois a experiência oficial de treinos e fotos é gerenciada pelo backend.
@@ -29,16 +30,27 @@ mobile integrado deve ser comprovado na validação manual antes da apresentaç�
 
 ## Evidências de validação
 
-No checkpoint `748dd83`, antes da limpeza:
+### 03/11/2026 — antes da limpeza do legado (`748dd83`)
 
 - Backend: **593 testes aprovados**; PostgreSQL de testes isolado.
 - Mobile: **199 testes aprovados**, distribuídos em **20 suítes**.
 - Ruff, Pyright, TypeScript, ESLint e Prettier: aprovados.
 - Alembic: `3a467e3941e2 (head)`.
 
-Após remover os testes exclusivos do componente legado `CustomButton`, o total de
-Jest será menor. Isso **não é regressão** desde que a suíte restante, as validações
-de tipo/lint/formatação e os fluxos reais continuem passando.
+As 20 suítes incluíam testes do componente legado `CustomButton`, removido posteriormente.
+
+### 23/11/2026 — QA pós-integração da Stack #92 (`881bde7`)
+
+- Mobile: **933 testes aprovados em 56 suítes**.
+- Backend: **1.206 testes aprovados** com PostgreSQL exclusivo de testes.
+- CI: **32 de 32 verificações obrigatórias aprovadas**, quatro em cada um dos oito PRs da stack.
+
+O PR #93 (`9f27e5c`) documentou a regressão executada em `881bde7`.
+Os 133 cenários físicos anteriores permanecem como evidência histórica. A homologação física
+complementar ficou pendente, inclusive a cobertura equivalente para Android, TalkBack e
+builds nativas. O [relatório de QA](../qa-final-postintegration-2026-11-23.md) detalha
+os resultados e as demais limitações. Para a banca, os prints e o vídeo devem identificar
+a versão e os percursos efetivamente demonstrados.
 
 ## Pendências antes de encerrar o TCC
 
