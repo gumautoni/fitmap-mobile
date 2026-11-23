@@ -389,8 +389,10 @@ Jobs aprovados:
 As auditorias foram aprovadas utilizando os critérios
 de severidade já existentes no workflow de CI.
 
-Essa aprovação corresponde ao PR #83 e não substitui
-a validação individual dos demais PRs empilhados.
+Naquele momento, a aprovação correspondia somente
+ao PR #83. Posteriormente, os demais sete PRs empilhados
+também passaram individualmente pelos quatro checks
+obrigatórios antes da integração da Stack #92.
 
 ### 10.4. Pendências e decisão técnica
 
@@ -404,9 +406,12 @@ A ausência de alertas altos não comprova ausência
 absoluta de vulnerabilidades e não constitui aceitação
 permanente dos riscos moderados.
 
-A integração dos PRs permanece condicionada à revisão
-de dependências, à estratégia de merges e aos checks
-aplicáveis a cada alteração.
+A integração da Stack #92 ocorreu em 23/11/2026 após
+a validação das dependências e dos checks aplicáveis.
+Nenhuma regra de CI foi dispensada para essa integração.
+
+A Issue #84 continua aberta para acompanhamento e
+remediação dos riscos moderados remanescentes.
 
 Issue de acompanhamento:
 
@@ -415,3 +420,25 @@ https://github.com/gumautoni/fitmap-mobile/issues/84
 Registro de evidências:
 
 https://github.com/gumautoni/fitmap-mobile/issues/84#issuecomment-7101557105
+
+
+## 11. Resultado pós-integração — 23/11/2026
+
+A Stack #92 foi integrada à `main` em oito commits Squash,
+correspondentes aos PRs #83, #85, #86, #87, #88, #89,
+#90 e #91. Cada PR possuía quatro checks obrigatórios
+aprovados, totalizando 32/32.
+
+O commit final da `main` é `881bde7`. Sua árvore Git
+é idêntica à árvore aprovada da QUALITY-01.
+
+A integração não corrigiu automaticamente os três
+advisories moderados de Glob, Minimatch e UUID.
+A Issue #84 permanece aberta para acompanhamento.
+
+A aprovação dos checks não constitui garantia
+de ausência de vulnerabilidades futuras.
+
+O registro detalhado da QA automatizada e das
+limitações está em
+`docs/qa-final-postintegration-2026-11-23.md`.

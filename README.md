@@ -1042,6 +1042,30 @@ mocked authentication services and secure storage.
 These results establish an automated validation checkpoint, not
 a physical-device or deployed-infrastructure acceptance test.
 
+### Validation checkpoint - post-integration (2026-11-23)
+
+The eight pull requests in GitHub Stack #92 (#83, #85, #86,
+#87, #88, #89, #90 and #91) were squash-merged into `main`.
+
+- Final `main` commit: `881bde7d9fce99a4d2788d4de3446be2d4b60044`.
+- The final Git tree matches approved QUALITY-01 commit `601b8ec`.
+- GitHub Actions: 32/32 required checks successful across eight PRs.
+- Mobile: 933 passing Jest tests in 56 suites.
+- Backend: 1,206 passing pytest tests on isolated PostgreSQL.
+- Combined automated result: 2,139 passing tests.
+- Prettier, TypeScript, ESLint, Ruff and strict Pyright: approved.
+- Local working tree and protected accessibility stash: preserved.
+
+The remaining moderate dependency advisories are tracked in
+[Issue #84](https://github.com/gumautoni/fitmap-mobile/issues/84).
+
+These results establish post-integration automated validation,
+not Android/native-build acceptance, WCAG certification or
+production deployment readiness.
+
+See the [post-integration QA report](docs/qa-final-postintegration-2026-11-23.md)
+for evidence, scope and remaining limitations.
+
 ## Continuous Integration
 
 Pull Requests targeting `main` are validated through GitHub Actions.

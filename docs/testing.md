@@ -1155,13 +1155,19 @@ de consolidação documental.
 
 Todos os testes foram aprovados, apesar do aviso.
 Sua ausência em uma execução não representa correção.
-A investigação permanece na QUALITY-01.
+A ocorrência permanece registrada como limitação histórica
+da QUALITY-01. A correção definitiva do aviso não foi comprovada.
 
 A validação local não substitui os checks de CI.
 
-A integração das branches empilhadas permanece
-condicionada à resolução da Issue #84 e à aprovação
-dos checks obrigatórios.
+No momento deste checkpoint, a integração das branches
+empilhadas ainda estava pendente. Posteriormente, em
+23/11/2026, os oito PRs da Stack #92 foram integrados
+após aprovação dos 32 checks obrigatórios.
+
+A Issue #84 permanece aberta para acompanhamento dos
+advisories moderados. Consulte o relatório pós-integração
+em `docs/qa-final-postintegration-2026-11-23.md`.
 
 ## 6. Verificações de qualidade
 
@@ -1402,6 +1408,27 @@ Após remover o componente legado CustomButton, seus testes exclusivos também s
 retirados; um total mobile menor é esperado e deve ser registrado após a nova suíte.
 
 A validação automatizada não substitui a avaliação integrada no dispositivo.
+
+### 8.2. Validação pós-integração — 23/11/2026
+
+A Stack #92 foi integrada à `main` em oito commits Squash,
+encerrando no commit `881bde7`. A comparação das árvores Git
+confirmou identidade exata com a versão aprovada da QUALITY-01.
+
+A regressão local consolidada aprovou 933 testes mobile
+em 56 suítes e 1.206 testes backend no PostgreSQL de
+testes isolado, totalizando 2.139 testes.
+
+Os oito PRs passaram nos quatro checks obrigatórios
+do GitHub Actions, totalizando 32 verificações aprovadas.
+
+A homologação física complementar, a investigação do
+aviso intermitente VirtualizedList e o monitoramento
+dos riscos moderados de dependências continuam separados
+dessa aprovação automatizada.
+
+Evidências, referências e limitações:
+`docs/qa-final-postintegration-2026-11-23.md`.
 
 ## 9. Convenções
 
