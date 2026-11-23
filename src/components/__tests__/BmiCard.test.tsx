@@ -265,4 +265,188 @@ describe("BmiCard", () => {
     expect(screen.getByText("75 kg")).toBeTruthy();
     expect(mockedGetBmiSnapshot).toHaveBeenCalledTimes(2);
   });
+
+  it("accessibility: exposes BMI loading, refresh and error recovery states", async () => {
+    let resolveInitial!: (value: BmiSnapshot) => void;
+
+    const initialRequest = new Promise<BmiSnapshot>((done) => {
+      resolveInitial = done;
+    });
+
+    let rejectRefresh!: (reason: Error) => void;
+    let resolveRefresh!: (value: BmiSnapshot) => void;
+
+    const refreshRequest = new Promise<BmiSnapshot>((done, fail) => {
+      resolveRefresh = done;
+      rejectRefresh = fail;
+    });
+
+    const updatedSnapshot: BmiSnapshot = {
+      ...availableSnapshot,
+      weightKg: "75.00",
+      bmi: "24.5",
+    };
+
+    mockedGetBmiSnapshot
+      .mockReturnValueOnce(initialRequest)
+      .mockReturnValueOnce(refreshRequest)
+      .mockResolvedValueOnce(updatedSnapshot);
+
+    await renderCard();
+
+    const refresh = "Atualizar IMC";
+    const loadingLabel = "Carregando IMC";
+
+    function expectRefreshState(loading: boolean) {
+      const button = screen.getByLabelText(refresh);
+
+      expect(button).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: loading,
+          disabled: loading,
+        }),
+      );
+
+      expect(button).toHaveStyle({
+        minHeight: 48,
+        minWidth: 48,
+      });
+
+      if (loading) {
+        expect(button).toBeDisabled();
+
+        expect(
+          screen.getByRole("progressbar", {
+            name: loadingLabel,
+          }),
+        ).toHaveProp(
+          "accessibilityState",
+          expect.objectContaining({ busy: true }),
+        );
+
+        expect(screen.getByText("Carregando IMC...")).toBeTruthy();
+      } else {
+        expect(button).not.toBeDisabled();
+        expect(screen.queryByLabelText(loadingLabel)).toBeNull();
+      }
+    }
+
+    try {
+      expectRefreshState(true);
+
+      await fireEvent.press(screen.getByLabelText(refresh));
+
+      expect(mockedGetBmiSnapshot).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => {
+        resolveInitial(availableSnapshot);
+      });
+    }
+
+    expect(await screen.findByLabelText("IMC 22,9")).toBeTruthy();
+
+    expectRefreshState(false);
+
+    try {
+      await fireEvent.press(screen.getByLabelText(refresh));
+
+      expectRefreshState(true);
+
+      expect(screen.queryByLabelText("IMC 22,9")).toBeNull();
+
+      await fireEvent.press(screen.getByLabelText(refresh));
+
+      expect(mockedGetBmiSnapshot).toHaveBeenCalledTimes(2);
+    } finally {
+      await act(async () => {
+        if (mockedGetBmiSnapshot.mock.calls.length > 1) {
+          rejectRefresh(new Error("The backend could not be reached."));
+        } else {
+          resolveRefresh(availableSnapshot);
+        }
+      });
+    }
+
+    const errorMessage = "N\u00e3o foi poss\u00edvel conectar ao servidor.";
+
+    expect(screen.getByRole("alert")).toHaveTextContent(errorMessage);
+
+    expect(screen.getByRole("alert")).toHaveProp(
+      "accessibilityLiveRegion",
+      "polite",
+    );
+
+    expectRefreshState(false);
+
+    expect(
+      screen.getByText("Use Atualizar para tentar novamente."),
+    ).toBeTruthy();
+
+    expect(screen.queryByLabelText("IMC 22,9")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText(refresh));
+
+    expect(await screen.findByLabelText("IMC 24,5")).toBeTruthy();
+
+    expectRefreshState(false);
+
+    expect(mockedGetBmiSnapshot).toHaveBeenCalledTimes(3);
+
+    expect(mockedGetBmiSnapshot).toHaveBeenLastCalledWith("test-access-token");
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(errorMessage)).toBeNull();
+  });
+
+  it("accessibility: identifies the BMI unit and contextualizes height and weight", async () => {
+    await renderCard();
+
+    const bmi = await screen.findByLabelText("IMC 22,9");
+
+    expect(bmi).toHaveProp(
+      "accessibilityHint",
+      "Quilogramas por metro quadrado.",
+    );
+
+    expect(screen.getByLabelText("Altura: 175 cm")).toBeTruthy();
+
+    expect(screen.getByLabelText("\u00daltimo peso: 70 kg")).toBeTruthy();
+
+    expect(screen.getByText("175 cm")).toBeTruthy();
+    expect(screen.getByText("70 kg")).toBeTruthy();
+
+    expect(
+      screen.getByText(/O IMC n\u00e3o distingue massa muscular/),
+    ).toBeTruthy();
+
+    expect(mockedGetBmiSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("accessibility: distinguishes unavailable BMI from zero and identifies missing measurements", async () => {
+    mockedGetBmiSnapshot.mockResolvedValueOnce(emptySnapshot);
+
+    await renderCard();
+
+    const bmi = await screen.findByLabelText("IMC indispon\u00edvel");
+
+    const guidance =
+      "Cadastre sua altura no Perfil e registre seu peso para visualizar o IMC.";
+
+    expect(bmi).toHaveProp("accessibilityHint", guidance);
+
+    expect(screen.getByLabelText("Altura: N\u00e3o registrado")).toBeTruthy();
+
+    expect(
+      screen.getByLabelText("\u00daltimo peso: N\u00e3o registrado"),
+    ).toBeTruthy();
+
+    expect(screen.getByText(guidance)).toBeTruthy();
+
+    expect(screen.getAllByText("N\u00e3o registrado")).toHaveLength(2);
+
+    expect(screen.queryByLabelText("IMC 0")).toBeNull();
+
+    expect(mockedGetBmiSnapshot).toHaveBeenCalledTimes(1);
+  });
 });

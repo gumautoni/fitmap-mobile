@@ -772,6 +772,195 @@ dos checks obrigatórios de CI.
 
 ---
 
+## Acessibilidade de autenticação, perfil, progresso e navegação (ACC-02.4)
+
+A entrega amplia a acessibilidade da conta, do acompanhamento
+de progresso e dos componentes compartilhados.
+
+O escopo considera os requisitos NFR-ACC-001 a NFR-ACC-006,
+sem representar certificação integral desses requisitos.
+
+### Autenticação
+
+* Rótulos contextuais dos campos de autenticação.
+* Identificação das ações de exibir e ocultar senha.
+* Orientações sobre requisitos e erros de preenchimento.
+* Campos e ações protegidos durante o envio.
+* Controles de navegação desabilitados durante operações pendentes.
+* Alvos de toque ampliados nos controles revisados.
+
+A validação de credenciais, as regras de senha, a navegação
+e os contratos de autenticação permanecem inalterados.
+
+### Perfil
+
+* Indicadores acessíveis de carregamento e falha.
+* Identificação contextual das configurações.
+* Indicador de preenchimento do perfil com semântica de progresso.
+* Orientações e estados acessíveis na edição de nome e altura.
+* Identificação da opção selecionada nas preferências.
+* Proteção das ações durante operações pendentes.
+
+O cálculo de preenchimento, os serviços de perfil e a persistência
+existente permanecem inalterados.
+
+### Progresso
+
+Os registros corporais e as metas possuem orientações de preenchimento,
+identificação de tipos e unidades, estados selecionados e estados
+acessíveis durante o salvamento.
+
+As metas com progresso calculável apresentam semântica de progresso,
+valor percentual e contexto do objetivo.
+
+O cartão de IMC identifica carregamento, indisponibilidade,
+altura e peso utilizados, preservando o cálculo original.
+
+O gráfico de evolução apresenta uma descrição textual dos valores
+inicial e final disponíveis, variação e extensão do histórico exibido.
+A seleção de métricas utiliza indicador visual adicional à cor.
+
+O cálculo, os limites do histórico e a representação gráfica
+permanecem inalterados.
+
+As operações de captura, envio e visualização de fotos possuem
+estados acessíveis e controles revisados.
+
+O visualizador mantém o fechamento convencional e oferece
+o callback de escape de acessibilidade.
+
+As miniaturas de mesma data possuem identificação contextual
+distinta, sem exposição de identificadores internos nos rótulos.
+
+Os indicadores de desempenho e evolução apresentam descrições
+que contextualizam métricas, datas, séries, repetições e cargas.
+
+Os serviços, contratos, cálculos e regras de acesso às fotos
+permanecem inalterados.
+
+### Home e navegação
+
+* Cabeçalhos semânticos na saudação e nas seções principais.
+* Rótulos distintos para os atalhos da Home.
+* Orientação contextual do card de treino.
+* Identificação acessível dos estados de carregamento.
+* Elementos puramente decorativos ocultados dos leitores de tela.
+* Controles de perfil e atalhos com áreas de toque revisadas.
+* Botões de Histórico e Treinar com dimensões mínimas de
+  48 por 48 unidades lógicas e orientações acessíveis.
+
+A navegação por abas mantém os navegadores reais, a seleção
+exclusiva, os parâmetros das rotas e o comportamento de retorno.
+
+A configuração visual da barra de navegação permanece inalterada.
+
+### Calendário de atividades
+
+O calendário identifica o dia atual, os dias selecionados,
+os dias indisponíveis e os estados de carregamento e falha.
+
+Os controles de navegação mensal possuem dimensões de
+48 por 48 unidades lógicas.
+
+A altura mínima das células mensais foi ampliada para 48 unidades,
+preservando a distribuição em sete colunas.
+
+O diário de treinos possui cabeçalhos semânticos e comunicação
+acessível do estado vazio.
+
+Treinos de mesmo nome recebem identificação ordinal contextual.
+O horário de conclusão está disponível na orientação acessível
+dos registros.
+
+Os rótulos são construídos em tempo linear em relação ao número
+de sessões do dia selecionado, sem modificar sua ordenação.
+
+A seleção de datas, os intervalos de consulta, a paginação,
+a recuperação de falhas e a navegação para o histórico
+permanecem inalterados.
+
+### Identidade visual e movimento
+
+O componente FitMapBrand identifica semanticamente a marca
+como uma imagem com o rótulo FIT Map.
+
+As variantes, imagens, dimensões e seleção de assets
+permanecem inalteradas.
+
+O calendário passou a reutilizar o hook useReducedMotion,
+eliminando a implementação duplicada da preferência.
+
+O hook mantém a redução de movimento enquanto a preferência
+não é conhecida ou quando sua consulta falha.
+
+Uma resposta inicial atrasada não sobrescreve uma preferência
+mais recente recebida do dispositivo.
+
+As animações de layout e seleção continuam condicionadas
+à preferência de movimento.
+
+Os parâmetros das animações existentes, os componentes 3D
+e a identidade Orange Fusion foram preservados.
+
+### Validação
+
+A entrega acrescentou 83 testes automatizados:
+
+* 16 de autenticação;
+* 13 de perfil;
+* 35 de progresso;
+* 7 da Home;
+* 3 de navegação;
+* 4 de acessibilidade do calendário;
+* 5 de identidade visual e movimento.
+
+Os números incluem testes de acessibilidade e caracterização
+de comportamentos existentes.
+
+A regressão direcionada final aprovou 246 testes em 19 suítes.
+
+A regressão mobile completa aprovou 866 testes em 55 suítes,
+com TypeScript, ESLint e Prettier aprovados.
+
+Em 18/11/2026, o desenvolvedor confirmou 36 de 36 verificações
+físicas no iPhone via Expo Go, com backend local.
+
+A avaliação incluiu VoiceOver, ampliação de texto,
+redução de movimento e persistência de dados de teste.
+
+Os cenários físicos estão registrados na seção 5.6
+de docs/testing.md.
+
+### Limitações
+
+As dimensões configuradas nos controles não constituem
+medição física exaustiva de todos os alvos de toque.
+
+A largura das células do calendário depende da área disponível
+para suas sete colunas e permanece sujeita à avaliação transversal.
+
+A verificação com texto ampliado representa a configuração
+avaliada, não todos os tamanhos de fonte e tela.
+
+A validação em Expo Go não constitui certificação WCAG,
+nem comprova compatibilidade com builds nativos.
+
+A validação Android e o comportamento dos seletores nativos
+de preferências nessa plataforma permanecem pendentes.
+
+A validação física utilizou dados de teste. A remoção posterior
+desses registros não foi confirmada nesta etapa.
+
+O aviso intermitente React act do VirtualizedList na suíte
+MapGymPreview.test.tsx permanece registrado para a QUALITY-01.
+
+As verificações transversais remanescentes pertencem à ACC-02.5.
+
+A integração permanece condicionada à resolução da Issue #84
+e à aprovação dos checks obrigatórios de CI.
+
+---
+
 ## Filtros de descoberta de academias
 
 A implementação da FUNC-05 atende ao requisito funcional

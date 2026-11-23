@@ -10,6 +10,7 @@ import { AccessibilityInfo, Animated, Text } from "react-native";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { lightSurfaceDepth, lightMetricDetail } from "../../theme/surfaces";
 import { darkTheme, lightTheme } from "../../theme/themes";
+import FitMapBrand from "../FitMapBrand";
 import MotionPressable from "../MotionPressable";
 import MotionScrollView from "../MotionScrollView";
 import ScreenGradient from "../ScreenGradient";
@@ -228,6 +229,78 @@ describe("Orange Fusion visual and motion", () => {
     );
 
     expect(screen.getByText("Accessible content")).toBeTruthy();
+    expect(Animated.timing).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: exposes the FIT Map brand as a named image across all variants", async () => {
+    const view = await render(
+      <FitMapBrand variant="full" mode="light" width={150} />,
+    );
+
+    const variants = [
+      { variant: "full", mode: "light", width: 150 },
+      { variant: "full", mode: "dark", width: 150 },
+      { variant: "symbol", mode: "light", width: 48 },
+      { variant: "symbol", mode: "dark", width: 48 },
+      { variant: "wordmark", mode: "light", width: 120 },
+      { variant: "wordmark", mode: "dark", width: 120 },
+    ] as const;
+
+    for (const props of variants) {
+      await view.rerender(<FitMapBrand {...props} />);
+
+      const image = screen.getByLabelText("FIT Map");
+
+      expect(image).toHaveProp("accessibilityRole", "image");
+
+      expect(screen.getByRole("image", { name: "FIT Map" })).toBe(image);
+
+      expect(image).toHaveProp("accessible", true);
+      expect(image).toHaveProp("resizeMode", "contain");
+
+      expect(image).toHaveStyle({
+        width: props.width,
+      });
+    }
+  });
+
+  it("preserves accessible disabled controls without press actions or motion", async () => {
+    const onPress = jest.fn();
+    const user = userEvent.setup();
+
+    await render(
+      <MotionPressable
+        reduceMotion={false}
+        disabled
+        accessibilityRole="button"
+        accessibilityLabel="Salvar treino"
+        accessibilityHint="Aguarde a operacao atual."
+        accessibilityState={{ disabled: true, busy: true }}
+        onPress={onPress}
+      >
+        <Text>Salvar treino</Text>
+      </MotionPressable>,
+    );
+
+    const button = screen.getByRole("button", {
+      name: "Salvar treino",
+    });
+
+    expect(button).toBeDisabled();
+
+    expect(button).toHaveProp("accessibilityHint", "Aguarde a operacao atual.");
+
+    expect(button).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        disabled: true,
+        busy: true,
+      }),
+    );
+
+    await user.press(button);
+
+    expect(onPress).not.toHaveBeenCalled();
     expect(Animated.timing).not.toHaveBeenCalled();
   });
 });

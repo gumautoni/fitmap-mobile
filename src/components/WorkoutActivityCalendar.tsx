@@ -13,7 +13,6 @@ import {
 } from "lucide-react-native";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import {
-  AccessibilityInfo,
   ActivityIndicator,
   Animated,
   Easing,
@@ -26,6 +25,7 @@ import {
 import Svg, { Circle } from "react-native-svg";
 
 import { AuthContext } from "../context/AuthContext";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import {
   getWorkoutHistoryPage,
   type WorkoutHistoryItem,
@@ -128,7 +128,7 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
   );
 
   const [expanded, setExpanded] = useState(false);
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   const [selectionScale] = useState(() => new Animated.Value(1.065));
 
@@ -154,34 +154,6 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
   const history =
     currentResult?.status === "ready" ? currentResult.items : EMPTY_HISTORY;
-
-  useEffect(() => {
-    let active = true;
-
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (active) {
-          setReduceMotion(enabled);
-        }
-      })
-      .catch(() => {
-        // Mantem o comportamento padrao caso a consulta falhe.
-      });
-
-    const subscription = AccessibilityInfo.addEventListener(
-      "reduceMotionChanged",
-      (enabled) => {
-        if (active) {
-          setReduceMotion(enabled);
-        }
-      },
-    );
-
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -337,6 +309,40 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
   const selectedSessions = selectedKey ? (grouped[selectedKey] ?? []) : [];
 
+  const sessionNameCounts = new Map<string, number>();
+
+  for (const item of selectedSessions) {
+    sessionNameCounts.set(
+      item.workoutName,
+      (sessionNameCounts.get(item.workoutName) ?? 0) + 1,
+    );
+  }
+
+  const sessionNamePositions = new Map<string, number>();
+
+  const selectedSessionEntries = selectedSessions.map((item) => {
+    const name = item.workoutName;
+    const position = (sessionNamePositions.get(name) ?? 0) + 1;
+    sessionNamePositions.set(name, position);
+
+    const count = sessionNameCounts.get(name) ?? 1;
+    const baseLabel = `Ver detalhes do treino ${name}`;
+
+    const time = new Date(item.completedAt).toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    return {
+      item,
+      accessibilityLabel:
+        count > 1
+          ? `${baseLabel}, registro ${position} de ${count} neste dia`
+          : baseLabel,
+      accessibilityHint: `Concluído às ${time}. Ver exercícios, séries e cargas.`,
+    };
+  });
+
   const canGoForward = visibleMonth.getTime() < monthStart(today).getTime();
 
   function animateCalendarLayout(): void {
@@ -369,6 +375,21 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
 
   const selectionColor = theme.mode === "light" ? "#64748B" : "#94A3B8";
 
+  function getDayAccessibilityLabel(date: Date): string {
+    const key = localDateKey(date);
+    const sessions = grouped[key] ?? [];
+
+    const status = loading
+      ? "Carregando dados de treino"
+      : error
+        ? "Dados de treino indisponíveis"
+        : sessions.length > 0
+          ? `${sessions.length} treino(s) concluído(s)`
+          : "Sem treino concluído registrado";
+
+    return `${formatDay(date)}. ${status}${key === todayKey ? ". Hoje" : ""}`;
+  }
+
   function renderDay(date: Date, monthly: boolean) {
     const key = localDateKey(date);
     const sessions = grouped[key] ?? [];
@@ -382,15 +403,7 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
       <Pressable
         key={key}
         accessibilityRole="button"
-        accessibilityLabel={`${formatDay(date)}. ${
-          loading
-            ? "Carregando dados de treino"
-            : error
-              ? "Dados de treino indisponíveis"
-              : completed
-                ? `${sessions.length} treino(s) concluído(s)`
-                : "Sem treino concluído registrado"
-        }`}
+        accessibilityLabel={getDayAccessibilityLabel(date)}
         accessibilityState={{
           selected,
           disabled: loading || error || isFuture,
@@ -520,11 +533,24 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
         <View style={styles.feedback}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
 
-          <Text style={styles.feedbackText}>Atualizando seus treinos...</Text>
+          <Text
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="Atualizando seus treinos"
+            accessibilityState={{ busy: true }}
+            accessibilityLiveRegion="polite"
+            style={styles.feedbackText}
+          >
+            Atualizando seus treinos...
+          </Text>
         </View>
       ) : error ? (
         <View style={styles.feedback}>
-          <Text style={styles.feedbackText}>
+          <Text
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={styles.feedbackText}
+          >
             Não foi possível carregar os dias de treino.
           </Text>
 
@@ -553,7 +579,13 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
               <ChevronLeft size={21} color={theme.colors.textPrimary} />
             </Pressable>
 
-            <Text style={styles.monthTitle}>{formatMonth(visibleMonth)}</Text>
+            <Text
+              accessibilityRole="header"
+              accessibilityLiveRegion="polite"
+              style={styles.monthTitle}
+            >
+              {formatMonth(visibleMonth)}
+            </Text>
 
             <Pressable
               accessibilityRole="button"
@@ -664,7 +696,10 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
                         </Text>
                       </View>
 
-                      <Text style={styles.detailsTitle}>
+                      <Text
+                        accessibilityRole="header"
+                        style={styles.detailsTitle}
+                      >
                         {formatDay(selectedDay)}
                       </Text>
                     </View>
@@ -680,54 +715,57 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
                   </View>
 
                   {selectedSessions.length > 0 ? (
-                    selectedSessions.map((item) => (
-                      <Pressable
-                        key={item.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Ver detalhes do treino ${item.workoutName}`}
-                        onPress={() => onOpenWorkout(item.id)}
-                        style={({ pressed }) => [
-                          styles.sessionRow,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <View style={styles.sessionIcon}>
-                          <Dumbbell
-                            size={20}
-                            strokeWidth={2.1}
-                            color={
-                              theme.mode === "light" ? "#0F766E" : "#57D6B8"
-                            }
+                    selectedSessionEntries.map(
+                      ({ item, accessibilityLabel, accessibilityHint }) => (
+                        <Pressable
+                          key={item.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={accessibilityLabel}
+                          accessibilityHint={accessibilityHint}
+                          onPress={() => onOpenWorkout(item.id)}
+                          style={({ pressed }) => [
+                            styles.sessionRow,
+                            pressed && styles.pressed,
+                          ]}
+                        >
+                          <View style={styles.sessionIcon}>
+                            <Dumbbell
+                              size={20}
+                              strokeWidth={2.1}
+                              color={
+                                theme.mode === "light" ? "#0F766E" : "#57D6B8"
+                              }
+                            />
+                          </View>
+
+                          <View style={styles.sessionCopy}>
+                            <Text style={styles.sessionTitle}>
+                              {item.workoutName}
+                            </Text>
+
+                            <Text style={styles.sessionTime}>
+                              Concluído às{" "}
+                              {new Date(item.completedAt).toLocaleTimeString(
+                                "pt-BR",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )}
+                            </Text>
+
+                            <Text style={styles.sessionAction}>
+                              Ver exercícios, séries e cargas
+                            </Text>
+                          </View>
+
+                          <ChevronRight
+                            size={18}
+                            color={theme.colors.textSecondary}
                           />
-                        </View>
-
-                        <View style={styles.sessionCopy}>
-                          <Text style={styles.sessionTitle}>
-                            {item.workoutName}
-                          </Text>
-
-                          <Text style={styles.sessionTime}>
-                            Concluído às{" "}
-                            {new Date(item.completedAt).toLocaleTimeString(
-                              "pt-BR",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )}
-                          </Text>
-
-                          <Text style={styles.sessionAction}>
-                            Ver exercícios, séries e cargas
-                          </Text>
-                        </View>
-
-                        <ChevronRight
-                          size={18}
-                          color={theme.colors.textSecondary}
-                        />
-                      </Pressable>
-                    ))
+                        </Pressable>
+                      ),
+                    )
                   ) : (
                     <View style={styles.diaryEmpty}>
                       <CalendarDays
@@ -736,7 +774,10 @@ export default function WorkoutActivityCalendar({ onOpenWorkout }: Props) {
                       />
 
                       <View style={styles.diaryEmptyCopy}>
-                        <Text style={styles.diaryEmptyTitle}>
+                        <Text
+                          accessibilityLiveRegion="polite"
+                          style={styles.diaryEmptyTitle}
+                        >
                           Dia sem registros
                         </Text>
 
@@ -794,6 +835,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     header: {
+      minHeight: 48,
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
@@ -942,6 +984,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     retry: {
+      minHeight: 48,
+      minWidth: 48,
+      justifyContent: "center",
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
@@ -975,8 +1020,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     monthArrow: {
-      width: 36,
-      height: 36,
+      width: 48,
+      height: 48,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1038,7 +1083,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 2,
-      minHeight: 40,
+      minHeight: 48,
     },
 
     legend: {
@@ -1187,6 +1232,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     sessionRow: {
+      minHeight: 48,
+      minWidth: 48,
       flexDirection: "row",
       alignItems: "center",
       borderRadius: 15,

@@ -180,6 +180,7 @@ export default function BmiCard({ refreshVersion = 0 }: BmiCardProps) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Atualizar IMC"
+          accessibilityState={{ busy: loading, disabled: loading }}
           disabled={loading}
           onPress={() => {
             void loadSnapshot();
@@ -196,12 +197,23 @@ export default function BmiCard({ refreshVersion = 0 }: BmiCardProps) {
 
       {loading ? (
         <View style={styles.statusBlock}>
-          <ActivityIndicator size="small" color={theme.colors.primary} />
+          <ActivityIndicator
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="Carregando IMC"
+            accessibilityState={{ busy: true }}
+            size="small"
+            color={theme.colors.primary}
+          />
           <Text style={styles.statusText}>Carregando IMC...</Text>
         </View>
       ) : error ? (
         <View style={styles.statusBlock}>
-          <Text accessibilityLiveRegion="polite" style={styles.errorText}>
+          <Text
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            style={styles.errorText}
+          >
             {error}
           </Text>
 
@@ -217,6 +229,11 @@ export default function BmiCard({ refreshVersion = 0 }: BmiCardProps) {
                 snapshot.bmi === null
                   ? "IMC indisponível"
                   : `IMC ${snapshot.bmi.replace(".", ",")}`
+              }
+              accessibilityHint={
+                snapshot.bmi === null
+                  ? getMissingDataMessage(snapshot)
+                  : "Quilogramas por metro quadrado."
               }
               style={styles.bmiValue}
             >
@@ -238,14 +255,22 @@ export default function BmiCard({ refreshVersion = 0 }: BmiCardProps) {
           )}
 
           <View style={styles.measurements}>
-            <View style={styles.measurement}>
+            <View
+              accessible
+              accessibilityLabel={`Altura: ${formatMeasurement(snapshot.heightCm, "cm")}`}
+              style={styles.measurement}
+            >
               <Text style={styles.measurementLabel}>Altura</Text>
               <Text style={styles.measurementValue}>
                 {formatMeasurement(snapshot.heightCm, "cm")}
               </Text>
             </View>
 
-            <View style={styles.measurement}>
+            <View
+              accessible
+              accessibilityLabel={`Último peso: ${formatMeasurement(snapshot.weightKg, "kg")}`}
+              style={styles.measurement}
+            >
               <Text style={styles.measurementLabel}>Último peso</Text>
               <Text style={styles.measurementValue}>
                 {formatMeasurement(snapshot.weightKg, "kg")}
@@ -300,7 +325,9 @@ function createStyles(theme: AppTheme) {
       lineHeight: theme.typography.lineHeight.cardTitle,
     },
     refreshButton: {
-      minHeight: 44,
+      minHeight: 48,
+      minWidth: 48,
+      alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: theme.spacing.md,
       borderRadius: theme.radii.md,

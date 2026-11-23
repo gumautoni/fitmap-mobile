@@ -103,6 +103,28 @@ export default function BodyEvolutionChart({
   const difference =
     first && last && series.points.length > 1 ? last.value - first.value : null;
 
+  const variationText =
+    difference !== null
+      ? `Variação do período: ${difference > 0 ? "+" : ""}${formatValue(difference, series.unit)}`
+      : "Adicione outro registro para visualizar a variação.";
+
+  const recordCountText = `${series.points.length} de ${series.totalValidRecords} registros válidos exibidos.`;
+
+  const chartDescription = last
+    ? [
+        ...(difference === null
+          ? [
+              `Registro: ${formatValue(last.value, series.unit)} em ${formatDate(last.timestamp)}.`,
+            ]
+          : [
+              `Primeiro registro: ${formatValue(first?.value ?? last.value, series.unit)} em ${formatDate(first?.timestamp ?? last.timestamp)}.`,
+              `Mais recente: ${formatValue(last.value, series.unit)} em ${formatDate(last.timestamp)}.`,
+            ]),
+        difference === null ? variationText : `${variationText}.`,
+        recordCountText,
+      ].join(" ")
+    : undefined;
+
   const linePoints = coordinates
     .map((point) => `${point.x},${point.y}`)
     .join(" ");
@@ -131,6 +153,11 @@ export default function BodyEvolutionChart({
               onPress={() => setSelectedType(option.type)}
               style={[styles.option, selected && styles.optionSelected]}
             >
+              {selected ? (
+                <Text accessible={false} style={styles.selectionMark}>
+                  ✓
+                </Text>
+              ) : null}
               <Text
                 style={[
                   styles.optionText,
@@ -145,14 +172,27 @@ export default function BodyEvolutionChart({
       </View>
 
       {loading ? (
-        <Text style={styles.emptyText}>Carregando evolução corporal...</Text>
+        <Text
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Carregando evolução corporal"
+          accessibilityState={{ busy: true }}
+          accessibilityLiveRegion="polite"
+          style={styles.emptyText}
+        >
+          Carregando evolução corporal...
+        </Text>
       ) : error ? (
-        <Text accessibilityRole="alert" style={styles.emptyText}>
+        <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          style={styles.emptyText}
+        >
           Não foi possível carregar a evolução corporal. Atualize o histórico
           para tentar novamente.
         </Text>
       ) : !last ? (
-        <Text style={styles.emptyText}>
+        <Text accessibilityLiveRegion="polite" style={styles.emptyText}>
           Nenhum registro válido de {series.label.toLowerCase()} para
           visualizar. Registre uma medida para começar.
         </Text>
@@ -176,7 +216,9 @@ export default function BodyEvolutionChart({
 
           <View
             accessible
+            accessibilityRole="image"
             accessibilityLabel={`Gráfico de ${series.label}, com ${series.points.length} registros`}
+            accessibilityHint={chartDescription}
             style={styles.chartArea}
           >
             <Svg
@@ -229,21 +271,9 @@ export default function BodyEvolutionChart({
             <Text style={styles.dateText}>{formatDate(last.timestamp)}</Text>
           </View>
 
-          {difference !== null ? (
-            <Text style={styles.changeText}>
-              Variação do período: {difference > 0 ? "+" : ""}
-              {formatValue(difference, series.unit)}
-            </Text>
-          ) : (
-            <Text style={styles.changeText}>
-              Adicione outro registro para visualizar a variação.
-            </Text>
-          )}
+          <Text style={styles.changeText}>{variationText}</Text>
 
-          <Text style={styles.countText}>
-            {series.points.length} de {series.totalValidRecords} registros
-            válidos exibidos.
-          </Text>
+          <Text style={styles.countText}>{recordCountText}</Text>
         </>
       )}
     </View>
@@ -287,7 +317,10 @@ function createStyles(theme: AppTheme) {
       gap: theme.spacing.sm,
     },
     option: {
-      minHeight: 44,
+      minHeight: 48,
+      minWidth: 48,
+      flexDirection: "row",
+      gap: 6,
       paddingHorizontal: theme.spacing.md,
       alignItems: "center",
       justifyContent: "center",
@@ -299,6 +332,11 @@ function createStyles(theme: AppTheme) {
     optionSelected: {
       backgroundColor: theme.colors.primarySoft,
       borderColor: theme.colors.primary,
+    },
+    selectionMark: {
+      color: theme.colors.primary,
+      fontFamily: theme.typography.fontFamily.bold,
+      fontSize: theme.typography.size.small,
     },
     optionText: {
       color: theme.colors.textSecondary,

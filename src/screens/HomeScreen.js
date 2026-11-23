@@ -287,7 +287,9 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         <View style={styles.greetingBlock}>
-          <Text style={styles.greeting}>Olá, {firstName}</Text>
+          <Text accessibilityRole="header" style={styles.greeting}>
+            Olá, {firstName}
+          </Text>
 
           <Text style={styles.greetingSubtitle}>
             Onde vai ser o treino de hoje?
@@ -298,6 +300,7 @@ export default function HomeScreen({ navigation }) {
           reduceMotion={reduceMotion}
           accessibilityRole="button"
           accessibilityLabel="Explorar academias"
+          accessibilityHint="Busque por cidade, bairro ou sua localização."
           onPress={() => navigation.navigate("Mapa")}
           style={({ pressed }) => [
             styles.heroPressable,
@@ -316,7 +319,13 @@ export default function HomeScreen({ navigation }) {
             }}
             style={styles.hero}
           >
-            <View pointerEvents="none" style={styles.heroBackground}>
+            <View
+              pointerEvents="none"
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={styles.heroBackground}
+            >
               <View style={styles.performanceLineOne} />
               <View style={styles.performanceLineTwo} />
               <View style={styles.performanceLineThree} />
@@ -357,7 +366,13 @@ export default function HomeScreen({ navigation }) {
               </View>
             </View>
 
-            <View pointerEvents="none" style={styles.performanceVisual}>
+            <View
+              pointerEvents="none"
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={styles.performanceVisual}
+            >
               <Animated.View style={[styles.performancePulse, pulseStyle]} />
 
               <Animated.View style={floatingTransform}>
@@ -383,7 +398,9 @@ export default function HomeScreen({ navigation }) {
           <View>
             <Text style={styles.sectionEyebrow}>ORGANIZE</Text>
 
-            <Text style={styles.sectionTitle}>Seu treino</Text>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
+              Seu treino
+            </Text>
           </View>
 
           <Pressable
@@ -408,7 +425,15 @@ export default function HomeScreen({ navigation }) {
         <MotionPressable
           reduceMotion={reduceMotion}
           accessibilityRole="button"
-          accessibilityLabel={trainingAction}
+          accessibilityLabel={
+            workoutOverview.status === "active"
+              ? `${trainingAction}: ${workoutOverview.session.workoutName}`
+              : trainingAction
+          }
+          accessibilityHint={trainingDescription}
+          accessibilityState={{
+            busy: workoutOverview.status === "loading",
+          }}
           onPress={openTrainingAction}
           style={({ pressed }) => [
             styles.trainingCard,
@@ -468,7 +493,9 @@ export default function HomeScreen({ navigation }) {
           <View>
             <Text style={styles.sectionEyebrow}>EVOLUÇÃO</Text>
 
-            <Text style={styles.sectionTitle}>Acompanhe seu progresso</Text>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
+              Acompanhe seu progresso
+            </Text>
           </View>
 
           <Pressable
@@ -493,7 +520,8 @@ export default function HomeScreen({ navigation }) {
         <MotionPressable
           reduceMotion={reduceMotion}
           accessibilityRole="button"
-          accessibilityLabel="Abrir meu progresso"
+          accessibilityLabel="Consultar meu progresso"
+          accessibilityHint="Consulte sua frequência de treino e a evolução dos exercícios concluídos."
           onPress={() => navigation.navigate("Progresso")}
           style={({ pressed }) => [
             styles.progressCard,
@@ -585,9 +613,9 @@ function createStyles(theme) {
     },
 
     profileButton: {
-      width: 43,
-      height: 43,
-      borderRadius: 15,
+      width: 48,
+      height: 48,
+      borderRadius: 16,
       backgroundColor: theme.colors.primary,
       borderWidth: 1,
       borderColor: theme.colors.primary,
@@ -843,8 +871,11 @@ function createStyles(theme) {
     },
 
     textAction: {
+      minHeight: 48,
+      minWidth: 48,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "center",
       gap: 4,
       paddingVertical: 7,
     },

@@ -323,4 +323,331 @@ describe("ProgressPhotoCapture", () => {
     expect(galleryPermission).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
   });
+
+  it("accessibility: exposes photo selection processing and restores the action after permission denial", async () => {
+    let resolvePermission!: (value: { granted: boolean }) => void;
+
+    const pendingPermission = new Promise<{ granted: boolean }>((done) => {
+      resolvePermission = done;
+    });
+
+    cameraPermission.mockReturnValueOnce(pendingPermission);
+
+    const onSave = await mount();
+
+    const label = "Adicionar foto de progresso";
+
+    await chooseSource("Tirar foto");
+
+    try {
+      const button = screen.getByLabelText(label);
+
+      expect(button).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: true,
+          disabled: true,
+        }),
+      );
+
+      expect(button).toBeDisabled();
+
+      expect(button).toHaveStyle({ minHeight: 52 });
+
+      await fireEvent.press(button);
+
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      expect(cameraPermission).toHaveBeenCalledTimes(1);
+
+      expect(launchCamera).not.toHaveBeenCalled();
+      expect(launchGallery).not.toHaveBeenCalled();
+      expect(onSave).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => {
+        resolvePermission({ granted: false });
+      });
+    }
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "Acesso \u00e0 c\u00e2mera",
+      expect.any(String),
+    );
+
+    expect(screen.getByLabelText(label)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        busy: false,
+        disabled: false,
+      }),
+    );
+
+    expect(screen.getByLabelText(label)).not.toBeDisabled();
+
+    expect(
+      screen.queryByLabelText("Pr\u00e9via da foto de progresso"),
+    ).toBeNull();
+
+    expect(launchCamera).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+
+    await chooseSource("Tirar foto");
+
+    expect(
+      await screen.findByLabelText("Pr\u00e9via da foto de progresso"),
+    ).toBeTruthy();
+
+    expect(cameraPermission).toHaveBeenCalledTimes(2);
+    expect(launchCamera).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: identifies the confirmation heading and photo inside an isolated modal", async () => {
+    const onSave = await mount();
+
+    await chooseSource("Escolher da galeria");
+
+    const heading = screen.getByRole("header", {
+      name: "Confirmar foto de progresso",
+    });
+
+    expect(heading).toBeTruthy();
+
+    const photo = screen.getByRole("image", {
+      name: "Pr\u00e9via da foto de progresso",
+    });
+
+    expect(photo).toHaveProp("source", {
+      uri: galleryAsset.uri,
+    });
+
+    let modalContainer = heading.parent;
+
+    while (
+      modalContainer &&
+      modalContainer.props.accessibilityViewIsModal !== true
+    ) {
+      modalContainer = modalContainer.parent;
+    }
+
+    expect(modalContainer).not.toBeNull();
+    expect(modalContainer).toContainElement(photo);
+
+    expect(
+      screen.getByText("Confira a imagem antes de salv\u00e1-la privadamente."),
+    ).toBeTruthy();
+
+    for (const label of ["Descartar foto", "Salvar foto de progresso"]) {
+      const button = screen.getByRole("button", {
+        name: label,
+      });
+
+      expect(button).not.toBeDisabled();
+
+      expect(button).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ disabled: false }),
+      );
+
+      expect(button).toHaveStyle({
+        minHeight: 48,
+        minWidth: 48,
+      });
+    }
+
+    expect(onSave).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText("Descartar foto"));
+
+    expect(
+      screen.queryByRole("image", {
+        name: "Pr\u00e9via da foto de progresso",
+      }),
+    ).toBeNull();
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: exposes pending photo confirmation and preserves the preview after failure", async () => {
+    let resolveSave!: (saved: boolean) => void;
+
+    const pendingSave = new Promise<boolean>((done) => {
+      resolveSave = done;
+    });
+
+    const onSave = jest
+      .fn()
+      .mockReturnValueOnce(pendingSave)
+      .mockResolvedValueOnce(true);
+
+    await mount(onSave);
+
+    await chooseSource("Tirar foto");
+
+    const saveLabel = "Salvar foto de progresso";
+    const discardLabel = "Descartar foto";
+    const previewLabel = "Pr\u00e9via da foto de progresso";
+
+    await screen.findByLabelText(previewLabel);
+
+    try {
+      await fireEvent.press(screen.getByLabelText(saveLabel));
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(onSave).toHaveBeenCalledWith(cameraAsset);
+
+      expect(screen.getByLabelText(saveLabel)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: true,
+          disabled: true,
+        }),
+      );
+
+      expect(screen.getByLabelText(discardLabel)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ disabled: true }),
+      );
+
+      expect(screen.getByText("Salvando...")).toBeTruthy();
+
+      for (const label of [saveLabel, discardLabel]) {
+        const button = screen.getByLabelText(label);
+
+        expect(button).toBeDisabled();
+
+        await fireEvent.press(button);
+      }
+
+      expect(onSave).toHaveBeenCalledTimes(1);
+
+      expect(screen.getByLabelText(previewLabel)).toBeTruthy();
+    } finally {
+      await act(async () => {
+        resolveSave(false);
+      });
+    }
+
+    expect(screen.getByLabelText(previewLabel)).toBeTruthy();
+
+    expect(screen.getByLabelText(saveLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        busy: false,
+        disabled: false,
+      }),
+    );
+
+    expect(screen.getByLabelText(discardLabel)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+
+    expect(screen.getByLabelText(saveLabel)).not.toBeDisabled();
+
+    expect(screen.getByLabelText(discardLabel)).not.toBeDisabled();
+
+    expect(screen.queryByText("Salvando...")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText(saveLabel));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(2);
+
+      expect(screen.queryByLabelText(previewLabel)).toBeNull();
+    });
+
+    expect(onSave).toHaveBeenNthCalledWith(2, cameraAsset);
+
+    expect(
+      screen.getByLabelText("Adicionar foto de progresso"),
+    ).not.toBeDisabled();
+  });
+
+  it("accessibility: exposes externally controlled upload processing without opening another picker", async () => {
+    const onSave = jest.fn().mockResolvedValue(true);
+
+    const view = await render(
+      <ProgressPhotoCapture uploading onSave={onSave} />,
+    );
+
+    const label = "Adicionar foto de progresso";
+
+    const button = screen.getByLabelText(label);
+
+    expect(button).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        busy: true,
+        disabled: true,
+      }),
+    );
+
+    expect(button).toBeDisabled();
+
+    expect(screen.getByText("Enviando foto...")).toBeTruthy();
+
+    await fireEvent.press(button);
+
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(cameraPermission).not.toHaveBeenCalled();
+    expect(galleryPermission).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+
+    await view.rerender(
+      <ProgressPhotoCapture uploading={false} onSave={onSave} />,
+    );
+
+    expect(screen.getByLabelText(label)).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        busy: false,
+        disabled: false,
+      }),
+    );
+
+    expect(screen.getByLabelText(label)).not.toBeDisabled();
+
+    expect(screen.queryByText("Enviando foto...")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText(label));
+
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("preserves explicit confirmation before uploading a selected photo", async () => {
+    const onSave = await mount();
+
+    await chooseSource("Escolher da galeria");
+
+    const previewLabel = "Pr\u00e9via da foto de progresso";
+
+    expect(await screen.findByLabelText(previewLabel)).toBeTruthy();
+
+    expect(launchGallery).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText("Descartar foto"));
+
+    expect(screen.queryByLabelText(previewLabel)).toBeNull();
+
+    expect(onSave).not.toHaveBeenCalled();
+
+    await chooseSource("Tirar foto");
+
+    expect(await screen.findByLabelText(previewLabel)).toBeTruthy();
+
+    expect(onSave).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText("Salvar foto de progresso"));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1);
+
+      expect(screen.queryByLabelText(previewLabel)).toBeNull();
+    });
+
+    expect(onSave).toHaveBeenCalledWith(cameraAsset);
+    expect(onSave).not.toHaveBeenCalledWith(galleryAsset);
+  });
 });

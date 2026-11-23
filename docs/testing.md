@@ -826,6 +826,173 @@ A integração permanece condicionada à aprovação
 dos checks obrigatórios de CI e à resolução
 do bloqueio de segurança da Issue #84.
 
+### 5.6. Acessibilidade de autenticação, perfil, progresso e navegação (ACC-02.4)
+
+Em 18/11/2026, a entrega registrou 83 novos testes automatizados.
+
+| Área | Novos testes |
+| --- | ---: |
+| Autenticação | 16 |
+| Perfil | 13 |
+| Progresso | 35 |
+| Home | 7 |
+| Navegação | 3 |
+| Calendário | 4 |
+| Identidade visual e movimento | 5 |
+| **Total** | **83** |
+
+O desenvolvimento utilizou etapas Red e Green, com revisão
+das falhas esperadas e preservação dos testes anteriores.
+
+Foram acrescentadas cinco novas suítes:
+
+* AuthControlsAccessibility.test.js;
+* AuthScreensAccessibility.test.js;
+* AuthNavigationAccessibility.test.js;
+* ProfileScreenAccessibility.test.tsx;
+* HomeScreenAccessibility.test.js.
+
+As suítes existentes de perfil, progresso, navegação,
+calendário e movimento também receberam novos cenários.
+
+#### Cobertura automatizada
+
+As verificações incluem:
+
+* semântica dos campos e controles de autenticação;
+* validações de formulário e proteção durante operações pendentes;
+* edição de perfil e estados das configurações;
+* medidas corporais, metas e respectivos estados acessíveis;
+* contexto do IMC e descrição do gráfico de evolução;
+* captura, envio, galeria e visualização de fotos;
+* identificação de indicadores de desempenho;
+* cabeçalhos, atalhos e estados do card de treino da Home;
+* seleção exclusiva das abas e preservação de rotas e parâmetros;
+* carregamento, erros, recuperação e navegação do calendário;
+* distinção de registros com nomes de treino repetidos;
+* preferência de movimento pendente, indisponível ou atualizada;
+* semântica das variantes da marca;
+* preservação da animação habilitada e dos controles desabilitados.
+
+Os testes do calendário preservam a cobertura de paginação,
+cursores repetidos e respostas obsoletas.
+
+A suíte de visualização de fotos utiliza isolamento do cartão
+de IMC, mantendo a cobertura específica do componente
+em sua própria suíte.
+
+#### Resultados automatizados
+
+* 246 testes direcionados aprovados em 19 suítes;
+* 866 testes mobile aprovados em 55 suítes;
+* 783 testes da baseline ACC-02.3 preservados;
+* 83 novos testes aprovados;
+* nenhum teste com falha ou pendente;
+* TypeScript, ESLint e Prettier aprovados;
+* verificação de integridade do diff aprovada;
+* duração da regressão direcionada final: 10,858 segundos;
+* duração da regressão completa: 26,544 segundos.
+
+Os arquivos JavaScript modificados também foram verificados
+explicitamente pelo Prettier.
+
+O aviso intermitente React act do VirtualizedList apareceu
+em MapGymPreview.test.tsx, sem falhas na regressão completa.
+
+O aviso não foi suprimido e permanece previsto para
+investigação na QUALITY-01.
+
+Não houve nova execução do backend nesta etapa.
+A última regressão backend permanece com 1.206 testes
+aprovados, totalizando 2.072 testes acumulados.
+
+#### Validação física
+
+O desenvolvedor confirmou, em 18/11/2026, os seguintes
+cenários no iPhone via Expo Go, utilizando backend local.
+
+Autenticação:
+
+1. Tela de boas-vindas e marca carregadas corretamente.
+2. Rótulos compreensíveis dos campos de login no VoiceOver.
+3. Exibição e ocultação de senha com identificação correta.
+4. Orientações e requisitos de senha no cadastro.
+5. Mensagens para senhas divergentes e campos inválidos.
+6. Login válido e direcionamento para a Home.
+
+Perfil:
+
+7. Abertura do perfil pela Home e retorno.
+8. Identificação dos campos, títulos e configurações no VoiceOver.
+9. Alteração do nome de teste e confirmação da persistência.
+10. Alteração da altura de teste e confirmação da persistência.
+11. Identificação das opções selecionadas nas preferências.
+12. Leitura contextual do indicador de preenchimento do perfil.
+
+Progresso:
+
+13. Identificação da tela e dos cabeçalhos.
+14. Registro de medida corporal de teste e persistência.
+15. Seleção de tipos e unidades sem depender somente da cor.
+16. Criação ou atualização de meta de teste e seu progresso.
+17. Leitura compreensível do IMC ou estado indisponível.
+18. Descrição acessível dos dados do gráfico de evolução.
+19. Captura ou seleção de imagem não pessoal para teste.
+20. Salvamento da foto de teste e presença na galeria.
+21. Visualização ampliada, rótulos e gesto de retorno do VoiceOver.
+22. Contexto acessível dos indicadores de desempenho e evolução.
+
+Home e navegação:
+
+23. Reconhecimento da saudação e dos títulos como cabeçalhos.
+24. Funcionamento dos atalhos Perfil, Academias, Treinos e Progresso.
+25. Orientação coerente do card de treino.
+26. Identificação da seleção das quatro abas no VoiceOver.
+27. Abertura do histórico e retorno para Treinos.
+28. Abertura do treino correspondente pelo botão Treinar.
+
+Calendário e movimento:
+
+29. Expansão e recolhimento do calendário.
+30. Navegação mensal e indisponibilidade de meses futuros.
+31. Identificação do dia atual e do dia selecionado no VoiceOver.
+32. Consulta de um dia sem registros.
+33. Abertura do registro correto de treino pelo calendário.
+34. Redução das animações opcionais e restauração do movimento
+    ao alterar a preferência do dispositivo.
+
+Escala de texto e encerramento:
+
+35. Utilização dos conteúdos e controles principais com texto ampliado,
+    sem cortes críticos na configuração avaliada.
+36. Logout e retorno ao fluxo de autenticação.
+
+Resultado: 36 de 36 verificações aprovadas, sem ressalvas
+relatadas pelo desenvolvedor.
+
+Somadas às etapas ACC-02.1, ACC-02.2 e ACC-02.3, as entregas
+registram 152 novos testes automatizados e 103 verificações
+físicas aprovadas.
+
+#### Limitações e integração
+
+Os estados de concorrência, falhas simuladas e respostas
+obsoletas também foram avaliados por testes automatizados.
+
+Os cenários físicos representam a configuração efetivamente
+utilizada, sem medição exaustiva das dimensões nativas.
+
+A validação Android, os builds nativos e as verificações
+transversais da ACC-02.5 permanecem pendentes.
+
+A remoção dos dados sintéticos utilizados nesta validação
+não foi confirmada.
+
+Os resultados não constituem certificação formal WCAG.
+
+A integração permanece condicionada à resolução do bloqueio
+de segurança da Issue #84 e à aprovação dos checks de CI.
+
 ## 6. Verificações de qualidade
 
 ### 6.1. Backend

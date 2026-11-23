@@ -72,8 +72,10 @@ export default function LoginScreen({ navigation }) {
       title="Sua evolução continua."
       subtitle="Entre na sua conta e retome sua jornada no FitMap."
       onBack={goBack}
+      backDisabled={submitting}
     >
       <AuthField
+        editable={!submitting}
         label="E-mail"
         placeholder="seu@email.com"
         icon={Mail}
@@ -88,6 +90,7 @@ export default function LoginScreen({ navigation }) {
       />
 
       <AuthField
+        editable={!submitting}
         label="Senha"
         placeholder="Digite sua senha"
         icon={LockKeyhole}
@@ -121,8 +124,10 @@ export default function LoginScreen({ navigation }) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Criar conta"
+          accessibilityState={{ disabled: submitting }}
+          disabled={submitting}
           onPress={() => navigation.navigate("Cadastro")}
-          style={styles.footerLink}
+          style={[styles.footerLink, submitting && styles.footerLinkDisabled]}
         >
           <Text style={styles.footerLinkText}>Criar conta</Text>
         </Pressable>
@@ -146,7 +151,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: authColors.textSecondary,
   },
-  footerLink: { paddingVertical: 4 },
+  footerLink: {
+    minHeight: 48,
+    minWidth: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  footerLinkDisabled: { opacity: 0.55 },
   footerLinkText: {
     fontFamily: "Manrope_700Bold",
     fontSize: 12,
