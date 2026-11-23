@@ -330,3 +330,88 @@ ou avaliação integrada do aplicativo em produção.
 
 Não houve nova execução da suíte backend nesta etapa mobile.
 A validação integrada da Pull Request permanece necessária.
+
+## 10. Reavaliação da Issue #84 — 23/11/2026
+
+Esta seção complementa o checkpoint histórico de 13/11/2026,
+sem substituir seus resultados ou decisões técnicas.
+
+### 10.1. Bloqueio original
+
+Em 17/11/2026, a auditoria mobile bloqueou a CI do PR #83.
+O relatório apontava ocorrências de severidade alta
+associadas ao advisory GHSA-fc5q-39xc-vjpf, de Picomatch.
+
+Em 18/11/2026, o GitHub retirou oficialmente esse advisory,
+informando que o comportamento reportado não constituía
+um problema de segurança:
+
+https://github.com/advisories/GHSA-fc5q-39xc-vjpf
+
+A retirada do advisory não representa uma atualização
+ou correção de código realizada pelo FIT Map.
+
+### 10.2. Nova baseline de auditoria
+
+Auditorias executadas em 23/11/2026:
+
+- Produção: 0 ocorrências conhecidas.
+- Árvore completa: 0 críticas, 0 altas e 28 moderadas.
+- Advisories moderados distintos: 3.
+
+Advisories remanescentes:
+
+- Glob: GHSA-3g3m-2fjr-6pw4.
+- Minimatch: GHSA-g3hv-75wg-m249.
+- UUID: GHSA-w5hq-g745-h8pq.
+
+As 28 ocorrências representam pacotes afetados no relatório
+npm, não 28 vulnerabilidades independentes.
+
+Nenhuma alteração de dependências, overrides, manifesto
+ou lockfile foi necessária para essa revalidação.
+
+### 10.3. Validação oficial GitHub Actions
+
+O workflow originalmente bloqueado foi reexecutado:
+
+https://github.com/gumautoni/fitmap-mobile/actions/runs/44139511018
+
+Resultado final: SUCCESS.
+
+Jobs aprovados:
+
+- Mobile validation.
+- Backend validation.
+- Backend container validation.
+- Secret scanning.
+
+As auditorias foram aprovadas utilizando os critérios
+de severidade já existentes no workflow de CI.
+
+Essa aprovação corresponde ao PR #83 e não substitui
+a validação individual dos demais PRs empilhados.
+
+### 10.4. Pendências e decisão técnica
+
+Os três advisories moderados permanecem registrados
+para acompanhamento e remediação compatível.
+
+Não foram introduzidos downgrades, overrides adicionais,
+alterações nas regras de segurança ou exceções na CI.
+
+A ausência de alertas altos não comprova ausência
+absoluta de vulnerabilidades e não constitui aceitação
+permanente dos riscos moderados.
+
+A integração dos PRs permanece condicionada à revisão
+de dependências, à estratégia de merges e aos checks
+aplicáveis a cada alteração.
+
+Issue de acompanhamento:
+
+https://github.com/gumautoni/fitmap-mobile/issues/84
+
+Registro de evidências:
+
+https://github.com/gumautoni/fitmap-mobile/issues/84#issuecomment-7101557105
