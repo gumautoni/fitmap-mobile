@@ -39,6 +39,12 @@ security remediation evidence and operational limitations.
 
 Documents the automated testing strategy, local validation commands, test isolation requirements and the relationship between local testing and CI.
 
+### `qa-final-postintegration-2026-11-23.md`
+
+Records the post-integration QA checkpoint for GitHub Stack #92,
+the consolidated `main` commit, automated test evidence,
+security follow-up and outstanding physical validation.
+
 ### `deployment.md`
 
 Documents the current backend container and deployment foundation, including:
