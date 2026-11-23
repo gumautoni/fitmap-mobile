@@ -695,6 +695,137 @@ A integração permanece condicionada à aprovação
 dos checks de CI e à resolução do bloqueio de
 segurança registrado na Issue #84.
 
+### 5.5. Acessibilidade de academias, favoritos e avaliações (ACC-02.3)
+
+Em 18/11/2026, a entrega registrou 25 novos testes
+automatizados, distribuídos da seguinte forma:
+
+| Suíte | Novos testes |
+| --- | ---: |
+| `MapGymPreview.test.tsx` | 7 |
+| `GymDetailsAccessibility.test.tsx` | 6 |
+| `GymReviewForm.test.tsx` | 3 |
+| `GymReviewReportForm.test.tsx` | 4 |
+| `GymReviewsDeletion.test.tsx` | 2 |
+| `GymReviewsReporting.test.tsx` | 2 |
+| `GymReviewsSection.test.tsx` | 1 |
+| **Total** | **25** |
+
+As suítes estão em `src/screens/__tests__/`.
+
+A suíte de detalhes e favoritos inclui dois testes
+de regressão funcional e quatro de acessibilidade.
+
+O desenvolvimento utilizou etapas Red e Green,
+com verificação das causas das falhas esperadas.
+
+As verificações incluem rótulos, estados acessíveis,
+seleção independente de cor, dimensões de toque,
+identidade dos provedores, recuperação de falhas
+e identificação contextual das denúncias.
+
+Doze consultas ao rótulo genérico de denúncia nos
+testes anteriores foram adaptadas à nova semântica,
+preservando as asserções funcionais e de negócio.
+
+#### Resultados automatizados
+
+* 158 testes direcionados aprovados em 9 suítes;
+* 783 testes mobile aprovados em 50 suítes;
+* 758 testes da baseline ACC-02.2 preservados;
+* 25 novos testes aprovados;
+* TypeScript, ESLint e Prettier aprovados;
+* verificação de integridade do diff aprovada;
+* duração da regressão Jest: 17,676 segundos.
+
+O aviso intermitente React `act` do VirtualizedList
+na suíte `MapGymPreview.test.tsx` apareceu na
+regressão completa, sem falhas de teste.
+
+O aviso não foi suprimido e permanece previsto
+para investigação na QUALITY-01.
+
+Não houve nova execução local do backend nesta etapa.
+
+A última regressão backend permanece com 1.206 testes
+aprovados, totalizando 1.989 testes acumulados.
+
+#### Validação física
+
+O desenvolvedor confirmou, em 18/11/2026,
+os seguintes cenários no iPhone via Expo Go,
+utilizando backend local.
+
+Mapa, busca e localização:
+
+1. Pesquisa por cidade.
+2. Pesquisa por sugestão de localidade.
+3. Utilização da localização atual.
+4. Alternância dos quatro filtros de distância e indicador visual.
+5. Alternância das três ordenações e indicador visual.
+6. Seleção por marcador e sincronização com a lista.
+7. Seleção pela lista e sincronização com a prévia.
+8. Filtro de nome, ocultação da seleção e limpeza dos filtros.
+
+Detalhes e favoritos:
+
+9. Abertura dos detalhes da academia correta.
+10. Adição de uma academia aos favoritos.
+11. Retorno ao mapa e conferência do favorito.
+12. Reabertura dos detalhes e remoção do favorito.
+
+Avaliações e denúncias:
+
+13. Seleção de nota e descrição textual das estrelas.
+14. Publicação de uma avaliação de teste.
+15. Edição da nota e do comentário.
+16. Persistência dos dados editados.
+17. Cancelamento da confirmação de exclusão.
+18. Exclusão da própria avaliação de teste e atualização.
+19. Abertura de denúncia de avaliação sintética de outra conta.
+20. Alternância dos quatro motivos e indicador visual.
+21. Cancelamento da denúncia e fechamento do formulário.
+22. Envio de denúncia sobre avaliação sintética no ambiente local.
+
+VoiceOver:
+
+23. Leitura do campo de busca e dos botões de pesquisa e localização.
+24. Leitura dos filtros e estados selecionados.
+25. Seleção pela lista, marcadores e acesso aos detalhes.
+26. Rótulos de favoritos e ações de avaliação.
+27. Distinção entre ações de denúncia de avaliações diferentes.
+
+Texto ampliado:
+
+28. Legibilidade dos filtros e resultados do mapa.
+29. Detalhes, favoritos e ações de gerenciamento.
+30. Formulários de avaliação e denúncia sem corte relevante.
+
+Resultado: 30 de 30 verificações aprovadas.
+
+Somadas às etapas ACC-02.1 e ACC-02.2, as entregas
+registram 69 novos testes automatizados e
+67 verificações físicas aprovadas.
+
+#### Limitações e integração
+
+Os estados pendentes e a recuperação de falhas
+foram avaliados por testes automatizados.
+
+A validação física não constitui certificação
+integral de acessibilidade ou comprovação de
+compatibilidade com todos os dispositivos.
+
+A validação Android e em builds nativos
+permanece pendente.
+
+Os resultados representam a validação local
+da branch ACC-02.3, baseada na ACC-02.2.
+
+A integração permanece condicionada à aprovação
+dos checks obrigatórios de CI e à resolução
+do bloqueio de segurança da Issue #84.
+
 ## 6. Verificações de qualidade
 
 ### 6.1. Backend

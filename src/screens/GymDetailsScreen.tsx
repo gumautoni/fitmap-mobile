@@ -576,10 +576,16 @@ export default function GymDetailsScreen({ navigation, route }: Props) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
-            favorite
-              ? "Remover academia dos favoritos"
-              : "Adicionar academia aos favoritos"
+            favoriteLoading
+              ? "Sincronizando favorito"
+              : favorite
+                ? "Remover academia dos favoritos"
+                : "Adicionar academia aos favoritos"
           }
+          accessibilityState={{
+            busy: favoriteLoading || favoriteUpdating,
+            disabled: favoriteActionDisabled,
+          }}
           onPress={() => {
             void toggleFavorite();
           }}
@@ -1308,6 +1314,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     favoriteRetryButton: {
+      minHeight: 48,
+      minWidth: 48,
+      justifyContent: "center",
       alignSelf: "flex-start",
       marginTop: theme.spacing.sm,
       paddingHorizontal: 10,

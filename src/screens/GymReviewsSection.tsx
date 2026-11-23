@@ -579,7 +579,10 @@ export default function GymReviewsSection({
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel="Confirmar exclusão de avaliação"
-                            accessibilityState={{ disabled: deletingReview }}
+                            accessibilityState={{
+                              busy: deletingReview,
+                              disabled: deletingReview,
+                            }}
                             disabled={deletingReview}
                             onPress={() => {
                               void deleteOwnReview();
@@ -668,7 +671,7 @@ export default function GymReviewsSection({
             </View>
           ) : (
             <View style={styles.reviewsList}>
-              {reviewData.reviews.map((review) => (
+              {reviewData.reviews.map((review, index) => (
                 <View key={review.id} style={styles.reviewCard}>
                   <View style={styles.reviewHeader}>
                     <RatingStars
@@ -713,7 +716,7 @@ export default function GymReviewsSection({
                     ) : (
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel="Denunciar avaliação"
+                        accessibilityLabel={`Denunciar avalia\u00e7\u00e3o ${index + 1} de ${reviewData.reviews.length}, nota ${review.rating} de 5`}
                         disabled={
                           reportingReviewId !== null || reportSubmitting
                         }
@@ -792,6 +795,9 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       textAlign: "center",
     },
     retryButton: {
+      minHeight: 48,
+      minWidth: 48,
+      justifyContent: "center",
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing.sm,
@@ -859,7 +865,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
     editReviewButton: {
       alignSelf: "flex-start",
-      minHeight: 42,
+      minHeight: 48,
       justifyContent: "center",
       paddingHorizontal: theme.spacing.lg,
       marginTop: theme.spacing.md,
@@ -880,7 +886,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       marginTop: theme.spacing.md,
     },
     deleteReviewButton: {
-      minHeight: 42,
+      minHeight: 48,
       justifyContent: "center",
       paddingHorizontal: theme.spacing.lg,
       borderRadius: theme.radii.md,
@@ -914,7 +920,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       marginTop: theme.spacing.md,
     },
     deleteCancelButton: {
-      minHeight: 44,
+      minHeight: 48,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: theme.spacing.md,
@@ -928,7 +934,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       fontSize: theme.typography.size.small,
     },
     deleteConfirmButton: {
-      minHeight: 44,
+      minHeight: 48,
       flexGrow: 1,
       alignItems: "center",
       justifyContent: "center",
@@ -981,7 +987,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
     reportButton: {
       alignSelf: "flex-start",
-      minHeight: 40,
+      minHeight: 48,
       justifyContent: "center",
       paddingHorizontal: theme.spacing.md,
       marginTop: theme.spacing.md,

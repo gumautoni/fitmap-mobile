@@ -374,4 +374,27 @@ describe("GymReviewsSection", () => {
       "tomtom",
     );
   });
+  it("accessibility: provides a practical retry touch target", async () => {
+    mockedIdentity.mockRejectedValueOnce(
+      new Error("The backend could not be reached."),
+    );
+
+    await renderReviews();
+
+    const retry = await screen.findByLabelText(
+      "Tentar carregar avalia\u00e7\u00f5es novamente",
+    );
+
+    expect(retry).toHaveStyle({
+      minHeight: 48,
+      minWidth: 48,
+    });
+
+    await fireEvent.press(retry);
+
+    expect(await screen.findByText("Excelente academia.")).toBeTruthy();
+
+    expect(mockedIdentity).toHaveBeenCalledTimes(2);
+    expect(mockedReviews).toHaveBeenCalledTimes(1);
+  });
 });

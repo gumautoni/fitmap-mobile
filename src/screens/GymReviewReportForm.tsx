@@ -110,7 +110,11 @@ export default function GymReviewReportForm({
               ]}
             />
 
-            <Text style={styles.reasonText}>{option.label}</Text>
+            <Text style={styles.reasonText}>
+              {reason === option.value
+                ? `${option.label} \u2713`
+                : option.label}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -126,6 +130,7 @@ export default function GymReviewReportForm({
         numberOfLines={3}
         textAlignVertical="top"
         editable={!submitting}
+        accessibilityState={{ disabled: submitting }}
         maxLength={MAX_DETAILS_LENGTH}
         value={details}
         onChangeText={setDetails}
@@ -165,7 +170,10 @@ export default function GymReviewReportForm({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Enviar denúncia"
-          accessibilityState={{ disabled: submitting }}
+          accessibilityState={{
+            busy: submitting,
+            disabled: submitting,
+          }}
           disabled={submitting}
           onPress={handleSubmit}
           style={({ pressed }) => [
@@ -237,7 +245,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       flexDirection: "row",
       alignItems: "center",
       gap: theme.spacing.md,
-      minHeight: 46,
+      minHeight: 48,
       paddingHorizontal: theme.spacing.md,
       borderWidth: 1,
       borderColor: theme.colors.border,
@@ -313,7 +321,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       marginTop: theme.spacing.lg,
     },
     cancelButton: {
-      minHeight: 46,
+      minHeight: 48,
       alignItems: "center",
       justifyContent: "center",
       paddingHorizontal: theme.spacing.md,
@@ -329,7 +337,7 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
     submitButton: {
       flex: 1,
-      minHeight: 46,
+      minHeight: 48,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",

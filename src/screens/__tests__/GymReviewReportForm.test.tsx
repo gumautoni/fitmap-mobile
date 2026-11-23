@@ -268,4 +268,130 @@ describe("GymReviewReportForm", () => {
 
     expect(screen.getByLabelText("Cancelar denúncia")).toBeTruthy();
   });
+  it("accessibility: exposes pending report submission states", async () => {
+    const { onSubmit, onCancel } = await renderForm({
+      submitting: true,
+    });
+
+    expect(screen.getByLabelText("Enviar den\u00fancia")).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: true, disabled: true }),
+    );
+
+    const input = screen.getByLabelText("Detalhes da den\u00fancia");
+
+    expect(input).toHaveProp("editable", false);
+
+    expect(input).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: true }),
+    );
+
+    for (const [label] of REASONS) {
+      expect(
+        screen.getByLabelText(`Selecionar motivo: ${label}`),
+      ).toBeDisabled();
+    }
+
+    expect(screen.getByLabelText("Cancelar den\u00fancia")).toBeDisabled();
+
+    await fireEvent.press(screen.getByLabelText("Enviar den\u00fancia"));
+
+    await fireEvent.press(screen.getByLabelText("Cancelar den\u00fancia"));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("accessibility: exposes available report controls after submission failure", async () => {
+    const errorMessage = "Falha de teste ao enviar denuncia.";
+
+    const { onSubmit } = await renderForm({
+      errorMessage,
+    });
+
+    expect(screen.getByText(errorMessage)).toBeTruthy();
+
+    const submit = screen.getByLabelText("Enviar den\u00fancia");
+
+    expect(submit).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    const input = screen.getByLabelText("Detalhes da den\u00fancia");
+
+    expect(input).toHaveProp("editable", true);
+
+    expect(input).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+
+    await fireEvent.press(
+      screen.getByLabelText("Selecionar motivo: Outro motivo"),
+    );
+
+    await fireEvent.changeText(input, "Detalhes de teste.");
+
+    await fireEvent.press(submit);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      reason: "other",
+      details: "Detalhes de teste.",
+    });
+  });
+
+  it("accessibility: identifies the report reason without relying on color", async () => {
+    await renderForm();
+
+    function assertSelection(selectedLabel: string | null): void {
+      for (const [label] of REASONS) {
+        const control = screen.getByLabelText(`Selecionar motivo: ${label}`);
+
+        const selected = label === selectedLabel;
+
+        expect(control).toHaveProp(
+          "accessibilityState",
+          expect.objectContaining({ selected }),
+        );
+
+        expect(control).toHaveTextContent(selected ? `${label} \u2713` : label);
+
+        if (!selected) {
+          expect(control).not.toHaveTextContent(/\u2713/);
+        }
+      }
+    }
+
+    assertSelection(null);
+
+    for (const [label] of REASONS) {
+      await fireEvent.press(
+        screen.getByLabelText(`Selecionar motivo: ${label}`),
+      );
+
+      assertSelection(label);
+    }
+  });
+
+  it("accessibility: provides practical report form touch targets", async () => {
+    await renderForm();
+
+    for (const [label] of REASONS) {
+      expect(screen.getByLabelText(`Selecionar motivo: ${label}`)).toHaveStyle({
+        minHeight: 48,
+      });
+    }
+
+    expect(screen.getByLabelText("Enviar den\u00fancia")).toHaveStyle({
+      minHeight: 48,
+    });
+
+    expect(screen.getByLabelText("Cancelar den\u00fancia")).toHaveStyle({
+      minHeight: 48,
+    });
+  });
 });

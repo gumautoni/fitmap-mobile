@@ -241,4 +241,89 @@ describe("GymReviewForm", () => {
 
     expect(screen.getByText("15/1000 caracteres")).toBeTruthy();
   });
+  it.each(["Publicar avalia\u00e7\u00e3o", "Salvar altera\u00e7\u00f5es"])(
+    "accessibility: exposes pending review submission for %s",
+    async (submitLabel) => {
+      const onCancel = jest.fn();
+
+      const { onSubmit } = await renderForm({
+        initialRating: 4,
+        initialComment: "Comentario de teste.",
+        submitting: true,
+        submitLabel,
+        onCancel,
+      });
+
+      expect(screen.getByLabelText(submitLabel)).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ busy: true, disabled: true }),
+      );
+
+      const input = screen.getByLabelText(
+        "Coment\u00e1rio da avalia\u00e7\u00e3o",
+      );
+
+      expect(input).toHaveProp("editable", false);
+
+      expect(input).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ disabled: true }),
+      );
+
+      expect(screen.getByLabelText("Selecionar 4 estrelas")).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected: true, disabled: true }),
+      );
+
+      expect(
+        screen.getByLabelText("Cancelar avalia\u00e7\u00e3o"),
+      ).toBeDisabled();
+
+      await fireEvent.press(screen.getByLabelText(submitLabel));
+
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(onCancel).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accessibility: exposes available review controls after submission failure", async () => {
+    const errorMessage = "Falha de teste ao salvar avaliacao.";
+
+    const { onSubmit } = await renderForm({
+      initialRating: 4,
+      initialComment: "Comentario preservado.",
+      errorMessage,
+    });
+
+    expect(screen.getByText(errorMessage)).toBeTruthy();
+
+    const submit = screen.getByLabelText("Publicar avalia\u00e7\u00e3o");
+
+    expect(submit).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ busy: false, disabled: false }),
+    );
+
+    const input = screen.getByLabelText(
+      "Coment\u00e1rio da avalia\u00e7\u00e3o",
+    );
+
+    expect(input).toHaveProp("editable", true);
+
+    expect(input).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ disabled: false }),
+    );
+
+    expect(input).toHaveProp("value", "Comentario preservado.");
+
+    await fireEvent.press(submit);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      rating: 4,
+      comment: "Comentario preservado.",
+    });
+  });
 });

@@ -802,6 +802,8 @@ export default function MapScreen({ navigation }: Props) {
           <Search size={20} strokeWidth={2.2} color={theme.colors.textMuted} />
 
           <TextInput
+            accessibilityLabel="Buscar por cidade, bairro ou região"
+            accessibilityState={{ disabled: loading }}
             style={styles.input}
             placeholder="Cidade, bairro ou região"
             placeholderTextColor={theme.colors.textMuted}
@@ -818,6 +820,10 @@ export default function MapScreen({ navigation }: Props) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Buscar academias"
+            accessibilityState={{
+              busy: loadingAction === "text",
+              disabled: loading,
+            }}
             onPress={() => {
               void handleSearch();
             }}
@@ -891,6 +897,10 @@ export default function MapScreen({ navigation }: Props) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Usar minha localização"
+          accessibilityState={{
+            busy: loadingAction === "location",
+            disabled: loading,
+          }}
           onPress={() => {
             void handleUseCurrentLocation();
           }}
@@ -1204,7 +1214,7 @@ export default function MapScreen({ navigation }: Props) {
                       isSelected && styles.distanceFilterTextSelected,
                     ]}
                   >
-                    {option.label}
+                    {isSelected ? `${option.label} \u2713` : option.label}
                   </Text>
                 </Pressable>
               );
@@ -1253,7 +1263,7 @@ export default function MapScreen({ navigation }: Props) {
                       isSelected && styles.distanceFilterTextSelected,
                     ]}
                   >
-                    {option.label}
+                    {isSelected ? `${option.label} \u2713` : option.label}
                   </Text>
                 </Pressable>
               );
@@ -1307,6 +1317,7 @@ export default function MapScreen({ navigation }: Props) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Selecionar ${item.name}`}
+              accessibilityState={{ selected: isSelected }}
               onPress={() => handleSelectGym(item)}
               style={({ pressed }) => [
                 styles.gymCard,
@@ -1781,8 +1792,8 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
     },
 
     searchButton: {
-      width: 46,
-      height: 46,
+      width: 48,
+      height: 48,
       borderRadius: 14,
       alignItems: "center",
       justifyContent: "center",
