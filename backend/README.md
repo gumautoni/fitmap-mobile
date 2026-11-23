@@ -1947,8 +1947,6 @@ The backend currently includes implemented capabilities across Identity, Gyms, T
 
 The favorite gyms functionality has passed automated backend and mobile tests and functional validation on a physical iPhone.
 
-The favorite gyms feature remains on its development branch until the Pull Request is reviewed, CI succeeds and the changes are merged into `main`.
+The `main` branch includes persistent favorites, gym ratings and reviews, body-metric history, and fitness goals with progress calculated from recorded measurements.
 
-Planned capabilities, including body-metric history, expanded fitness goals and gym ratings/reviews, remain separate from the implemented functionality.
-
-Documentation should always distinguish actual implementation from approved architecture and future backlog items.
+The backend also includes routes for password recovery and email verification. Both features are disabled by default and outside the mobile TCC demonstration. For the dated test results and remaining device checks, see the [TCC implementation status](../docs/tcc/implementation-status.md).

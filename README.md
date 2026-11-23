@@ -120,7 +120,7 @@ Users can:
 
 The application includes loading, empty and error states for relevant discovery operations.
 
-For device-location discovery, the mobile application requests TomTom first. An empty response or a recoverable provider/network error triggers a Geoapify fallback. Text searches by city, neighborhood or region continue using Geoapify.
+For device-location discovery, the mobile application requests TomTom first. An empty response or a recoverable provider/network error triggers a Geoapify fallback. For a text search, the backend uses Geoapify to locate the city, neighborhood or region and can return gyms from either provider.
 
 External gym data is accessed through the backend.
 
@@ -295,8 +295,8 @@ flowchart TD
     Mobile["FitMap Mobile<br/>React Native + Expo"]
     API["FitMap Backend<br/>Python + FastAPI"]
     DB[("PostgreSQL")]
-    Geoapify["Geoapify<br/>Text Search and Fallback"]
-    TomTom["TomTom<br/>Nearby Discovery"]
+    Geoapify["Geoapify<br/>Locality Geocoding and Gym Search"]
+    TomTom["TomTom<br/>Gym Search by Coordinates"]
     Storage["Private Object Storage<br/>S3-compatible"]
 
     Mobile -->|"REST / JSON<br/>/api/v1"| API
@@ -416,7 +416,7 @@ Basic training statistics and exercise performance are derived from completed tr
 
 ### External services
 
-Gym discovery uses backend-managed adapters for Geoapify and TomTom. TomTom supports nearby discovery and gym details; Geoapify remains the textual-search provider and nearby-discovery fallback.
+The backend uses Geoapify for locality geocoding. Both Geoapify and TomTom support gym discovery around coordinates and details for gyms identified by that provider.
 
 Private progress-photo storage uses an S3-compatible storage abstraction.
 
@@ -476,7 +476,9 @@ POST   /gyms/{external_id}/identity
 DELETE /gyms/favorites/{gym_id}
 ```
 
-The `/gyms/nearby`, `/gyms/{external_id}`, favorite-creation and identity-resolution endpoints accept an optional `provider_name` query parameter (`geoapify` or `tomtom`). Omitting it preserves Geoapify as the backend default. The `/gyms/search` endpoint remains Geoapify-only.
+The `/gyms/nearby`, `/gyms/{external_id}`, favorite-creation and identity-resolution endpoints accept an optional `provider_name` query parameter (`geoapify` or `tomtom`). Omitting it preserves Geoapify as the backend default.
+
+For `/gyms/search`, the backend first obtains results and locality coordinates from Geoapify. If coordinates are available and TomTom is configured, it searches TomTom within 10 km of that locality and prefers its results. An empty TomTom result leaves the Geoapify results in place. If TomTom fails, the backend returns available Geoapify results or reports a provider error when there are none.
 
 Mobile nearby discovery selects TomTom explicitly and uses Geoapify as a fallback when appropriate.
 
@@ -861,16 +863,16 @@ Database migrations are explicit operations and are not automatically applied wh
 
 ### 8. Start the backend
 
-For local development:
+From the `backend` directory, use the FitMap server module to apply sanitized operational logging and disable Uvicorn's conventional access log. For development on the same machine, bind to loopback.
 
 ```bash
-uv run uvicorn fitmap.main:app --host 127.0.0.1 --port 8000 --reload
+uv run python -m fitmap.server --host 127.0.0.1 --port 8000 --reload
 ```
 
-For physical-device access across a permitted local network:
+For a physical device on a trusted local network, bind to all interfaces only when the device needs to reach the API. Restrict access to port 8000 to the intended development devices and use the computer's LAN address in the mobile API URL.
 
 ```bash
-uv run uvicorn fitmap.main:app --host 0.0.0.0 --port 8000 --reload
+uv run python -m fitmap.server --host 0.0.0.0 --port 8000 --reload
 ```
 
 Useful endpoints:
@@ -915,7 +917,7 @@ The Expo development server can be accessed through Expo Go on a supported physi
 
 Local development does not require running FastAPI inside Docker.
 
-Developers may run Uvicorn directly while PostgreSQL and S3Mock are provided through Docker Compose.
+For host-based development, run the API through `python -m fitmap.server` while Docker Compose provides PostgreSQL and S3Mock.
 
 When full backend container integration is needed, execute from the `backend` directory:
 
@@ -1366,6 +1368,8 @@ The current `main` branch includes:
 - private progress-photo metadata and access;
 - PostgreSQL and Alembic.
 
+The backend includes routes for email ownership verification and password recovery. Both features are disabled by default and outside the mobile TCC demonstration.
+
 **Infrastructure**
 
 - Docker and Docker Compose;
@@ -1384,8 +1388,7 @@ The current `main` branch includes:
 
 Future product development includes:
 
-- e-mail ownership verification and password recovery (deferred beyond the TCC);
-- password recovery;
+- mobile flows for email ownership verification and password recovery (deferred beyond the TCC);
 - authenticated password changes;
 - account deletion;
 - profile-image storage when justified;
