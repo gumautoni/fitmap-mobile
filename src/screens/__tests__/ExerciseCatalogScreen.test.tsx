@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -347,6 +348,364 @@ describe("ExerciseCatalogScreen - intelligent catalog search", () => {
     expect(
       await screen.findByText(/foi criado como exerc\u00edcio personalizado/),
     ).toBeTruthy();
+
+    expect(mockedAdd).not.toHaveBeenCalled();
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it("provides an accessible label for the catalog search", async () => {
+    await renderCatalog();
+
+    const search = screen.getByLabelText("Buscar exerc\u00edcio");
+
+    expect(search).toHaveProp("editable", true);
+
+    await fireEvent.changeText(search, "flexao");
+
+    expect(screen.getByText("Flex\u00e3o de bra\u00e7os")).toBeTruthy();
+  });
+
+  it("preserves the custom creation button name while busy", async () => {
+    let finishRequest!: (value: TrainingExercise) => void;
+
+    const created: TrainingExercise = {
+      id: "accessibility-custom",
+      name: "Movimento de acessibilidade",
+      origin: "custom",
+      isArchived: false,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    };
+
+    mockedCreate.mockReturnValueOnce(
+      new Promise<TrainingExercise>((resolve) => {
+        finishRequest = resolve;
+      }),
+    );
+
+    await renderCatalog();
+    await openCustomForm();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Nome do exerc\u00edcio personalizado"),
+      created.name,
+    );
+
+    await fireEvent.press(screen.getByText("Criar exerc\u00edcio"));
+
+    try {
+      expect(mockedCreate).toHaveBeenCalledWith(TOKEN, created.name);
+
+      expect(
+        screen.getByRole("button", {
+          name: "Criar exerc\u00edcio",
+        }),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: true,
+          disabled: true,
+        }),
+      );
+    } finally {
+      await act(async () => {
+        finishRequest(created);
+      });
+    }
+
+    expect(
+      await screen.findByText(/foi criado como exerc\u00edcio personalizado/),
+    ).toBeTruthy();
+  });
+
+  it("announces the exercise being added without losing its name", async () => {
+    let finishRequest!: (value: Workout) => void;
+
+    mockedAdd.mockReturnValueOnce(
+      new Promise<Workout>((resolve) => {
+        finishRequest = resolve;
+      }),
+    );
+
+    await renderCatalog();
+
+    await fireEvent.press(
+      screen.getByRole("button", {
+        name: "Adicionar Supino reto com barra",
+      }),
+    );
+
+    try {
+      expect(mockedAdd).toHaveBeenCalledWith(TOKEN, WORKOUT_ID, {
+        exerciseId: "bench",
+      });
+
+      expect(
+        screen.getByRole("button", {
+          name: "Adicionar Supino reto com barra",
+        }),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: true,
+          disabled: true,
+        }),
+      );
+
+      expect(
+        screen.getByRole("button", {
+          name: "Adicionar Puxada frontal na polia alta",
+        }),
+      ).toBeDisabled();
+    } finally {
+      await act(async () => {
+        finishRequest(workout);
+      });
+    }
+
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves accessibility when reusing an existing exercise fails", async () => {
+    let failRequest!: (reason: Error) => void;
+
+    mockedAdd.mockReturnValueOnce(
+      new Promise<Workout>((_, reject) => {
+        failRequest = reject;
+      }),
+    );
+
+    await renderCatalog();
+    await openCustomForm();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Nome do exerc\u00edcio personalizado"),
+      "SUPINO RETO COM BARRA",
+    );
+
+    await fireEvent.press(
+      screen.getByRole("button", {
+        name: "Adicionar existente",
+      }),
+    );
+
+    try {
+      expect(mockedAdd).toHaveBeenCalledWith(TOKEN, WORKOUT_ID, {
+        exerciseId: "bench",
+      });
+
+      expect(mockedCreate).not.toHaveBeenCalled();
+
+      expect(
+        screen.getByRole("button", {
+          name: "Adicionar existente",
+        }),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: true,
+          disabled: true,
+        }),
+      );
+
+      expect(screen.getByLabelText("Buscar exerc\u00edcio")).toHaveProp(
+        "editable",
+        false,
+      );
+    } finally {
+      await act(async () => {
+        failRequest(new Error("Falha de teste na reutilizacao"));
+      });
+    }
+
+    expect(
+      await screen.findByText("Falha de teste na reutilizacao"),
+    ).toBeTruthy();
+
+    expect(
+      screen.getByRole("button", {
+        name: "Adicionar existente",
+      }),
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        busy: false,
+        disabled: false,
+      }),
+    );
+
+    expect(screen.getByLabelText("Buscar exerc\u00edcio")).toHaveProp(
+      "editable",
+      true,
+    );
+
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it("announces suggestion addition and restores controls after failure", async () => {
+    let failRequest!: (reason: Error) => void;
+
+    mockedAdd.mockReturnValueOnce(
+      new Promise<Workout>((_, reject) => {
+        failRequest = reject;
+      }),
+    );
+
+    await renderCatalog();
+    await openCustomForm();
+
+    await fireEvent.changeText(
+      screen.getByLabelText("Nome do exerc\u00edcio personalizado"),
+      "pulley",
+    );
+
+    const suggestionLabel =
+      "Adicionar sugest\u00e3o Puxada frontal na polia alta";
+
+    await fireEvent.press(
+      screen.getByRole("button", {
+        name: suggestionLabel,
+      }),
+    );
+
+    try {
+      expect(mockedAdd).toHaveBeenCalledWith(TOKEN, WORKOUT_ID, {
+        exerciseId: "lat",
+      });
+
+      expect(
+        screen.getByRole("button", {
+          name: suggestionLabel,
+        }),
+      ).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          busy: true,
+          disabled: true,
+        }),
+      );
+
+      expect(
+        screen.getByRole("button", {
+          name: "Adicionar Supino reto com barra",
+        }),
+      ).toBeDisabled();
+
+      expect(mockedCreate).not.toHaveBeenCalled();
+    } finally {
+      await act(async () => {
+        failRequest(new Error("Falha de teste na sugestao"));
+      });
+    }
+
+    expect(await screen.findByText("Falha de teste na sugestao")).toBeTruthy();
+
+    expect(
+      screen.getByRole("button", {
+        name: suggestionLabel,
+      }),
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        busy: false,
+        disabled: false,
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Adicionar Supino reto com barra",
+      }),
+    ).not.toBeDisabled();
+
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it("restores accessible custom form controls after creation failure", async () => {
+    let failRequest!: (reason: Error) => void;
+
+    mockedCreate.mockReturnValueOnce(
+      new Promise<TrainingExercise>((_, reject) => {
+        failRequest = reject;
+      }),
+    );
+
+    await renderCatalog();
+    await openCustomForm();
+
+    const nameLabel = "Nome do exerc\u00edcio personalizado";
+
+    const exerciseName = "Movimento acessivel de teste";
+
+    await fireEvent.changeText(screen.getByLabelText(nameLabel), exerciseName);
+
+    await fireEvent.press(
+      screen.getByRole("button", {
+        name: "Criar exerc\u00edcio",
+      }),
+    );
+
+    try {
+      expect(mockedCreate).toHaveBeenCalledWith(TOKEN, exerciseName);
+
+      for (const label of [nameLabel, "Buscar exerc\u00edcio"]) {
+        const field = screen.getByLabelText(label);
+
+        expect(field).toHaveProp("editable", false);
+
+        expect(field).toHaveProp(
+          "accessibilityState",
+          expect.objectContaining({
+            disabled: true,
+          }),
+        );
+      }
+
+      expect(
+        screen.getByRole("button", {
+          name: "Cancelar cria\u00e7\u00e3o de exerc\u00edcio personalizado",
+        }),
+      ).toBeDisabled();
+    } finally {
+      await act(async () => {
+        failRequest(new Error("Falha de teste na criacao"));
+      });
+    }
+
+    expect(await screen.findByText("Falha de teste na criacao")).toBeTruthy();
+
+    for (const label of [nameLabel, "Buscar exerc\u00edcio"]) {
+      const field = screen.getByLabelText(label);
+
+      expect(field).toHaveProp("editable", true);
+
+      expect(field).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({
+          disabled: false,
+        }),
+      );
+    }
+
+    expect(screen.getByLabelText(nameLabel)).toHaveProp("value", exerciseName);
+
+    expect(
+      screen.getByRole("button", {
+        name: "Criar exerc\u00edcio",
+      }),
+    ).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({
+        busy: false,
+        disabled: false,
+      }),
+    );
+
+    expect(
+      screen.getByRole("button", {
+        name: "Cancelar cria\u00e7\u00e3o de exerc\u00edcio personalizado",
+      }),
+    ).not.toBeDisabled();
 
     expect(mockedAdd).not.toHaveBeenCalled();
     expect(navigation.goBack).not.toHaveBeenCalled();

@@ -582,6 +582,119 @@ A validação manual complementa os testes automatizados,
 mas não comprova conformidade integral de acessibilidade
 nem compatibilidade com todos os dispositivos.
 
+### 5.4. Acessibilidade do gerenciamento, execução e histórico (ACC-02.2)
+
+Em 17/11/2026, a entrega registrou 36 novos testes
+automatizados, distribuídos da seguinte forma:
+
+| Suíte | Novos testes |
+| --- | ---: |
+| `ExerciseCatalogScreen.test.tsx` | 6 |
+| `WorkoutDetailsAccessibility.test.tsx` | 10 |
+| `WorkoutsAccessibility.test.tsx` | 3 |
+| `WorkoutSessionNavigation.test.tsx` | 11 |
+| `WorkoutHistoryScreen.test.tsx` | 2 |
+| `WorkoutHistoryDetailsAccessibility.test.tsx` | 4 |
+| **Total** | **36** |
+
+As suítes estão em `src/screens/__tests__/`.
+
+Os testes incluem cenários de acessibilidade,
+regressão funcional, operações pendentes,
+recuperação de falhas, dimensões de toque
+e preservação dos registros de treino.
+
+O desenvolvimento utilizou fases Red e Green,
+com verificação das causas das falhas esperadas.
+
+Os testes anteriores foram preservados.
+
+#### Resultados automatizados
+
+* 120 testes direcionados aprovados em 7 suítes;
+* 758 testes mobile aprovados em 49 suítes;
+* 722 testes da baseline ACC-02.1 preservados;
+* 36 novos testes aprovados;
+* TypeScript, ESLint e Prettier aprovados;
+* verificação de integridade do diff aprovada;
+* duração da regressão Jest: 17,092 segundos.
+
+O aviso intermitente React `act` da suíte
+`MapGymPreview.test.tsx` não apareceu na regressão
+final, mas não foi considerado definitivamente resolvido.
+
+Não houve nova execução local do backend nesta etapa.
+A última regressão backend permanece com 1.206 testes
+aprovados, totalizando 1.964 testes acumulados.
+
+#### Validação física
+
+O desenvolvedor confirmou, em 17/11/2026,
+os seguintes cenários no iPhone via Expo Go,
+utilizando backend local.
+
+Gerenciamento:
+
+1. Busca e adição de exercícios do catálogo.
+2. Criação ou reutilização de exercício personalizado.
+3. Edição do nome e persistência.
+4. Reordenação e remoção de exercício.
+5. Arquivamento e restauração do treino.
+
+Execução:
+
+6. Início do treino e registro de séries em dois exercícios.
+7. Alternância kg/lb e indicador visual.
+8. Registro e salvamento de observações gerais e individuais.
+9. Remoção de série sem afetar outro exercício.
+10. Conclusão, reabertura e atualização do progresso.
+11. Aviso ao finalizar com exercício não concluído.
+12. Retorno à aba Treinos após finalizar.
+
+Histórico:
+
+13. Alternância dos quatro períodos e indicador visual.
+14. Limpeza dos filtros e retorno para Todos.
+15. Identificação dos dois estados de conclusão.
+16. Persistência das observações, séries, repetições e cargas.
+
+VoiceOver:
+
+17. Busca e botões do catálogo.
+18. Controles de gerenciamento.
+19. Campos de repetições e carga por exercício.
+20. Unidades selecionadas e remoção contextual de séries.
+21. Ações de conclusão, finalização e cancelamento.
+22. Período selecionado e estados de conclusão no histórico.
+
+Texto ampliado:
+
+23. Legibilidade no catálogo e gerenciamento.
+24. Campos, seletores e botões durante a execução.
+25. Filtros e estados de conclusão no histórico.
+
+Resultado: 25 de 25 verificações aprovadas.
+
+Somadas à ACC-02.1, as entregas registram
+44 novos testes automatizados e 37 verificações
+físicas aprovadas.
+
+#### Limitações e integração
+
+As verificações de estados pendentes e recuperação
+de falhas utilizaram testes automatizados.
+
+A validação física não constitui certificação
+integral de acessibilidade nem comprova funcionamento
+em Android ou em builds nativos.
+
+Os resultados representam a validação local
+da branch ACC-02.2, baseada na ACC-02.1.
+
+A integração permanece condicionada à aprovação
+dos checks de CI e à resolução do bloqueio de
+segurança registrado na Issue #84.
+
 ## 6. Verificações de qualidade
 
 ### 6.1. Backend

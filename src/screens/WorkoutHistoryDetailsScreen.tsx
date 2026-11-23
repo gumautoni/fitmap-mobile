@@ -310,6 +310,16 @@ export default function WorkoutHistoryDetailsScreen({
                   <Text style={styles.exerciseName}>
                     {exercise.exerciseName}
                   </Text>
+
+                  <Text
+                    accessible
+                    accessibilityLabel={`Status de ${exercise.exerciseName}: ${exercise.isCompleted ? "conclu\u00eddo" : "n\u00e3o conclu\u00eddo"}`}
+                    style={styles.exerciseStatus}
+                  >
+                    {exercise.isCompleted
+                      ? "Conclu\u00eddo"
+                      : "N\u00e3o conclu\u00eddo"}
+                  </Text>
                 </View>
 
                 {exercise.isCompleted ? (
@@ -621,6 +631,14 @@ function createStyles(theme: ReturnType<typeof useAppTheme>["theme"]) {
       color: theme.colors.textPrimary,
       fontFamily: theme.typography.fontFamily.extrabold,
       fontSize: theme.typography.size.cardTitle,
+    },
+
+    exerciseStatus: {
+      marginTop: 4,
+      color: theme.colors.textSecondary,
+      fontFamily: theme.typography.fontFamily.medium,
+      fontSize: theme.typography.size.small,
+      lineHeight: theme.typography.lineHeight.small,
     },
 
     plannedNotes: {

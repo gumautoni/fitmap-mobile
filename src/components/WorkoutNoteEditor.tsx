@@ -47,6 +47,7 @@ export default function WorkoutNoteEditor({
 
       <TextInput
         accessibilityLabel={`Observa\u00e7\u00e3o ${scopeLabel}`}
+        accessibilityState={{ disabled }}
         value={value}
         editable={!disabled}
         multiline
