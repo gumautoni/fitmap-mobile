@@ -1372,7 +1372,7 @@ export default function MapScreen({ navigation }: Props) {
 
           {!canFilterByDistance ? (
             <Text style={styles.filterHint}>
-              Use sua localiza\u00e7\u00e3o para ordenar por proximidade.
+              Use sua localização para ordenar por proximidade.
             </Text>
           ) : null}
         </View>
