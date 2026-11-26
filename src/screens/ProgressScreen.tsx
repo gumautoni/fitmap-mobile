@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import {
   Activity,
   AlertCircle,
+  ArrowRight,
   CalendarDays,
   Dumbbell,
   Images,
@@ -1140,7 +1141,7 @@ export default function ProgressScreen() {
                           accessibilityLabel={`Evolução de carga de ${exercise.exerciseName}: ${loadEvolution.replace(/ → /g, " para ").replace(/ • /g, "; ")}`}
                           style={styles.evolutionBadge}
                         >
-                          <TrendingUp
+                          <ArrowRight
                             size={15}
                             strokeWidth={2.2}
                             color={theme.colors.primary}
